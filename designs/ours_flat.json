@@ -1,0 +1,712 @@
+{
+  "ga_weeks": {
+    "description": "孕周",
+    "type": "Measurement",
+    "unit": "weeks"
+  },
+  "ga_plus_days": {
+    "description": "孕周+天（可选）",
+    "type": "Text"
+  },
+  "pregnancy_type": {
+    "description": "妊娠类型",
+    "type": "Enum",
+    "options": [
+      "Intrauterine_Singleton",
+      "Intrauterine_Multiple",
+      "Ectopic",
+      "Unknown"
+    ]
+  },
+  "presentation": {
+    "description": "胎位",
+    "type": "Enum",
+    "options": [
+      "Cephalic",
+      "Breech",
+      "Transverse",
+      "Oblique",
+      "Unknown"
+    ]
+  },
+  "cervical_length": {
+    "description": "宫颈管长度",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "internal_os_status": {
+    "description": "宫颈内口",
+    "type": "Enum",
+    "options": [
+      "Closed",
+      "Dilated",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "internal_os_dilation_width": {
+    "description": "内口扩张宽度（如有）",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "endocervical_bleeding": {
+    "description": "宫颈管内出血信号（如有）",
+    "type": "Enum",
+    "options": [
+      "Absent",
+      "Minimal",
+      "Obvious",
+      "NotAssessed"
+    ]
+  },
+  "maternal_incidental_findings": {
+    "description": "母体偶发所见（如肾积水/子宫肌瘤等）",
+    "type": "Text"
+  },
+  "overall_status": {
+    "description": "总体评估",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Abnormal",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "overall_comment": {
+    "description": "总体描述（可选）",
+    "type": "Text"
+  },
+  "bpd_brain": {
+    "description": "脑双顶径（BPD）",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "bpd_skull": {
+    "description": "颅骨双顶径（BPD）",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "fod_brain": {
+    "description": "脑额枕径（FOD）",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "fod_skull": {
+    "description": "颅骨额枕径（FOD）",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "head_circumference": {
+    "description": "头围（如有）",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "symmetry": {
+    "description": "大脑半球对称性",
+    "type": "Enum",
+    "options": [
+      "Symmetric",
+      "Asymmetric",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "sulci_gyral_development": {
+    "description": "脑沟回发育/显示",
+    "type": "Enum",
+    "options": [
+      "Appropriate_for_GA",
+      "Delayed",
+      "Simplified",
+      "NotAssessed"
+    ]
+  },
+  "central_sulcus_visibility": {
+    "description": "中央沟可见性（如评估）",
+    "type": "Enum",
+    "options": [
+      "Visible",
+      "NotVisible",
+      "Partial",
+      "NotAssessed"
+    ]
+  },
+  "signal_status": {
+    "description": "脑实质信号",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Abnormal",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "lamination": {
+    "description": "分层结构",
+    "type": "Enum",
+    "options": [
+      "Clear",
+      "Blurred",
+      "Absent",
+      "NotAssessed"
+    ]
+  },
+  "dwi_restriction": {
+    "description": "DWI弥散受限（如评估）",
+    "type": "Enum",
+    "options": [
+      "None",
+      "Present",
+      "NotAssessed"
+    ]
+  },
+  "extra_axial_space": {
+    "description": "脑外间隙",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "MildlyWidened",
+      "Widened",
+      "NotAssessed"
+    ]
+  },
+  "midline_centered": {
+    "description": "脑中线结构",
+    "type": "Enum",
+    "options": [
+      "Centered",
+      "Shifted",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "csp_visibility": {
+    "description": "透明隔/透明隔腔可见性",
+    "type": "Enum",
+    "options": [
+      "Visible",
+      "NotVisible",
+      "Partial",
+      "NotAssessed"
+    ]
+  },
+  "csp_integrity": {
+    "description": "透明隔完整性",
+    "type": "Enum",
+    "options": [
+      "Intact",
+      "NotIntact",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "csp_width": {
+    "description": "透明隔腔宽度（如有）",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "cc_visualization": {
+    "description": "胼胝体可见性",
+    "type": "Enum",
+    "options": [
+      "Visible",
+      "Partial",
+      "NotVisible",
+      "NotAssessed"
+    ]
+  },
+  "cc_morphology": {
+    "description": "胼胝体形态",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Dysgenesis",
+      "Agenesis",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "cc_length": {
+    "description": "胼胝体长度（如测量）",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "olfactory_visualization": {
+    "description": "嗅球/嗅沟显示",
+    "type": "Enum",
+    "options": [
+      "Visible",
+      "Partial",
+      "NotVisible",
+      "NotAssessed"
+    ]
+  },
+  "olfactory_symmetry": {
+    "description": "嗅球/嗅沟对称性",
+    "type": "Enum",
+    "options": [
+      "Symmetric",
+      "Asymmetric",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "optic_chiasm_visibility": {
+    "description": "视交叉可见性（如评估）",
+    "type": "Enum",
+    "options": [
+      "Visible",
+      "NotVisible",
+      "NotAssessed"
+    ]
+  },
+  "atrium_width_left": {
+    "description": "左侧侧脑室三角区宽度",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "atrium_width_right": {
+    "description": "右侧侧脑室三角区宽度",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "ventriculomegaly": {
+    "description": "侧脑室扩张分级",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Mild",
+      "Moderate",
+      "Severe",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "third_ventricle_dilation": {
+    "description": "第三脑室扩张",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Dilated",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "fourth_ventricle_dilation": {
+    "description": "第四脑室扩张",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Dilated",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "tcd": {
+    "description": "小脑横径（TCD）",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "hemisphere_symmetry": {
+    "description": "小脑半球对称性",
+    "type": "Enum",
+    "options": [
+      "Symmetric",
+      "Asymmetric",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "hemisphere_morphology": {
+    "description": "小脑半球形态",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Irregular",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "hemisphere_signal": {
+    "description": "小脑半球信号",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Heterogeneous",
+      "AbnormalFocus",
+      "NotAssessed"
+    ]
+  },
+  "vermis_status": {
+    "description": "小脑蚓部完整性/发育",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Hypoplastic",
+      "PartialAgenesis",
+      "Agenesis",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "vermis_height": {
+    "description": "蚓部上下径",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "vermis_ap": {
+    "description": "蚓部前后径",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "tegmento_vermis_angle": {
+    "description": "蚓干角",
+    "type": "Measurement",
+    "unit": "°"
+  },
+  "primary_fissure_visibility": {
+    "description": "原裂显示",
+    "type": "Enum",
+    "options": [
+      "Clear",
+      "Unclear",
+      "NotVisible",
+      "NotAssessed"
+    ]
+  },
+  "cm_width": {
+    "description": "枕大池/后颅窝池宽度",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "cm_status": {
+    "description": "枕大池/后颅窝池状态",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "MildlyWidened",
+      "Widened",
+      "NotAssessed"
+    ]
+  },
+  "tentorium_position": {
+    "description": "小脑幕位置",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Elevated",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "morphology_signal": {
+    "description": "脑干形态与信号",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Abnormal",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "skull_integrity": {
+    "description": "颅骨完整性",
+    "type": "Enum",
+    "options": [
+      "Intact",
+      "Defect",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "pf_cyst_present": {
+    "description": "后颅窝囊性灶",
+    "type": "Boolean"
+  },
+  "pf_cyst_size_lwh": {
+    "description": "囊性灶大小（长×宽×高）",
+    "type": "Text"
+  },
+  "pf_effect_on_bone": {
+    "description": "对枕骨/邻近结构影响（如压迹）",
+    "type": "Text"
+  },
+  "pf_impression_suggestion": {
+    "description": "倾向诊断/鉴别（如蛛网膜囊肿/Blake pouch等）",
+    "type": "Enum",
+    "options": [
+      "ArachnoidCyst",
+      "BlakePouchCyst",
+      "DandyWalkerSpectrum",
+      "Other",
+      "Indeterminate"
+    ]
+  },
+  "vascular_abnormality_present": {
+    "description": "脑血管异常",
+    "type": "Boolean"
+  },
+  "suspected_type": {
+    "description": "可疑类型",
+    "type": "Enum",
+    "options": [
+      "VeinOfGalenAneurysmalMalformation",
+      "DuralAVF",
+      "PialAVF",
+      "Other",
+      "Indeterminate"
+    ]
+  },
+  "feeding_arteries": {
+    "description": "供血动脉描述（如MCA/ACA分支）",
+    "type": "Text"
+  },
+  "drainage_veins": {
+    "description": "引流静脉/静脉窦描述",
+    "type": "Text"
+  },
+  "parenchymal_injury_suspected": {
+    "description": "脑实质继发损伤（缺血/出血等）",
+    "type": "Enum",
+    "options": [
+      "None",
+      "IschemicInjurySuspected",
+      "HemorrhageSuspected",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "face_neck_status": {
+    "description": "面颈部总体评估",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Abnormal",
+      "NotAssessed"
+    ]
+  },
+  "face_neck_comment": {
+    "description": "面颈部描述（可选）",
+    "type": "Text"
+  },
+  "conus_level": {
+    "description": "脊髓圆锥位置",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "LowLying",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "sacral_canal_abnormality": {
+    "description": "骶管异常",
+    "type": "Enum",
+    "options": [
+      "None",
+      "CystSuspected",
+      "MassSuspected",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "diaphragm_integrity": {
+    "description": "膈肌完整性",
+    "type": "Enum",
+    "options": [
+      "Intact",
+      "DefectOrHernia",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "abdomen_status": {
+    "description": "腹部总体评估",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Abnormal",
+      "NotAssessed"
+    ]
+  },
+  "liver_morphology": {
+    "description": "肝脏形态/信号",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Abnormal",
+      "NotAssessed"
+    ]
+  },
+  "spleen_morphology": {
+    "description": "脾脏形态/信号",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Abnormal",
+      "NotAssessed"
+    ]
+  },
+  "gb_visibility": {
+    "description": "胆囊可见性",
+    "type": "Enum",
+    "options": [
+      "Visible",
+      "NotVisible",
+      "NotAssessed"
+    ]
+  },
+  "esophagus_upper_visibility": {
+    "description": "食道上段显示",
+    "type": "Enum",
+    "options": [
+      "Visible",
+      "NotVisible",
+      "NotAssessed"
+    ]
+  },
+  "stomach_bubble": {
+    "description": "胃泡",
+    "type": "Enum",
+    "options": [
+      "Visible_Normal",
+      "NotVisible",
+      "Dilated",
+      "NotAssessed"
+    ]
+  },
+  "small_bowel": {
+    "description": "小肠",
+    "type": "Enum",
+    "options": [
+      "Visible_Normal",
+      "Dilated",
+      "NotAssessed"
+    ]
+  },
+  "colon_rectum": {
+    "description": "结肠/直肠",
+    "type": "Enum",
+    "options": [
+      "Visible_Normal",
+      "Dilated",
+      "NotAssessed"
+    ]
+  },
+  "kidneys_status": {
+    "description": "双肾形态/信号",
+    "type": "Enum",
+    "options": [
+      "Normal",
+      "Abnormal",
+      "NotAssessed"
+    ]
+  },
+  "bladder_distension": {
+    "description": "膀胱充盈",
+    "type": "Enum",
+    "options": [
+      "Adequate",
+      "Small",
+      "Overdistended",
+      "NotAssessed"
+    ]
+  },
+  "bladder_wall": {
+    "description": "膀胱壁",
+    "type": "Enum",
+    "options": [
+      "Smooth",
+      "Irregular",
+      "NotAssessed"
+    ]
+  },
+  "placenta_location": {
+    "description": "胎盘位置",
+    "type": "Enum",
+    "options": [
+      "Anterior",
+      "Posterior",
+      "Fundal",
+      "LateralLeft",
+      "LateralRight",
+      "Combined",
+      "Previa",
+      "Unknown"
+    ]
+  },
+  "placenta_previa_type": {
+    "description": "前置胎盘类型（如有）",
+    "type": "Enum",
+    "options": [
+      "None",
+      "Marginal",
+      "Partial",
+      "Complete",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "distance_to_internal_os": {
+    "description": "距宫颈内口距离（如有）",
+    "type": "Measurement",
+    "unit": "cm"
+  },
+  "placenta_signal_abnormality": {
+    "description": "胎盘信号异常",
+    "type": "Enum",
+    "options": [
+      "Absent",
+      "Present",
+      "NotAssessed"
+    ]
+  },
+  "placenta_signal_description": {
+    "description": "胎盘信号描述（如有）",
+    "type": "Text"
+  },
+  "accreta_signs": {
+    "description": "胎盘植入相关征象（如评估）",
+    "type": "Enum",
+    "options": [
+      "Absent",
+      "Suspected",
+      "Indeterminate",
+      "NotAssessed"
+    ]
+  },
+  "nuchal_cord_presence": {
+    "description": "脐带绕颈征象",
+    "type": "Enum",
+    "options": [
+      "Absent",
+      "Present",
+      "NotAssessed"
+    ]
+  },
+  "nuchal_cord_loops": {
+    "description": "绕颈圈数（如有）",
+    "type": "Measurement",
+    "unit": "loops"
+  },
+  "cord_insertion_site": {
+    "description": "脐带插入点（如描述）",
+    "type": "Text"
+  },
+  "impression_items": {
+    "description": "影像诊断要点（列表）",
+    "type": "Text"
+  },
+  "recommendation": {
+    "description": "建议（如产前诊断咨询/复查）",
+    "type": "Enum",
+    "options": [
+      "PrenatalCounseling",
+      "FollowUpMRI",
+      "FollowUpUS",
+      "ClinicalCorrelation",
+      "NoneSpecified"
+    ]
+  }
+}
