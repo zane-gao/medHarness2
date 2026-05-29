@@ -16,17 +16,19 @@ pluggable:
 
 ```bash
 cd /data/isbi/gzp/medHarness2
-PYTHONPATH=src python -m medharness2.cli workflow single-case \
-  --report tests/fixtures/human_report.txt \
-  --image tests/fixtures/dummy.dcm \
-  --modality cxr \
-  --top-n 1 \
-  --output outputs/mvp_result.json
+make smoke
 ```
 
 The default command uses `chexagent` from `config/default.yaml`. Its source is
 `artifact_reuse`, so it reads one existing generation JSONL row and lets the
 rest of the evaluation workflow run quickly.
+
+For a smoke run that uses the old medHarness CXR manifest and real image path
+while still reusing the fast artifact generator, run:
+
+```bash
+make smoke-legacy-cxr
+```
 
 ## Optional Fresh Local Generation
 
@@ -34,13 +36,7 @@ Use `--model maira_2` to call the legacy medHarness report-generation CLI for
 fresh inference:
 
 ```bash
-PYTHONPATH=src python -m medharness2.cli workflow single-case \
-  --report tests/fixtures/human_report.txt \
-  --image tests/fixtures/dummy.dcm \
-  --modality cxr \
-  --model maira_2 \
-  --top-n 1 \
-  --output outputs/maira2_result.json
+make smoke-maira2
 ```
 
 This adapter writes a temporary one-case JSONL manifest, calls
@@ -55,6 +51,8 @@ device and model weights are available.
 ## Configuration
 
 Default config lives at `config/default.yaml`.
+Use `config/example.yaml` as a safe copyable template for experiment-specific
+configuration.
 
 - `llm.provider: mock` keeps the workflow deterministic for tests.
 - `llm.provider: openai` uses the OpenAI Responses API with the key from

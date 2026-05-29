@@ -26,12 +26,7 @@ python -m pip install -e ".[test]"
 
 ```bash
 cd /data/isbi/gzp/medHarness2
-PYTHONPATH=src python -m medharness2.cli workflow single-case \
-  --report tests/fixtures/human_report.txt \
-  --image tests/fixtures/dummy.dcm \
-  --modality cxr \
-  --top-n 1 \
-  --output outputs/mvp_result.json
+make smoke
 ```
 
 By default, the MVP uses the `chexagent` artifact configured in
@@ -42,13 +37,7 @@ To exercise the legacy medHarness fresh-generation adapter, request a model
 explicitly:
 
 ```bash
-PYTHONPATH=src python -m medharness2.cli workflow single-case \
-  --report tests/fixtures/human_report.txt \
-  --image tests/fixtures/dummy.dcm \
-  --modality cxr \
-  --model maira_2 \
-  --top-n 1 \
-  --output outputs/maira2_result.json
+make smoke-maira2
 ```
 
 That path calls `/data/isbi/gzp/medHarness/scripts/run_report_generation.py`
@@ -68,12 +57,14 @@ artifact smoke.
 - `generator.local_models` defines local artifacts and fresh medHarness
   adapters.
 
+Use `config/example.yaml` as the copyable template when creating local
+experiment-specific configs.
+
 Do not commit API keys, GitHub tokens, model credentials, or private paths that
 should not be shared. `docs/pat.txt` is intentionally ignored.
 
 ## Validation
 
 ```bash
-python -m compileall src tests
-python -m pytest -q
+make test
 ```
