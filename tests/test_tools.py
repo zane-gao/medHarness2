@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from medharness2.config import AppConfig, GeneratorConfig
 from medharness2.llm_client import build_mock_client
 from medharness2.tools.tool1_likert import evaluate_likert, likert_mean
 from medharness2.tools.tool2_extract import extract_findings
@@ -38,8 +39,9 @@ def test_tool4_adds_hazard_levels():
     assert result["errors"][0]["hazard_level"] == 4
 
 
-def test_tool8_cloud_fallback_returns_report():
-    reports = generate_reports("dummy.dcm", "cxr", llm_client=build_mock_client())
+def test_tool8_cloud_fallback_returns_report_when_no_local_generator():
+    cfg = AppConfig(generator=GeneratorConfig(cloud_fallback_enabled=True, default_models=[], local_models=[]))
+    reports = generate_reports("dummy.dcm", "cxr", config=cfg, llm_client=build_mock_client())
     assert len(reports) == 1
     assert reports[0].source == "cloud_fallback"
     assert reports[0].report

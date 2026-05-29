@@ -9,20 +9,33 @@ llm:
   temperature: 0.0
 
 extractor:
-  backend: placeholder
+  backend: cxr_rule
   template_path: config/templates/default_finding_template.json
 
 generator:
   cloud_fallback_enabled: true
   default_models:
-    - local_readiness_stub
+    - chexagent
   local_models:
-    - key: local_readiness_stub
-      title: Local readiness placeholder
-      source: local_stub
-      supported_modalities: [xray, cxr, ct, mri, pathology, unknown]
-      ready: false
-      notes: Placeholder entry; real medHarness adapters can be wired later.
+    - key: chexagent
+      title: CheXagent artifact
+      source: artifact_reuse
+      supported_modalities: [xray, cxr]
+      source_generation_jsonl: /data/isbi/gzp/baseline/medLLM3/outputs/runs/chexagent_openi_full_weight_100/generation.jsonl
+      notes: Existing CXR artifact from medHarness/medLLM3; fast default smoke path.
+    - key: maira_2
+      title: MAIRA-2 fresh
+      source: medharness_cli
+      supported_modalities: [xray, cxr]
+      medharness_model_key: maira_2
+      script_path: /data/isbi/gzp/medHarness/scripts/run_report_generation.py
+      config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
+      device: cuda:0
+      dtype: bf16
+      max_new_tokens: 160
+      timeout_sec: 1800
+      ready: true
+      notes: Fresh adapter through the existing medHarness report generation CLI.
 
 ranking:
   top_n: 3

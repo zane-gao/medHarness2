@@ -1,0 +1,130 @@
+from __future__ import annotations
+
+import json
+import subprocess
+from pathlib import Path
+
+from medharness2.config import AppConfig, GeneratorConfig, LLMConfig
+from medharness2.generators.registry import ReportGeneratorRegistry
+from medharness2.llm_client import LLMClient
+from medharness2.tools.tool2_extract import extract_findings
+from medharness2.tools.tool8_generate import generate_reports
+
+
+def test_artifact_generator_reads_existing_jsonl(tmp_path: Path):
+    artifact = tmp_path / "generation.jsonl"
+    artifact.write_text(
+        json.dumps(
+            {
+                "case_id": "case-a",
+                "model_key": "chexagent",
+                "generated_report": "FINDINGS: No pneumothorax. IMPRESSION: Normal chest.",
+                "modality": "xray",
+                "body_part": "chest",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["chexagent"],
+            local_models=[
+                {
+                    "key": "chexagent",
+                    "source": "artifact_reuse",
+                    "supported_modalities": ["xray", "cxr"],
+                    "source_generation_jsonl": str(artifact),
+                }
+            ],
+        )
+    )
+    reports = generate_reports("image.png", "cxr", config=cfg)
+    assert reports[0].model == "chexagent"
+    assert "No pneumothorax" in reports[0].report
+    assert reports[0].source == "artifact_reuse"
+
+
+def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: Path):
+    output_jsonl = tmp_path / "legacy_out.jsonl"
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        assert "/data/isbi/gzp/medHarness/scripts/run_report_generation.py" in cmd
+        out_index = cmd.index("--output-jsonl") + 1
+        Path(cmd[out_index]).write_text(
+            json.dumps({"model_key": "maira_2", "generated_text": "FINDINGS: Clear lungs.", "modality": "xray"})
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["maira_2"],
+            local_models=[
+                {
+                    "key": "maira_2",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["xray", "cxr"],
+                    "medharness_model_key": "maira_2",
+                    "output_jsonl": str(output_jsonl),
+                    "ready": True,
+                }
+            ],
+        )
+    )
+    reports = generate_reports("image.png", "cxr", reference_report="human report", config=cfg)
+    assert reports[0].model == "maira_2"
+    assert reports[0].source == "medharness_cli"
+    assert reports[0].report == "FINDINGS: Clear lungs."
+
+
+def test_cxr_rule_extractor_marks_negated_observation_absent():
+    graph = extract_findings("FINDINGS: There is no pneumothorax. Mild right lung opacity.", modality="cxr", backend="cxr_rule")
+    pneumothorax = [item for item in graph["findings"] if item["observation"] == "pneumothorax"][0]
+    assert pneumothorax["certainty"] == "absent"
+    assert graph["backend"] == "cxr_rule"
+    assert graph["coverage"] > 0
+
+
+def test_openai_extract_text_and_json_payload(monkeypatch):
+    calls = {}
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "output": [
+                        {
+                            "content": [
+                                {"type": "output_text", "text": "{\"ok\": true}"}
+                            ]
+                        }
+                    ]
+                }
+            ).encode("utf-8")
+
+    def fake_urlopen(request, timeout):
+        calls["body"] = json.loads(request.data.decode("utf-8"))
+        return FakeResponse()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    client = LLMClient(AppConfig(llm=LLMConfig(provider="openai", model="gpt-test", max_retries=1)))
+    result = client.call("return json", response_format="json")
+    assert result == "{\"ok\": true}"
+    assert calls["body"]["text"]["format"]["type"] == "json_object"
+
+
+def test_pat_file_is_gitignored():
+    ignore_file = Path(".gitignore").read_text(encoding="utf-8")
+    assert "docs/pat.txt" in ignore_file

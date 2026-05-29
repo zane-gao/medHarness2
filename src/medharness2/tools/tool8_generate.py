@@ -21,7 +21,7 @@ def generate_reports(
     registry = ReportGeneratorRegistry(cfg)
     reports: list[GeneratedReport] = []
     for entry in registry.select(modality, requested=model_keys):
-        generated = registry.generate_stub(entry, image_path, modality, reference_report=reference_report)
+        generated = registry.generate(entry, image_path, modality, reference_report=reference_report)
         if generated.report:
             reports.append(generated)
     if not reports and cfg.generator.cloud_fallback_enabled:
