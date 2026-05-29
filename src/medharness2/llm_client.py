@@ -99,6 +99,7 @@ def build_mock_client(response_json: dict[str, Any] | None = None) -> LLMClient:
         original_call = client.call
 
         def call(prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
+            kwargs.pop("response_json", None)
             return original_call(prompt, image_path=image_path, response_json=response_json, **kwargs)
 
         client.call = call  # type: ignore[method-assign]
