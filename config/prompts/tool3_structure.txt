@@ -1,0 +1,2 @@
+Classify the report into standard radiology sections and return JSON.
+Use keys findings, impression, clinical_history, other.

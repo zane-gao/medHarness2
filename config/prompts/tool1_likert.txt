@@ -1,0 +1,5 @@
+Evaluate the radiology report as JSON with five metrics:
+Completeness and Accuracy, Conciseness and Clarity, Terminological Accuracy,
+Structure and Style, Overall Writing Quality.
+
+Each metric must contain score from 1 to 5 and explanation.

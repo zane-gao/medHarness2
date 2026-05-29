@@ -1,0 +1,4 @@
+{
+  "findings": [],
+  "required_fields": ["observation", "location", "severity", "measurement"]
+}

@@ -1,0 +1,44 @@
+llm:
+  provider: mock
+  model: gpt-5.5
+  api_key_env: OPENAI_API_KEY
+  base_url: https://api.openai.com/v1
+  timeout_sec: 60
+  max_retries: 3
+  retry_initial_sec: 0.25
+  temperature: 0.0
+
+extractor:
+  backend: placeholder
+  template_path: config/templates/default_finding_template.json
+
+generator:
+  cloud_fallback_enabled: true
+  default_models:
+    - local_readiness_stub
+  local_models:
+    - key: local_readiness_stub
+      title: Local readiness placeholder
+      source: local_stub
+      supported_modalities: [xray, cxr, ct, mri, pathology, unknown]
+      ready: false
+      notes: Placeholder entry; real medHarness adapters can be wired later.
+
+ranking:
+  top_n: 3
+  weights:
+    likert_mean: 0.4
+    structure_score: 0.3
+    finding_coverage: 0.3
+
+alignment:
+  tolerance_mm: 5.0
+
+modality_map:
+  DX: cxr
+  CR: cxr
+  XR: cxr
+  CT: ct
+  MR: mri
+  MRI: mri
+  pathology: pathology
