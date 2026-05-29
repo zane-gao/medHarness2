@@ -4,26 +4,33 @@ import re
 from typing import Any
 
 
-def align_graphs(graph_a: dict[str, Any], graph_b: dict[str, Any], tolerance_mm: float = 5.0) -> dict[str, Any]:
-    findings_a = list(graph_a.get("findings") or [])
-    findings_b = list(graph_b.get("findings") or [])
-    used_b: set[int] = set()
+def align_graphs(candidate_graph: dict[str, Any], reference_graph: dict[str, Any], tolerance_mm: float = 5.0) -> dict[str, Any]:
+    """Align candidate findings against a human/reference finding graph."""
+    candidate_findings = list(candidate_graph.get("findings") or [])
+    reference_findings = list(reference_graph.get("findings") or [])
+    used_reference: set[int] = set()
     matched: list[dict[str, Any]] = []
     approximate: list[dict[str, Any]] = []
     mismatched: list[dict[str, Any]] = []
-    a_only: list[dict[str, Any]] = []
+    candidate_only: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
 
-    for finding_a in findings_a:
-        idx_b = _best_match_index(finding_a, findings_b, used_b)
-        if idx_b is None:
-            a_only.append(finding_a)
-            errors.append({"error_type": "false_finding", "finding": finding_a})
+    for candidate_finding in candidate_findings:
+        reference_idx = _best_match_index(candidate_finding, reference_findings, used_reference)
+        if reference_idx is None:
+            candidate_only.append(candidate_finding)
+            errors.append({"error_type": "false_finding", "finding": candidate_finding, "candidate": candidate_finding})
             continue
-        finding_b = findings_b[idx_b]
-        used_b.add(idx_b)
-        comparison = _compare_findings(finding_a, finding_b, tolerance_mm=tolerance_mm)
-        row = {"a": finding_a, "b": finding_b, "differences": comparison["differences"]}
+        reference_finding = reference_findings[reference_idx]
+        used_reference.add(reference_idx)
+        comparison = _compare_findings(candidate_finding, reference_finding, tolerance_mm=tolerance_mm)
+        row = {
+            "candidate": candidate_finding,
+            "reference": reference_finding,
+            "a": candidate_finding,
+            "b": reference_finding,
+            "differences": comparison["differences"],
+        }
         if comparison["category"] == "matched":
             matched.append(row)
         elif comparison["category"] == "approximate_match":
@@ -32,23 +39,25 @@ def align_graphs(graph_a: dict[str, Any], graph_b: dict[str, Any], tolerance_mm:
             mismatched.append(row)
             errors.extend(comparison["errors"])
 
-    b_only = [finding for idx, finding in enumerate(findings_b) if idx not in used_b]
-    for finding in b_only:
-        errors.append({"error_type": "omission_finding", "finding": finding})
-    precision = len(matched) / max(len(findings_a), 1)
-    recall = len(matched) / max(len(findings_b), 1)
+    reference_only = [finding for idx, finding in enumerate(reference_findings) if idx not in used_reference]
+    for finding in reference_only:
+        errors.append({"error_type": "omission_finding", "finding": finding, "reference": finding})
+    precision = len(matched) / max(len(candidate_findings), 1)
+    recall = len(matched) / max(len(reference_findings), 1)
     f1 = 0.0 if precision + recall == 0 else 2 * precision * recall / (precision + recall)
     return {
         "matched": matched,
         "approximate_match": approximate,
         "mismatched": mismatched,
-        "a_only": a_only,
-        "b_only": b_only,
+        "candidate_only": candidate_only,
+        "reference_only": reference_only,
+        "a_only": candidate_only,
+        "b_only": reference_only,
         "metrics": {
             "precision": round(precision, 4),
             "recall": round(recall, 4),
             "f1": round(f1, 4),
-            "symmetric_agreement": round((len(matched) + 0.5 * len(approximate)) / max(len(findings_a) + len(findings_b), 1), 4),
+            "symmetric_agreement": round((len(matched) + 0.5 * len(approximate)) / max(len(candidate_findings) + len(reference_findings), 1), 4),
         },
         "error_candidates": errors,
     }
@@ -80,15 +89,15 @@ def _compare_findings(a: dict[str, Any], b: dict[str, Any], tolerance_mm: float)
     errors: list[dict[str, Any]] = []
     if _loc(a) != _loc(b):
         differences.append("location")
-        errors.append({"error_type": "incorrect_location", "a": a, "b": b})
+        errors.append({"error_type": "incorrect_location", "candidate": a, "reference": b, "a": a, "b": b})
     if _severity(a) != _severity(b):
         differences.append("severity")
-        errors.append({"error_type": "incorrect_severity", "a": a, "b": b})
+        errors.append({"error_type": "incorrect_severity", "candidate": a, "reference": b, "a": a, "b": b})
     a_mm = normalize_measurement_mm(a.get("measurement"))
     b_mm = normalize_measurement_mm(b.get("measurement"))
     if a_mm is not None and b_mm is not None and abs(a_mm - b_mm) > tolerance_mm:
         differences.append("measurement")
-        errors.append({"error_type": "mismatched_finding", "a": a, "b": b})
+        errors.append({"error_type": "mismatched_finding", "candidate": a, "reference": b, "a": a, "b": b})
     if not differences:
         if a_mm is not None and b_mm is not None and a_mm != b_mm:
             return {"category": "approximate_match", "differences": ["measurement_approximate"], "errors": []}

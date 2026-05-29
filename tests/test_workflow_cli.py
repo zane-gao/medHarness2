@@ -27,6 +27,19 @@ def test_pairwise_module_returns_alignment():
     assert result["alignment"]["metrics"]["f1"] == 1.0
 
 
+def test_pairwise_aligns_candidate_against_human_reference():
+    result = evaluate_pairwise(
+        "FINDINGS: Mild right lung opacity. No pneumothorax.",
+        "FINDINGS: Mild right lung opacity. Small pleural effusion.",
+        modality="cxr",
+        llm_client=build_mock_client(),
+    )
+    error_types = [item["error_type"] for item in result["alignment"]["error_candidates"]]
+    assert "false_finding" in error_types
+    assert "omission_finding" in error_types
+    assert result["alignment"]["candidate_only"][0]["observation"] == "effusion"
+
+
 def test_single_case_workflow_writes_json(tmp_path: Path):
     report = tmp_path / "human.txt"
     image = tmp_path / "dummy.dcm"

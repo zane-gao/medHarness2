@@ -34,6 +34,28 @@ def test_tool5_normalizes_units_and_aligns_approximately():
     assert not result["error_candidates"]
 
 
+def test_tool5_uses_candidate_reference_error_semantics():
+    candidate = {
+        "findings": [
+            {"observation": "nodule", "location": "right lung", "severity": "mild"},
+            {"observation": "opacity", "location": "left lung", "severity": "mild"},
+        ]
+    }
+    reference = {
+        "findings": [
+            {"observation": "nodule", "location": "right lung", "severity": "mild"},
+            {"observation": "effusion", "location": "pleural", "severity": "small"},
+        ]
+    }
+    result = align_graphs(candidate, reference)
+    error_types = [item["error_type"] for item in result["error_candidates"]]
+    assert result["candidate_only"][0]["observation"] == "opacity"
+    assert result["reference_only"][0]["observation"] == "effusion"
+    assert error_types == ["false_finding", "omission_finding"]
+    assert result["metrics"]["precision"] == 0.5
+    assert result["metrics"]["recall"] == 0.5
+
+
 def test_tool4_adds_hazard_levels():
     result = evaluate_hazards([{"error_type": "omission_finding"}], llm_client=build_mock_client())
     assert result["errors"][0]["hazard_level"] == 4
