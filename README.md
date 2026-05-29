@@ -63,6 +63,24 @@ experiment-specific configs.
 Do not commit API keys, GitHub tokens, model credentials, or private paths that
 should not be shared. `docs/pat.txt` is intentionally ignored.
 
+## API Smoke
+
+```bash
+PYTHONPATH=src uvicorn medharness2.api:app --host 0.0.0.0 --port 8000
+```
+
+```bash
+curl -X POST http://127.0.0.1:8000/workflow/single-case \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "report_text": "FINDINGS: No pneumothorax. IMPRESSION: No acute disease.",
+    "image_path": "tests/fixtures/dummy.dcm",
+    "output_path": "outputs/api_result.json",
+    "modality": "cxr",
+    "top_n": 1
+  }'
+```
+
 ## Validation
 
 ```bash
