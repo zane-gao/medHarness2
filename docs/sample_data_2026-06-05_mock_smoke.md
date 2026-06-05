@@ -23,6 +23,10 @@ PYTHONPATH=src python -m medharness2.cli workflow batch-readers \
 PYTHONPATH=src python -m medharness2.cli workflow department \
   --batch-result outputs/sample_data_2026-06-05_full_mock/workflow2.json \
   --output outputs/sample_data_2026-06-05_full_mock/workflow3.json
+
+PYTHONPATH=src python -m medharness2.cli workflow validate-run \
+  --output-dir outputs/sample_data_2026-06-05_full_mock \
+  --expected-cases 52
 ```
 
 ## 结果
@@ -37,6 +41,9 @@ PYTHONPATH=src python -m medharness2.cli workflow department \
 - `workflow3`：52 例，6 位 reader，生成 reader percentile 和科室统计。
 - 生成报告 warning：`artifact_reuse_not_fresh_inference=11`；
   `cloud_fallback_used=41`；`no_compatible_local_generator=41`。
+- `validate-run --expected-cases 52`：通过。
+- `validate-run --require-real-ocr`：不通过，原因是本次输出为 mock smoke，
+  旧 OCR 缓存未记录真实 provider，`unknown_ocr_count=52`。
 
 ## 说明
 
@@ -46,3 +53,6 @@ PYTHONPATH=src python -m medharness2.cli workflow department \
 
 运行过程中 SimpleITK 对部分 CT/MRI series 输出了 non-uniform sampling warning。
 当前 medHarness2 将其视为数据几何提示；本次 mock smoke 中未导致病例失败。
+
+后续正式评测应先配置真实 VLM/OCR provider，重新生成 OCR 缓存，再用
+`validate-run --require-real-ocr` 作为进入统计分析前的门禁。

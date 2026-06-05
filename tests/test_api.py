@@ -120,3 +120,23 @@ def test_api_batch_readers_and_department(tmp_path: Path):
     )
     assert response.status_code == 200
     assert response.json()["summary"]["readers"] == 1
+
+
+def test_api_validate_run(tmp_path: Path):
+    _write_json(tmp_path / "summary.json", {"case_count": 1, "warning_counts": {}})
+    (tmp_path / "manifest.jsonl").write_text(
+        json.dumps({"case_id": "case1", "reader": "reader_a", "modality": "cxr", "body_part": "chest"}) + "\n",
+        encoding="utf-8",
+    )
+    _write_json(tmp_path / "workflow2.json", {"case_count": 1, "failed_case_count": 0})
+    _write_json(tmp_path / "workflow3.json", {"case_count": 1, "reader_count": 1})
+    client = TestClient(app)
+    response = client.post("/workflow/validate-run", json={"output_dir": str(tmp_path), "expected_cases": 1})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["passed"] is True
+    assert body["result"]["case_count"] == 1
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

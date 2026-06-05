@@ -32,6 +32,7 @@ def extract_report_text(
     if len(direct_text.strip()) >= min_direct_chars:
         text = direct_text
         method = "pdf_text_layer"
+        provider = "local_pdf_text"
     else:
         prompt = (
             "Extract the radiology report text from this scanned PDF. "
@@ -39,12 +40,20 @@ def extract_report_text(
         )
         text = str(client.call(prompt, image_path=str(pdf), response_format="text")).strip()
         method = "vlm_ocr"
+        provider = cfg.llm.provider
         if not text:
             warnings.append("empty_vlm_ocr_result")
     cache_path.write_text(text + ("\n" if text and not text.endswith("\n") else ""), encoding="utf-8")
     meta_path.write_text(
         __import__("json").dumps(
-            {"case_id": case_id, "method": method, "source_pdf": str(pdf), "warnings": warnings},
+            {
+                "case_id": case_id,
+                "method": method,
+                "provider": provider,
+                "model": cfg.llm.model if method == "vlm_ocr" else "",
+                "source_pdf": str(pdf),
+                "warnings": warnings,
+            },
             ensure_ascii=False,
             indent=2,
         )

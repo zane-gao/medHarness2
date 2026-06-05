@@ -37,6 +37,9 @@ def test_extract_report_text_uses_vlm_for_scanned_pdf(tmp_path: Path):
     assert result.text.startswith("FINDINGS:")
     assert result.method == "vlm_ocr"
     assert Path(result.cache_path).exists()
+    meta = json.loads((tmp_path / "ocr" / "case1.ocr.json").read_text(encoding="utf-8"))
+    assert meta["provider"] == "mock"
+    assert meta["method"] == "vlm_ocr"
 
 
 def test_build_sample_manifest_reads_reader_map_and_dicom_headers(tmp_path: Path):

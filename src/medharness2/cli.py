@@ -8,6 +8,7 @@ from medharness2.data.sample_data import prepare_sample_dataset
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
 from medharness2.workflows.single_case import run_single_case
+from medharness2.validation.sample_run import validate_sample_run
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,6 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
     department = workflow_sub.add_parser("department")
     department.add_argument("--batch-result", required=True)
     department.add_argument("--output", required=True)
+    validate = workflow_sub.add_parser("validate-run")
+    validate.add_argument("--output-dir", required=True)
+    validate.add_argument("--expected-cases", type=int)
+    validate.add_argument("--require-real-ocr", action="store_true")
+    validate.add_argument("--no-require-workflows", action="store_true")
     return parser
 
 
@@ -89,6 +95,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote medHarness2 department output to {args.output}")
         print(f"cases={result['case_count']} readers={result['reader_count']}")
         return 0
+    if args.command == "workflow" and args.workflow == "validate-run":
+        result = validate_sample_run(
+            args.output_dir,
+            expected_cases=args.expected_cases,
+            require_real_ocr=args.require_real_ocr,
+            require_workflows=not args.no_require_workflows,
+        )
+        print(__import__("json").dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["passed"] else 1
     parser.error("unsupported command")
     return 2
 

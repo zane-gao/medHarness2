@@ -82,6 +82,17 @@ Model routing filters local generators by modality and body part. Unsupported
 cases use the configured VLM/cloud fallback and record the reason in JSON
 warnings.
 
+Validate a completed sample-data run before treating it as an evaluable result:
+
+```bash
+PYTHONPATH=src medharness2 workflow validate-run \
+  --output-dir outputs/sample_data_2026-06-05 \
+  --expected-cases 52
+```
+
+Add `--require-real-ocr` for non-mock evaluation. This checks each report text
+cache for explicit OCR provenance and rejects mock or unknown OCR outputs.
+
 ## Configuration
 
 `config/default.yaml` keeps provider choices outside the code:

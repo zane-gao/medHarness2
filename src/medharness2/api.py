@@ -12,6 +12,7 @@ from medharness2.data.sample_data import prepare_sample_dataset
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
 from medharness2.workflows.single_case import run_single_case
+from medharness2.validation.sample_run import validate_sample_run
 
 
 app = FastAPI(title="medHarness2 API", version="0.1.0")
@@ -48,6 +49,13 @@ class BatchReadersRequest(BaseModel):
 class DepartmentRequest(BaseModel):
     batch_result_path: str
     output_path: str
+
+
+class ValidateRunRequest(BaseModel):
+    output_dir: str
+    expected_cases: int | None = None
+    require_real_ocr: bool = False
+    require_workflows: bool = True
 
 
 @app.post("/workflow/single-case")
@@ -123,3 +131,14 @@ def department(request: DepartmentRequest) -> dict[str, Any]:
         "summary": {"cases": result["case_count"], "readers": result["reader_count"]},
         "result": result,
     }
+
+
+@app.post("/workflow/validate-run")
+def validate_run(request: ValidateRunRequest) -> dict[str, Any]:
+    result = validate_sample_run(
+        request.output_dir,
+        expected_cases=request.expected_cases,
+        require_real_ocr=request.require_real_ocr,
+        require_workflows=request.require_workflows,
+    )
+    return {"summary": {"passed": result["passed"], "errors": result["errors"]}, "result": result}

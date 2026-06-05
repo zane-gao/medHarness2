@@ -135,3 +135,15 @@ GPU memory and prepared assets are available.
 `batch-readers` writes `failed_cases` and continues processing when an
 individual case fails, so long full-dataset runs can be inspected and resumed
 without losing all prior work.
+
+Validate the completed output directory before reporting it as a usable run:
+
+```bash
+PYTHONPATH=src medharness2 workflow validate-run \
+  --output-dir outputs/sample_data_2026-06-05 \
+  --expected-cases 52
+```
+
+For a real evaluation run, add `--require-real-ocr`. The gate then rejects mock
+OCR, `real_ocr_required_but_provider_is_mock`, and older OCR caches whose
+`.ocr.json` files do not record a real provider.
