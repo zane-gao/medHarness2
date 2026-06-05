@@ -58,6 +58,7 @@
 - MAIRA-2 52 例 batch：11 例 `cxr/chest` 走 MAIRA-2 fresh，41 例不匹配病例 fallback，失败 0 例。
 - 双 CXR fresh 模型 smoke：`maira_2` + `chexagent_srrg_findings_full`，生成 2 个候选，Top-N 和 pairwise 均正常。
 - MAIRA-2 batch-readers 2 例 CXR chest：一次 batch 调用，2 例均生成 `maira_2 / medharness_cli`，失败 0 例。
+- MAIRA-2 真实 OCR batch-readers 2 例 CXR chest：基于 Qwen3-VL 4B OCR cache，2 例均生成 `maira_2 / medharness_cli`，Workflow 2/3 失败 0 例。
 - Merlin fresh 腹部 CT smoke：`merlin_fresh / medharness_cli`，生成非空腹部 CT 报告。
 - BrainGemma3D 脑 MRI smoke：接口可跑通，但输出出现 hip radiograph 内容，已标记为接口 smoke，不作为正式质量结果。
 - 基于真实 OCR manifest 的 Workflow 2/3 smoke：52 例、0 failed cases、6 个 reader；生成侧限定为 artifact reuse 且关闭 fallback，因此该运行是工程闭环，不是最终正式模型排名。
