@@ -8,6 +8,7 @@
 `source_batch_result`。
 
 该目录用于回答“52 例样本是否已经按本机资源路线跑完整系统”的验收问题。
+完整 design-to-implementation 审计见 `docs/design_implementation_audit_20260606.md`。
 
 输出目录：
 
