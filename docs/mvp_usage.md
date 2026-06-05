@@ -114,6 +114,21 @@ workflow outputs live under `outputs/` and should not be committed.
 When `llm.provider: mock`, OCR results are marked with `mock_ocr_used`. Add
 `--require-real-ocr` to reject mock OCR and surface
 `real_ocr_required_but_provider_is_mock` until a real VLM provider is configured.
+The real provider does not have to be a cloud API. To use the local Qwen2.5-VL
+debug fallback that is already registered in medHarness, copy `config/example.yaml`
+and set:
+
+```yaml
+llm:
+  provider: local_vlm_cli
+  model: qwen25vl_7b_instruct
+```
+
+This renders scanned PDF pages to temporary PNG files and calls the legacy
+`/data/isbi/gzp/medHarness/scripts/run_report_generation.py` runner. Its OCR
+metadata is recorded as `provider: local_vlm_cli`; keep in mind that
+`qwen25vl_7b_instruct` is a debug/OCR fallback, not a formal report-trained
+candidate for model ranking.
 OCR caches are resumable: a later real-provider run can reuse caches whose
 `.ocr.json` records real provenance, and it refreshes mock or unknown caches
 when `--require-real-ocr` is set. Use `--force-ocr` to deliberately regenerate

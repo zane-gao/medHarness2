@@ -7,6 +7,14 @@ llm:
   max_retries: 3
   retry_initial_sec: 0.25
   temperature: 0.0
+  local_cli_python_bin: python
+  local_cli_script: /data/isbi/gzp/medHarness/scripts/run_report_generation.py
+  local_cli_config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
+  local_cli_device: cuda:0
+  local_cli_dtype: bf16
+  local_cli_max_new_tokens: 512
+  local_cli_timeout_sec: 1800
+  local_cli_pdf_max_pages: 3
 
 extractor:
   backend: cxr_rule

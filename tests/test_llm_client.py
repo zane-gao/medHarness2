@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import subprocess
+
 import pytest
 
 from medharness2.config import AppConfig, LLMConfig
@@ -43,3 +46,46 @@ def test_openai_multimodal_input_uses_data_urls(tmp_path):
     assert image_input[0]["content"][1]["image_url"].startswith("data:image/png;base64,")
     assert pdf_input[0]["content"][0]["type"] == "input_file"
     assert pdf_input[0]["content"][0]["file_data"].startswith("data:application/pdf;base64,")
+
+
+def test_local_vlm_cli_provider_invokes_legacy_runner(monkeypatch, tmp_path):
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# fake runner\n", encoding="utf-8")
+    config = tmp_path / "reportgen_models.yaml"
+    config.write_text("models: {}\n", encoding="utf-8")
+    image = tmp_path / "report_page.png"
+    image.write_bytes(b"\x89PNG\r\n\x1a\n")
+    calls = []
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        calls.append(cmd)
+        input_path = cmd[cmd.index("--input-jsonl") + 1]
+        output_path = cmd[cmd.index("--output-jsonl") + 1]
+        row = json.loads(open(input_path, encoding="utf-8").read())
+        assert row["prompt"] == "Extract the report text."
+        assert row["image_paths"] == [str(image.resolve())]
+        assert row["modality"] == "generic_image"
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"case_id": row["case_id"], "generated_text": "FINDINGS: Local OCR."}) + "\n")
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    client = LLMClient(
+        AppConfig(
+            llm=LLMConfig(
+                provider="local_vlm_cli",
+                model="qwen25vl_7b_instruct",
+                local_cli_python_bin="/opt/local/python",
+                local_cli_script=str(script),
+                local_cli_config_path=str(config),
+                local_cli_device="cuda:0",
+                local_cli_dtype="bf16",
+                local_cli_max_new_tokens=256,
+                local_cli_timeout_sec=30,
+            )
+        )
+    )
+    result = client.call("Extract the report text.", image_path=str(image))
+    assert result == "FINDINGS: Local OCR."
+    assert calls[0][0] == "/opt/local/python"
+    assert calls[0][calls[0].index("--model-key") + 1] == "qwen25vl_7b_instruct"

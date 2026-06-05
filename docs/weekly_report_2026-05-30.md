@@ -66,7 +66,7 @@
 
 当前系统仍有以下限制：
 
-- PDF 报告 OCR 仍主要使用 mock provider 缓存；正式评测前必须配置真实 VLM OCR，并通过 `validate-run --require-real-ocr`。
+- PDF 报告 OCR 默认仍使用 mock provider 缓存；目前已补充 `local_vlm_cli` 本地 VLM OCR 入口，可调用旧项目中的本地 VLM adapter。当前 `qwen25vl_7b_instruct` 软链指向的 HF snapshot 缺失，dry-run 为 `debug_asset_missing`，因此正式评测前仍需恢复本地 VLM 权重或改用云端 VLM，并通过 `validate-run --require-real-ocr`。
 - Tool2 的 CXR rule extractor 仍是 MVP 规则版，后续需要接更稳定的结构化抽取 backend。
 - Tool4 hazard 仍是 MVP 规则估计，后续需要接 evaluator 或本地 LLM，并保留 deterministic fallback。
 - BrainGemma3D 虽然接口可跑通，但本批样本输出存在部位语义跑偏，需要进一步核对真实输入预处理、模型适配和质量门控。
@@ -76,7 +76,7 @@
 
 下周建议按以下顺序推进：
 
-1. 配置真实 VLM OCR，重跑 52 例样本并通过 `--require-real-ocr` 校验。
+1. 先修复 `qwen25vl_7b_instruct` 本地权重路径，或配置云端 VLM；随后完成真实 OCR，重跑 52 例样本并通过 `--require-real-ocr` 校验。
 2. 扩展 CXR fresh 小批量：MAIRA-2、CheXagent SRRG、MedGemma SRRG 多模型候选池。
 3. 对 Merlin fresh 扩展腹部 CT 小批量，记录耗时、失败率和输出质量。
 4. 针对 BrainGemma3D 做输入预处理核查和质量门控增强，决定是否进入正式候选池。

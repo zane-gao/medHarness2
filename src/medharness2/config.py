@@ -20,6 +20,14 @@ class LLMConfig:
     max_retries: int = 3
     retry_initial_sec: float = 0.25
     temperature: float = 0.0
+    local_cli_python_bin: str = "python"
+    local_cli_script: str = "/data/isbi/gzp/medHarness/scripts/run_report_generation.py"
+    local_cli_config_path: str = "/data/isbi/gzp/medHarness/configs/reportgen_models.yaml"
+    local_cli_device: str = "cuda:0"
+    local_cli_dtype: str = "bf16"
+    local_cli_max_new_tokens: int = 512
+    local_cli_timeout_sec: int = 1800
+    local_cli_pdf_max_pages: int = 3
 
 
 @dataclass

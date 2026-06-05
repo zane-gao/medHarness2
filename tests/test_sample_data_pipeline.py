@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import fitz
@@ -115,6 +116,44 @@ def test_extract_report_text_force_refreshes_cache(tmp_path: Path):
     )
     assert client.calls == 1
     assert result.text.startswith("FINDINGS: OCR text")
+
+
+def test_extract_report_text_can_use_local_vlm_cli_for_scanned_pdf(monkeypatch, tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    _write_blank_pdf(pdf)
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# fake runner\n", encoding="utf-8")
+    config = tmp_path / "reportgen_models.yaml"
+    config.write_text("models: {}\n", encoding="utf-8")
+    seen_image_paths: list[str] = []
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        input_path = Path(cmd[cmd.index("--input-jsonl") + 1])
+        output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+        row = json.loads(input_path.read_text(encoding="utf-8"))
+        seen_image_paths.extend(row["image_paths"])
+        output_path.write_text(
+            json.dumps({"case_id": row["case_id"], "generated_text": "FINDINGS: Local PDF OCR."}) + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = AppConfig(
+        llm=LLMConfig(
+            provider="local_vlm_cli",
+            model="qwen25vl_7b_instruct",
+            local_cli_script=str(script),
+            local_cli_config_path=str(config),
+            local_cli_timeout_sec=30,
+        )
+    )
+    result = extract_report_text(pdf, case_id="case1", output_dir=tmp_path / "ocr", config=cfg)
+    assert result.text == "FINDINGS: Local PDF OCR."
+    assert seen_image_paths and seen_image_paths[0].endswith(".png")
+    meta = json.loads((tmp_path / "ocr" / "case1.ocr.json").read_text(encoding="utf-8"))
+    assert meta["provider"] == "local_vlm_cli"
+    assert meta["model"] == "qwen25vl_7b_instruct"
 
 
 def test_build_sample_manifest_reads_reader_map_and_dicom_headers(tmp_path: Path):
