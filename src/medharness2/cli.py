@@ -8,10 +8,12 @@ from medharness2.data.sample_data import prepare_sample_dataset
 from medharness2.generators.registry import ReportGeneratorRegistry
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
+from medharness2.workflows.merge_batches import merge_batch_results
 from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full
 from medharness2.workflows.single_case import run_single_case
 from medharness2.validation.preflight import run_sample_preflight
 from medharness2.validation.sample_run import validate_sample_run
+from medharness2.utils.io import write_json
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -67,6 +69,12 @@ def build_parser() -> argparse.ArgumentParser:
     department = workflow_sub.add_parser("department")
     department.add_argument("--batch-result", required=True)
     department.add_argument("--output", required=True)
+    merge = workflow_sub.add_parser("merge-batches")
+    merge.add_argument("--batch-result", action="append", required=True, dest="batch_results")
+    merge.add_argument("--output-dir", required=True)
+    merge.add_argument("--manifest")
+    merge.add_argument("--expected-cases", type=int)
+    merge.add_argument("--require-real-ocr", action="store_true")
     validate = workflow_sub.add_parser("validate-run")
     validate.add_argument("--output-dir", required=True)
     validate.add_argument("--expected-cases", type=int)
@@ -185,6 +193,42 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote medHarness2 department output to {args.output}")
         print(f"cases={result['case_count']} readers={result['reader_count']}")
         return 0
+    if args.command == "workflow" and args.workflow == "merge-batches":
+        result = merge_batch_results(
+            args.batch_results,
+            args.output_dir,
+            manifest_path=args.manifest,
+            expected_cases=args.expected_cases,
+        )
+        validation = validate_sample_run(
+            args.output_dir,
+            expected_cases=args.expected_cases,
+            require_real_ocr=args.require_real_ocr,
+        )
+        summary = {
+            "paths": {
+                "manifest": str(Path(args.output_dir) / "manifest.jsonl") if args.manifest else "",
+                "workflow2": str(Path(args.output_dir) / "workflow2.json"),
+                "workflow3": str(Path(args.output_dir) / "workflow3.json"),
+                "run_summary": str(Path(args.output_dir) / "run_summary.json"),
+            },
+            "summary": {
+                "case_count": result["case_count"],
+                "failed_case_count": result["failed_case_count"],
+                "reader_count": len(result["per_reader"]),
+            },
+            "validation": validation,
+            "merge_metadata": result.get("merge_metadata") or {},
+        }
+        write_json(Path(args.output_dir) / "run_summary.json", summary)
+        print(f"wrote medHarness2 merged batch outputs to {args.output_dir}")
+        print(
+            "cases="
+            f"{result['case_count']} "
+            f"failed={result['failed_case_count']} "
+            f"validation_passed={validation['passed']}"
+        )
+        return 0 if validation["passed"] else 1
     if args.command == "workflow" and args.workflow == "validate-run":
         result = validate_sample_run(
             args.output_dir,

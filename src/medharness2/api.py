@@ -11,6 +11,7 @@ from medharness2.config import load_config
 from medharness2.data.sample_data import prepare_sample_dataset
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
+from medharness2.workflows.merge_batches import merge_batch_results
 from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full
 from medharness2.workflows.single_case import run_single_case
 from medharness2.validation.preflight import run_sample_preflight
@@ -69,6 +70,14 @@ class BatchReadersRequest(BaseModel):
 class DepartmentRequest(BaseModel):
     batch_result_path: str
     output_path: str
+
+
+class MergeBatchesRequest(BaseModel):
+    batch_result_paths: list[str]
+    output_dir: str
+    manifest_path: str | None = None
+    expected_cases: int | None = None
+    require_real_ocr: bool = False
 
 
 class ValidateRunRequest(BaseModel):
@@ -205,6 +214,33 @@ def department(request: DepartmentRequest) -> dict[str, Any]:
         "output_path": request.output_path,
         "summary": {"cases": result["case_count"], "readers": result["reader_count"]},
         "result": result,
+    }
+
+
+@app.post("/workflow/merge-batches")
+def merge_batches(request: MergeBatchesRequest) -> dict[str, Any]:
+    result = merge_batch_results(
+        request.batch_result_paths,
+        request.output_dir,
+        manifest_path=request.manifest_path,
+        expected_cases=request.expected_cases,
+    )
+    validation = validate_sample_run(
+        request.output_dir,
+        expected_cases=request.expected_cases,
+        require_real_ocr=request.require_real_ocr,
+    )
+    return {
+        "output_dir": request.output_dir,
+        "summary": {
+            "cases": result["case_count"],
+            "failed_cases": result["failed_case_count"],
+            "readers": len(result["per_reader"]),
+            "validation_passed": validation["passed"],
+            "validation_errors": validation["errors"],
+        },
+        "result": result,
+        "validation": validation,
     }
 
 

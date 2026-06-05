@@ -161,6 +161,26 @@ PYTHONPATH=src medharness2 workflow validate-run \
 Add `--require-real-ocr` for non-mock evaluation. This checks each report text
 cache for explicit OCR provenance and rejects mock or unknown OCR outputs.
 
+When expensive local batches are run by modality/body-part subsets, merge the
+validated batch outputs into one auditable 52-case result without rerunning
+models:
+
+```bash
+PYTHONPATH=src medharness2 workflow merge-batches \
+  --manifest outputs/sample_data_2026-06-05_local_hf_qwen3vl4b_ocr_52_20260606/manifest.jsonl \
+  --output-dir outputs/sample_data_2026-06-05_final_local_routed_52_20260606 \
+  --expected-cases 52 \
+  --require-real-ocr \
+  --batch-result outputs/cxr_real_ocr_three_fresh_11_20260606/workflow2.json \
+  --batch-result outputs/merlin_real_ocr_ct_abdomen_7_20260606/workflow2.json \
+  --batch-result outputs/braingemma3d_real_ocr_mri_brain_series_prompt_7_20260606/workflow2.json \
+  --batch-result outputs/ct_chest_real_ocr_artifact_7_20260606/workflow2.json \
+  --batch-result outputs/local_hf_fallback_remaining_20_qualityfix_20260606/workflow2.json
+```
+
+The merged output writes `workflow2.json`, `workflow3.json`, `run_summary.json`,
+and one copied Workflow 1 JSON per case under `workflow2_cases/`.
+
 ## Configuration
 
 `config/default.yaml` keeps provider choices outside the code:

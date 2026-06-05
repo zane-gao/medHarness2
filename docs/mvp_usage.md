@@ -255,6 +255,26 @@ metadata but are excluded from Top-N and pairwise comparison.
 individual case fails, so long full-dataset runs can be inspected and resumed
 without losing all prior work.
 
+When the full dataset is split into modality/body-part batches to avoid
+reloading heavy local models unnecessarily, combine the verified batch outputs
+with `merge-batches`:
+
+```bash
+PYTHONPATH=src medharness2 workflow merge-batches \
+  --manifest outputs/sample_data_2026-06-05_local_hf_qwen3vl4b_ocr_52_20260606/manifest.jsonl \
+  --output-dir outputs/sample_data_2026-06-05_final_local_routed_52_20260606 \
+  --expected-cases 52 \
+  --require-real-ocr \
+  --batch-result outputs/cxr_real_ocr_three_fresh_11_20260606/workflow2.json \
+  --batch-result outputs/merlin_real_ocr_ct_abdomen_7_20260606/workflow2.json \
+  --batch-result outputs/braingemma3d_real_ocr_mri_brain_series_prompt_7_20260606/workflow2.json \
+  --batch-result outputs/ct_chest_real_ocr_artifact_7_20260606/workflow2.json \
+  --batch-result outputs/local_hf_fallback_remaining_20_qualityfix_20260606/workflow2.json
+```
+
+This creates a unified result directory and verifies manifest coverage. It does
+not rerun OCR or generation; each case keeps `source_batch_result` provenance.
+
 Validate the completed output directory before reporting it as a usable run:
 
 ```bash
