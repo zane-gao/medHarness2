@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 
+import fitz
 import pytest
 
 from medharness2.config import AppConfig, LLMConfig
@@ -89,3 +90,54 @@ def test_local_vlm_cli_provider_invokes_legacy_runner(monkeypatch, tmp_path):
     assert result == "FINDINGS: Local OCR."
     assert calls[0][0] == "/opt/local/python"
     assert calls[0][calls[0].index("--model-key") + 1] == "qwen25vl_7b_instruct"
+
+
+def test_local_hf_vlm_provider_renders_pdf_before_generation(monkeypatch, tmp_path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    doc.new_page(width=200, height=200)
+    doc.save(pdf)
+    model_dir = tmp_path / "qwen3-vl-4b"
+    model_dir.mkdir()
+    seen = {}
+
+    def fake_generate(self, prompt, image_paths, max_new_tokens):
+        seen["prompt"] = prompt
+        seen["image_paths"] = image_paths
+        seen["max_new_tokens"] = max_new_tokens
+        return "FINDINGS: Local HF OCR."
+
+    monkeypatch.setattr(LLMClient, "_generate_local_hf_vlm", fake_generate)
+    client = LLMClient(
+        AppConfig(
+            llm=LLMConfig(
+                provider="local_hf_vlm",
+                model="qwen3-vl-4b",
+                local_hf_model_path=str(model_dir),
+                local_hf_max_new_tokens=96,
+            )
+        )
+    )
+    result = client.call("Extract the report text.", image_path=str(pdf))
+    assert result == "FINDINGS: Local HF OCR."
+    assert seen["prompt"] == "Extract the report text."
+    assert seen["max_new_tokens"] == 96
+    assert seen["image_paths"] and seen["image_paths"][0].endswith(".png")
+
+
+def test_local_hf_vlm_loader_reuses_cached_model(tmp_path):
+    model_dir = tmp_path / "qwen3-vl-4b"
+    model_dir.mkdir()
+    client = LLMClient(
+        AppConfig(
+            llm=LLMConfig(
+                provider="local_hf_vlm",
+                local_hf_model_path=str(model_dir),
+                local_hf_device="cuda:0",
+                local_hf_dtype="bf16",
+            )
+        )
+    )
+    cache_key = (str(model_dir), "cuda:0", "bf16")
+    client._local_hf_cache[cache_key] = ("model", "processor")
+    assert client._load_local_hf_vlm() == ("model", "processor")

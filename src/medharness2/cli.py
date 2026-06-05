@@ -10,6 +10,7 @@ from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
 from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full
 from medharness2.workflows.single_case import run_single_case
+from medharness2.validation.preflight import run_sample_preflight
 from medharness2.validation.sample_run import validate_sample_run
 
 
@@ -71,6 +72,15 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--expected-cases", type=int)
     validate.add_argument("--require-real-ocr", action="store_true")
     validate.add_argument("--no-require-workflows", action="store_true")
+    preflight = workflow_sub.add_parser("preflight")
+    preflight.add_argument("--sample-root", required=True)
+    preflight.add_argument("--output", required=True)
+    preflight.add_argument("--limit", type=int)
+    preflight.add_argument("--model", action="append", dest="models")
+    preflight.add_argument("--model-source", action="append", dest="model_sources")
+    preflight.add_argument("--all-compatible-local-models", action="store_true")
+    preflight.add_argument("--require-real-ocr", action="store_true")
+    preflight.add_argument("--config")
     return parser
 
 
@@ -183,6 +193,25 @@ def main(argv: list[str] | None = None) -> int:
             require_workflows=not args.no_require_workflows,
         )
         print(__import__("json").dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["passed"] else 1
+    if args.command == "workflow" and args.workflow == "preflight":
+        config = load_config(args.config) if args.config else load_config()
+        result = run_sample_preflight(
+            args.sample_root,
+            args.output,
+            config=config,
+            require_real_ocr=args.require_real_ocr,
+            limit=args.limit,
+            model_keys=_model_keys(args),
+            model_sources=args.model_sources,
+        )
+        print(f"wrote medHarness2 preflight output to {args.output}")
+        print(
+            "passed="
+            f"{result['passed']} "
+            f"cases={result['sample']['case_count']} "
+            f"blockers={','.join(result['blockers']) if result['blockers'] else '-'}"
+        )
         return 0 if result["passed"] else 1
     parser.error("unsupported command")
     return 2

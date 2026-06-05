@@ -72,5 +72,103 @@ python -m pytest -q
 正式评测必须先完成真实 OCR。当前可选路径如下：
 
 1. 修复本地 `qwen25vl_7b_instruct` 权重路径后，用 `local_vlm_cli` 跑 OCR。
-2. 使用云端 VLM OCR。
-3. 继续使用 mock OCR 只做工程闭环验证，但不能作为正式评价结果。
+2. 使用新增的 `local_hf_vlm` 直连本地 HF VLM 权重目录。
+3. 使用云端 VLM OCR。
+4. 继续使用 mock OCR 只做工程闭环验证，但不能作为正式评价结果。
+
+## Qwen3-VL 4B 本地路径
+
+进一步扫描本机后，发现可用的 Qwen3-VL 4B 权重：
+
+```text
+/data/cyf/shared_data/hd_data/qwen3-vl-4B
+```
+
+该目录包含 `config.json`、`preprocessor_config.json`、`tokenizer_config.json`、
+`model.safetensors.index.json` 和 2 个 safetensors shard。medHarness2 已新增
+`llm.provider: local_hf_vlm`，可直接使用该目录，不依赖旧项目 registry。
+
+配置示例：
+
+```yaml
+llm:
+  provider: local_hf_vlm
+  model: qwen3-vl-4b
+  local_hf_model_path: /data/cyf/shared_data/hd_data/qwen3-vl-4B
+  local_hf_device: cuda:0
+  local_hf_dtype: bf16
+  local_hf_max_new_tokens: 384
+```
+
+仓库内也提供了可直接使用的配置文件：
+
+```text
+config/local_hf_qwen3vl4b.yaml
+```
+
+## Qwen3-VL 4B OCR Smoke
+
+已对样本集 1 例扫描 PDF 执行真实本地 OCR：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=src python - <<'PY'
+from medharness2.config import LLMConfig, load_config
+from medharness2.data.sample_data import prepare_sample_dataset
+
+cfg = load_config()
+cfg.llm = LLMConfig(
+    provider="local_hf_vlm",
+    model="qwen3-vl-4b",
+    local_hf_model_path="/data/cyf/shared_data/hd_data/qwen3-vl-4B",
+    local_hf_device="cuda:0",
+    local_hf_dtype="bf16",
+    local_hf_max_new_tokens=384,
+)
+prepare_sample_dataset(
+    "/data/isbi/gzp/medHarness/data/sample_data_2026-06-05",
+    "outputs/sample_data_2026-06-05_local_hf_qwen3vl4b_ocr_limit1_20260606",
+    config=cfg,
+    limit=1,
+    run_ocr=True,
+    require_real_ocr=True,
+    force_ocr=True,
+)
+PY
+```
+
+校验：
+
+```bash
+PYTHONPATH=src python -m medharness2.cli workflow validate-run \
+  --output-dir outputs/sample_data_2026-06-05_local_hf_qwen3vl4b_ocr_limit1_20260606 \
+  --expected-cases 1 \
+  --require-real-ocr \
+  --no-require-workflows
+```
+
+结果：`passed=true`，`real_ocr_count=1`，`mock_ocr_count=0`，`unknown_ocr_count=0`。
+OCR 文本成功提取中文报告正文，包括检查所见、诊断印象、报告医生和审核时间。
+
+随后已扩展到 52 例样本：
+
+```text
+outputs/sample_data_2026-06-05_local_hf_qwen3vl4b_ocr_52_20260606
+```
+
+结果：`cases=52`，`with_report_text=52`，`warnings={}`。
+
+最终校验：
+
+```text
+passed=true
+real_ocr_count=52
+mock_ocr_count=0
+unknown_ocr_count=0
+failed_case_count=0
+```
+
+详见：
+
+```text
+docs/sample_data_2026-06-05_real_ocr_qwen3vl4b_20260606.md
+```

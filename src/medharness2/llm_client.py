@@ -22,6 +22,7 @@ class LLMClientError(RuntimeError):
 class LLMClient:
     def __init__(self, config: AppConfig | None = None):
         self.config = config or load_config()
+        self._local_hf_cache: dict[tuple[str, str, str], tuple[Any, Any]] = {}
 
     def call(self, prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
         provider = self.config.llm.provider.lower()
@@ -31,6 +32,8 @@ class LLMClient:
             return self._call_openai_responses(prompt, image_path=image_path, **kwargs)
         if provider in {"local_vlm_cli", "medharness_cli_vlm"}:
             return self._call_local_vlm_cli(prompt, image_path=image_path, **kwargs)
+        if provider in {"local_hf_vlm", "hf_vlm_local"}:
+            return self._call_local_hf_vlm(prompt, image_path=image_path, **kwargs)
         raise LLMClientError(f"Unsupported LLM provider: {self.config.llm.provider}")
 
     def _mock_response(self, prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
@@ -133,6 +136,16 @@ class LLMClient:
                 raise LLMClientError("Local VLM CLI call timed out") from exc
             return self._read_local_vlm_output(output_jsonl)
 
+    def _call_local_hf_vlm(self, prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
+        llm = self.config.llm
+        with tempfile.TemporaryDirectory(prefix="medharness2_local_hf_vlm_") as tmpdir:
+            image_paths = self._local_hf_image_paths(image_path, Path(tmpdir))
+            return self._generate_local_hf_vlm(
+                prompt,
+                image_paths,
+                int(kwargs.get("max_new_tokens") or llm.local_hf_max_new_tokens),
+            )
+
     @staticmethod
     def _build_input(prompt: str, image_path: str | None) -> str | list[dict[str, Any]]:
         if image_path:
@@ -182,7 +195,15 @@ class LLMClient:
             return self._render_pdf_pages(path, tmp)
         return [str(path.resolve())]
 
-    def _render_pdf_pages(self, pdf: Path, tmp: Path) -> list[str]:
+    def _local_hf_image_paths(self, image_path: str | None, tmp: Path) -> list[str]:
+        if not image_path:
+            return []
+        path = Path(image_path).expanduser()
+        if path.exists() and path.suffix.lower() == ".pdf":
+            return self._render_pdf_pages(path, tmp, max_pages=self.config.llm.local_hf_pdf_max_pages)
+        return [str(path.resolve())]
+
+    def _render_pdf_pages(self, pdf: Path, tmp: Path, *, max_pages: int | None = None) -> list[str]:
         try:
             import fitz
         except Exception as exc:
@@ -192,13 +213,83 @@ class LLMClient:
         except Exception as exc:
             raise LLMClientError(f"Could not open PDF for local VLM OCR: {pdf}") from exc
         paths: list[str] = []
-        max_pages = max(1, int(self.config.llm.local_cli_pdf_max_pages))
-        for index, page in enumerate(doc[:max_pages]):
+        page_limit = max(1, int(max_pages if max_pages is not None else self.config.llm.local_cli_pdf_max_pages))
+        for index, page in enumerate(doc[:page_limit]):
             pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
             out = tmp / f"pdf_page_{index + 1}.png"
             pixmap.save(out)
             paths.append(str(out))
         return paths
+
+    def _generate_local_hf_vlm(self, prompt: str, image_paths: list[str], max_new_tokens: int) -> str:
+        model, processor = self._load_local_hf_vlm()
+        images = self._load_images(image_paths)
+        if hasattr(processor, "apply_chat_template"):
+            content = [{"type": "image"} for _ in images]
+            content.append({"type": "text", "text": prompt})
+            messages = [{"role": "user", "content": content}]
+            text = processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+            inputs = processor(text=[text], images=images or None, return_tensors="pt")
+        else:
+            inputs = processor(text=prompt, images=images or None, return_tensors="pt")
+        target_device = getattr(model, "device", None)
+        if target_device is not None:
+            inputs = {key: value.to(target_device) if hasattr(value, "to") else value for key, value in inputs.items()}
+        import torch
+
+        with torch.no_grad():
+            generated_ids = model.generate(**inputs, max_new_tokens=max_new_tokens)
+        decoded = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
+        return _strip_prompt(decoded, prompt)
+
+    def _load_local_hf_vlm(self) -> tuple[Any, Any]:
+        model_path = self.config.llm.local_hf_model_path
+        if not model_path:
+            raise LLMClientError("local_hf_model_path is required for local_hf_vlm")
+        cache_key = (model_path, self.config.llm.local_hf_device, self.config.llm.local_hf_dtype)
+        cached = self._local_hf_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        try:
+            import torch
+            from transformers import AutoModelForCausalLM, AutoProcessor
+        except Exception as exc:
+            raise LLMClientError("torch, transformers, and Pillow are required for local_hf_vlm") from exc
+        try:
+            from transformers import AutoModelForImageTextToText  # type: ignore
+        except Exception:
+            AutoModelForImageTextToText = None
+        try:
+            from transformers import AutoModelForVision2Seq  # type: ignore
+        except Exception:
+            AutoModelForVision2Seq = None
+
+        processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True, local_files_only=True)
+        dtype = self.config.llm.local_hf_dtype.lower()
+        torch_dtype = torch.bfloat16 if dtype == "bf16" else torch.float16 if dtype == "fp16" else torch.float32
+        load_kwargs: dict[str, Any] = {
+            "torch_dtype": torch_dtype,
+            "trust_remote_code": True,
+            "local_files_only": True,
+        }
+        device = self.config.llm.local_hf_device
+        if device.startswith("cuda"):
+            load_kwargs["device_map"] = "auto"
+        model_cls = AutoModelForImageTextToText or AutoModelForVision2Seq or AutoModelForCausalLM
+        model = model_cls.from_pretrained(model_path, **load_kwargs)
+        if not device.startswith("cuda"):
+            model = model.to(device)
+        model.eval()
+        self._local_hf_cache[cache_key] = (model, processor)
+        return model, processor
+
+    @staticmethod
+    def _load_images(image_paths: list[str]) -> list[Any]:
+        try:
+            from PIL import Image
+        except Exception as exc:
+            raise LLMClientError("Pillow is required for local_hf_vlm image loading") from exc
+        return [Image.open(path).convert("RGB") for path in image_paths]
 
     @staticmethod
     def _read_local_vlm_output(output_jsonl: Path) -> str:
@@ -232,3 +323,13 @@ def _file_data_url(path: Path) -> str:
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     data = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime};base64,{data}"
+
+
+def _strip_prompt(decoded: str, prompt: str) -> str:
+    text = decoded.strip()
+    if prompt and prompt in text:
+        text = text.split(prompt, 1)[-1].strip()
+    for prefix in ("assistant\n", "assistant:", "Assistant\n", "Assistant:", "model\n", "model:"):
+        if text.startswith(prefix):
+            text = text[len(prefix) :].strip()
+    return text

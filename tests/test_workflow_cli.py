@@ -237,3 +237,29 @@ def test_cli_models_list_shows_local_ready_generators(capsys):
     assert "maira_2" in captured.out
     assert "chexagent_srrg_findings_full" in captured.out
     assert "brain_gemma3d" not in captured.out
+
+
+def test_cli_preflight_returns_nonzero_when_real_ocr_is_blocked(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
+    output = tmp_path / "preflight.json"
+    code = main(
+        [
+            "workflow",
+            "preflight",
+            "--sample-root",
+            str(sample_root),
+            "--output",
+            str(output),
+            "--limit",
+            "1",
+            "--require-real-ocr",
+            "--all-compatible-local-models",
+        ]
+    )
+    assert code == 1
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert "real_ocr_required_but_provider_is_mock" in payload["blockers"]

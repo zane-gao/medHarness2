@@ -138,6 +138,31 @@ def test_api_validate_run(tmp_path: Path):
     assert body["result"]["case_count"] == 1
 
 
+def test_api_preflight_reports_blockers(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
+    output = tmp_path / "preflight.json"
+    client = TestClient(app)
+    response = client.post(
+        "/workflow/preflight",
+        json={
+            "sample_root": str(sample_root),
+            "output_path": str(output),
+            "limit": 1,
+            "require_real_ocr": True,
+            "all_compatible_local_models": True,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["passed"] is False
+    assert "real_ocr_required_but_provider_is_mock" in body["summary"]["blockers"]
+    assert output.exists()
+
+
 def test_api_sample_full(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"

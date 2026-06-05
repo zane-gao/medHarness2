@@ -129,6 +129,30 @@ This renders scanned PDF pages to temporary PNG files and calls the legacy
 metadata is recorded as `provider: local_vlm_cli`; keep in mind that
 `qwen25vl_7b_instruct` is a debug/OCR fallback, not a formal report-trained
 candidate for model ranking.
+
+On this machine, the medHarness Qwen2.5-VL soft link is currently missing its
+HF snapshot. The directly available local Qwen3-VL 4B path works for OCR smoke:
+
+```yaml
+llm:
+  provider: local_hf_vlm
+  model: qwen3-vl-4b
+  local_hf_model_path: /data/cyf/shared_data/hd_data/qwen3-vl-4B
+  local_hf_device: cuda:0
+  local_hf_dtype: bf16
+```
+
+Run a gate check before an expensive sample run:
+
+```bash
+PYTHONPATH=src medharness2 workflow preflight \
+  --sample-root /data/isbi/gzp/medHarness/data/sample_data_2026-06-05 \
+  --output outputs/sample_data_2026-06-05_preflight/preflight.json \
+  --require-real-ocr \
+  --all-compatible-local-models \
+  --config config/local_hf_qwen3vl4b.yaml
+```
+
 OCR caches are resumable: a later real-provider run can reuse caches whose
 `.ocr.json` records real provenance, and it refreshes mock or unknown caches
 when `--require-real-ocr` is set. Use `--force-ocr` to deliberately regenerate

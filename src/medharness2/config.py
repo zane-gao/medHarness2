@@ -28,6 +28,11 @@ class LLMConfig:
     local_cli_max_new_tokens: int = 512
     local_cli_timeout_sec: int = 1800
     local_cli_pdf_max_pages: int = 3
+    local_hf_model_path: str = ""
+    local_hf_device: str = "cuda:0"
+    local_hf_dtype: str = "bf16"
+    local_hf_max_new_tokens: int = 512
+    local_hf_pdf_max_pages: int = 3
 
 
 @dataclass
