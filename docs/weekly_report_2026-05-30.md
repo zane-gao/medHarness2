@@ -62,6 +62,7 @@
 - CXR 真实 OCR 三 fresh 模型 11 例 batch：`maira_2`、`chexagent_srrg_findings_full`、`medgemma_srrg_findings` 共生成 33 个 fresh 候选，Workflow 2/3 失败 0 例，质量门控失败 0。
 - Merlin fresh 腹部 CT smoke：`merlin_fresh / medharness_cli`，生成非空腹部 CT 报告。
 - Merlin 真实 OCR 腹部 CT 2 例 batch：基于 Qwen3-VL 4B OCR cache 和派生 NIfTI，2 例均生成 `merlin_fresh / medharness_cli`，Workflow 2/3 失败 0 例。
+- Merlin 真实 OCR 腹部 CT 7 例 batch：完整 CT abdomen 子集均生成 `merlin_fresh / medharness_cli`，Workflow 2/3 失败 0 例，质量门控失败 0。
 - BrainGemma3D 脑 MRI smoke：接口可跑通，但输出出现 hip radiograph 内容，已标记为接口 smoke，不作为正式质量结果。
 - 基于真实 OCR manifest 的 Workflow 2/3 smoke：52 例、0 failed cases、6 个 reader；生成侧限定为 artifact reuse 且关闭 fallback，因此该运行是工程闭环，不是最终正式模型排名。
 
@@ -82,10 +83,9 @@
 下周建议按以下顺序推进：
 
 1. 在真实 OCR manifest 基础上扩展 CXR fresh 小批量：MAIRA-2、CheXagent SRRG、MedGemma SRRG 多模型候选池。
-2. 对 Merlin fresh 扩展腹部 CT 小批量，记录耗时、失败率和输出质量。
-3. 针对 BrainGemma3D 做输入预处理核查和质量门控增强，决定是否进入正式候选池。
-4. 对无本地 report-trained 模型的 CR abdomen 与 CT head，明确通用 VLM fallback/debug baseline 的统计边界。
-5. 强化 Tool2 structured finding extractor，统一 observation、location、measurement、certainty、negation schema。
-6. 为 FastAPI 增加 run id、状态查询和结果索引，为后续平台化做准备。
+2. 针对 BrainGemma3D 做输入预处理核查和质量门控增强，决定是否进入正式候选池。
+3. 对无本地 report-trained 模型的 CR abdomen 与 CT head，明确通用 VLM fallback/debug baseline 的统计边界。
+4. 强化 Tool2 structured finding extractor，统一 observation、location、measurement、certainty、negation schema。
+5. 为 FastAPI 增加 run id、状态查询和结果索引，为后续平台化做准备。
 
 总体来看，本周已经在洪学长原始设计基础上完成了从设计文稿到可运行系统的关键落地：系统骨架、核心 workflow、样本数据入口、本机模型桥接、批量统计、质量门控和多类本机模型 smoke 均已形成闭环，为下一阶段真实 OCR 和正式批量实验打下了基础。
