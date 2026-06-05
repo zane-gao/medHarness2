@@ -1,67 +1,86 @@
 # medHarness2 本周工作汇报
 
-汇报日期：2026-05-30
+汇报周期：2026-05-30 至 2026-06-06
 
 ## 一、工作背景
 
-本周工作围绕 medHarness2 新系统落地展开。原始设计稿由洪学长提出，设计目标是围绕医学影像报告生成与评估，建立从人工报告、影像输入、AI 报告生成、单报告评估、Top-N 排序到 human-vs-AI 成对比较的闭环。本周工作的重点不是重新提出一套独立方案，而是在洪学长设计基础上进行工程化完善、范围收敛、关键接口拆分和 MVP 落地实现。
+本周工作围绕 medHarness2 新系统落地展开。原始设计稿由洪学长提出，设计目标是围绕医学影像报告生成与评估，建立从人工报告、影像输入、AI 报告生成、单报告评估、Top-N 排序到 human-vs-AI 成对比较的闭环。
+
+我的工作不是重新提出一套独立方案，而是在洪学长原设计基础上进一步完善系统边界、拆分关键接口、补齐工程实现，并用本机样本数据和已就位模型资源做落地验证。
 
 ## 二、基于原设计的完善
 
-针对设计稿中尚未完全定稿的部分，本周完成了三方面调整：
+本周主要完成了以下设计收敛和工程化调整：
 
-1. 将系统定位从“CLI 系统”调整为“核心 Python library + 薄 CLI/API 入口”。CLI 只作为最小验证和批处理入口，后续可平滑接入 Web/API 平台。
-2. 将云端 LLM/VLM 调用与本地报告生成模型解耦。`LLMClient` 负责 OpenAI/mock 等评估和 fallback；`ReportGeneratorRegistry` 负责本地复现模型和旧 medHarness 生成入口。
-3. 收敛 MVP 范围，仅保留单病例 Workflow 1 的核心闭环，将批量统计、复杂 workflow 和后续工具放到后续版本。
-
-同时，对 Tool/Module/Workflow 边界做了进一步澄清：Tool5 负责候选报告与参考报告的图谱对齐及错误候选生成，Tool4 负责 hazard level 与解释；Tool7 作为 modality fallback，不强制每次识别。
+1. 将系统定位从单纯 CLI 调整为“核心 Python library + 薄 CLI/API 入口”。CLI 用于最小验证和批处理，后续可继续接 Web/API 平台。
+2. 将云端 LLM/VLM 调用与本地报告生成模型解耦。`LLMClient` 负责评估、结构化解释、OCR 和 fallback；`ReportGeneratorRegistry` 负责本地复现模型、历史 artifact 和旧 medHarness runner。
+3. 明确 Tool/Module/Workflow 边界。Tool5 负责候选报告对参考报告的图谱对齐和错误候选生成，Tool4 负责 hazard level 与解释，Tool7 作为 modality fallback。
+4. 将样本数据流程扩展为完整链路：manifest 构建、PDF OCR cache、DICOM/体数据预处理、Workflow 1/2/3、运行校验和结果文档。
+5. 明确模型来源：不只依赖 API，可使用本机已就位模型、历史 artifact、旧 medHarness fresh runner 和云端 fallback，并在 JSON 中记录来源和 warning。
 
 ## 三、本周实现进展
 
 已在 `/data/isbi/gzp/medHarness2` 建立独立仓库，并完成多轮 checkpoint commit 与 push。当前系统已经包含：
 
 - 标准 Python 包结构、配置加载、JSON I/O、mock/OpenAI LLM client。
-- MVP tools：Likert 评估、报告 findings 抽取、结构检查、hazard 评估、图谱对齐、modality 识别、报告生成、Top-N 排序。
-- MVP modules：单报告评估与 human-vs-AI 成对比较。
-- MVP workflow：`single-case`，可从人工报告和影像路径出发生成 AI 报告、评估、排序并输出 nested JSON。
-- CLI 入口：`medharness2 workflow single-case`。
-- 工程化入口：`make test`、`make smoke`、`make smoke-legacy-cxr`、`make smoke-maira2`。
-- FastAPI 薄入口：`POST /workflow/single-case`，复用同一套 Python workflow。
+- Tools 1-12：Likert 评估、报告 findings 抽取、结构检查、hazard 评估、图谱对齐、modality 识别、报告生成、Top-N、模型级/风险级/统计汇总。
+- Modules：单报告评估与 human-vs-AI 成对比较。
+- Workflows：单病例 Workflow 1、医生 vs 模型批量 Workflow 2、科室医生组 vs AI 模型组统计 Workflow 3。
+- CLI：`single-case`、`sample-data`、`sample-full`、`batch-readers`、`department`、`validate-run`、`models list`。
+- FastAPI 薄入口：复用同一套 Python workflow。
+- 样本数据支持：读取 `/data/isbi/gzp/medHarness/data/sample_data_2026-06-05`，生成统一 manifest、OCR cache、PNG/NIfTI/contact sheet。
 
-在本地模型衔接方面，已完成两条路径：
+## 四、本机模型资源落地
 
-- `chexagent` artifact 复用：作为默认快速 smoke 路径，读取已有 generation JSONL，避免每次加载大模型。
-- `maira_2` fresh adapter：通过旧项目 `/data/isbi/gzp/medHarness/scripts/run_report_generation.py` 调用真实生成流程，实现 medHarness2 到旧 medHarness 模型资源的桥接。
+根据 `/data/isbi/gzp/medHarness/docs/report_generation_model_readiness.md` 和旧项目配置，已接入以下本机资源路线：
 
-## 四、验证结果
+- CXR artifact：`chexagent`、`llava_rad`、`r2gengpt`、`radialog_proxy` 等。
+- CXR fresh：`maira_2`、`chexagent_srrg_findings_full` 等。
+- 腹部 CT fresh：`merlin_fresh`。
+- 脑 MRI fresh：`brain_gemma3d`。
 
-本周完成了以下验证：
+本周解决了 MAIRA-2 调用链中的两个关键问题：
 
-- 默认 CLI smoke：`generated_reports=1`，`pairwise=1`。
-- 旧 medHarness CXR manifest artifact smoke：`generated_reports=1`，`pairwise=1`。
-- `maira_2` fresh smoke：完整运行 1 例 CXR 样例，退出码 `0`，耗时 `48` 秒，生成报告 1 份，完成 pairwise comparison 1 次。
-- 单元与集成测试：当前 `make test` 覆盖语法检查和 pytest，最近一次结果为 `26 passed`。
-- API 测试：FastAPI TestClient 可跑通 `/workflow/single-case`，缺少报告输入时返回 4xx。
+- 旧配置中的 `/data/miniconda3/envs/deepseek/bin/python` 当前 transformers 已变为 `5.9.0`，与 readiness 文档所需的 `4.48.2` 不一致；medHarness2 侧改用 `/data/miniconda3/envs/deepseek_2/bin/python`。
+- medHarness2 派生图像路径原本为相对路径，旧 runner 在 `/data/isbi/gzp/medHarness` 下执行时找不到文件；现已统一传入绝对路径。
 
-本周还修正了 Tool5 对齐语义：现在明确以 candidate report 对 reference/human report 对齐，candidate-only 记为 `false_finding`，reference-only 记为 `omission_finding`，precision/recall 分母也按 candidate/reference 语义修正，避免后续实验和论文解释混乱。
+同时新增 batch 级 `medharness_cli` 调用：Workflow 2 对纯 fresh 本地模型请求按模型分组，一次性写多例 input JSONL，减少重复加载大模型；混合 fresh + artifact 请求仍保留逐例路径，避免漏掉 artifact 候选。
 
-## 五、当前状态与风险
+## 五、验证结果
 
-当前 MVP 已能形成核心闭环，但仍有以下风险需要后续继续处理：
+已完成的关键验证：
 
-- Tool2 的 `cxr_rule` 仍是规则抽取器，只适合 MVP 和 CXR smoke；后续需要接入更稳定的结构化抽取 backend。
-- Tool4 hazard 目前是 MVP 规则估计，后续需要接 OpenAI evaluator 或本地 LLM evaluator，并保留 deterministic fallback。
-- `maira_2` fresh smoke 已跑通 1 例，但还不是批量稳定性验证；后续需在更多病例上评估失败率、耗时和显存占用。
-- FastAPI 当前是薄入口，尚未加入任务队列、运行状态管理、权限控制和 Web UI。
+- 单元与集成测试：`python -m pytest -q` 当前为 `69 passed`。
+- 语法/导入检查：`python -m compileall src tests` 通过。
+- 52 例 artifact-only 全链路：52 例完成，Workflow 2 失败 0 例，Workflow 3 reader 数 6。
+- MAIRA-2 单例 fresh smoke：`maira_2 / medharness_cli`，生成非空报告并进入 pairwise。
+- MAIRA-2 52 例 batch：11 例 `cxr/chest` 走 MAIRA-2 fresh，41 例不匹配病例 fallback，失败 0 例。
+- 双 CXR fresh 模型 smoke：`maira_2` + `chexagent_srrg_findings_full`，生成 2 个候选，Top-N 和 pairwise 均正常。
+- MAIRA-2 batch-readers 2 例 CXR chest：一次 batch 调用，2 例均生成 `maira_2 / medharness_cli`，失败 0 例。
+- Merlin fresh 腹部 CT smoke：`merlin_fresh / medharness_cli`，生成非空腹部 CT 报告。
+- BrainGemma3D 脑 MRI smoke：接口可跑通，但输出出现 hip radiograph 内容，已标记为接口 smoke，不作为正式质量结果。
 
-## 六、下周计划
+针对 BrainGemma3D 暴露出的质量问题，新增了轻量 modality/body-part 一致性门控。明显 off-domain 输出会保留在 JSON 中并标记 `quality_gate_failed`，但不会进入 Top-N 和 pairwise 正式比较。
+
+## 六、当前限制与风险
+
+当前系统仍有以下限制：
+
+- PDF 报告 OCR 仍主要使用 mock provider 缓存；正式评测前必须配置真实 VLM OCR，并通过 `validate-run --require-real-ocr`。
+- Tool2 的 CXR rule extractor 仍是 MVP 规则版，后续需要接更稳定的结构化抽取 backend。
+- Tool4 hazard 仍是 MVP 规则估计，后续需要接 evaluator 或本地 LLM，并保留 deterministic fallback。
+- BrainGemma3D 虽然接口可跑通，但本批样本输出存在部位语义跑偏，需要进一步核对真实输入预处理、模型适配和质量门控。
+- 当前 batch 优化只覆盖纯 `medharness_cli` 请求，后续可继续扩展到更多模型和更细的失败恢复机制。
+
+## 七、下周计划
 
 下周建议按以下顺序推进：
 
-1. 扩展本地模型 registry，将旧项目 readiness 文档中已就绪的 1-2 个稳定模型接入 medHarness2。
-2. 强化 Tool2 findings extractor，优先固定 observation、location、measurement、certainty、negation 的 schema。
-3. 将 `maira_2` fresh smoke 扩展到小批量病例，记录运行耗时、失败原因和输出质量摘要。
-4. 为 FastAPI 增加 run id、结果文件索引和基础状态查询接口，为后续平台化做准备。
-5. 整理一版面向论文复现的实验 manifest 与结果汇总格式，支持后续模型间比较。
+1. 配置真实 VLM OCR，重跑 52 例样本并通过 `--require-real-ocr` 校验。
+2. 扩展 CXR fresh 小批量：MAIRA-2、CheXagent SRRG、MedGemma SRRG 多模型候选池。
+3. 对 Merlin fresh 扩展腹部 CT 小批量，记录耗时、失败率和输出质量。
+4. 针对 BrainGemma3D 做输入预处理核查和质量门控增强，决定是否进入正式候选池。
+5. 强化 Tool2 structured finding extractor，统一 observation、location、measurement、certainty、negation schema。
+6. 为 FastAPI 增加 run id、状态查询和结果索引，为后续平台化做准备。
 
-总体来看，本周已经完成了从设计稿到可运行 MVP 的关键跨越：在洪学长原始设计的基础上，完成了设计收敛、系统骨架、核心 workflow、旧模型资源桥接、真实 smoke 验证和 API 入口，为后续批量实验和平台化奠定了基础。
+总体来看，本周已经在洪学长原始设计基础上完成了从设计文稿到可运行系统的关键落地：系统骨架、核心 workflow、样本数据入口、本机模型桥接、批量统计、质量门控和多类本机模型 smoke 均已形成闭环，为下一阶段真实 OCR 和正式批量实验打下了基础。
