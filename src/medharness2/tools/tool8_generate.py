@@ -28,10 +28,20 @@ def generate_reports(
         body_part=body_part,
         sources=set(model_sources or []),
     )
+    failed_attempts: list[dict[str, object]] = []
     for entry in selected_entries:
         generated = registry.generate(entry, image_path, modality, reference_report=reference_report, body_part=body_part)
         if generated.report:
             reports.append(generated)
+        else:
+            failed_attempts.append(
+                {
+                    "model": generated.model or entry.key,
+                    "source": generated.source or entry.source,
+                    "warnings": generated.warnings,
+                    "metadata": generated.metadata,
+                }
+            )
     if not reports and cfg.generator.cloud_fallback_enabled:
         prompt = f"Generate a concise radiology report for modality={modality}, body_part={body_part or 'unknown'}."
         if reference_report:
@@ -51,6 +61,7 @@ def generate_reports(
                     "body_part": body_part,
                     "requested_models": model_keys or cfg.generator.default_models,
                     "requested_sources": model_sources or [],
+                    "local_attempts": failed_attempts,
                 },
             )
         )

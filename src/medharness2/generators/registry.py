@@ -24,6 +24,7 @@ class GeneratorEntry:
     notes: str = ""
     source_generation_jsonl: str = ""
     medharness_model_key: str = ""
+    python_bin: str = "python"
     script_path: str = "/data/isbi/gzp/medHarness/scripts/run_report_generation.py"
     config_path: str = "/data/isbi/gzp/medHarness/configs/reportgen_models.yaml"
     output_jsonl: str = ""
@@ -170,21 +171,23 @@ class ReportGeneratorRegistry:
             tmp = Path(tmpdir)
             input_jsonl = tmp / "input.jsonl"
             output_jsonl = Path(entry.output_jsonl) if entry.output_jsonl else tmp / "generation.jsonl"
+            runtime_config = self._write_legacy_config_overlay(entry, tmp / "reportgen_models.overlay.yaml")
+            asset_path = str(Path(image_path).expanduser().resolve())
             row = {
                 "case_id": "medharness2_single_case",
                 "modality": "xray" if modality == "cxr" else modality,
                 "body_part": body_part or _default_body_part(modality),
-                "image_paths": [] if _looks_like_volume(image_path) else [image_path],
-                "volume_path": image_path if _looks_like_volume(image_path) else None,
+                "image_paths": [] if _looks_like_volume(asset_path) else [asset_path],
+                "volume_path": asset_path if _looks_like_volume(asset_path) else None,
                 "reference_report": reference_report or "",
                 "prompt": "Generate a radiology report for this study.",
             }
             input_jsonl.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
             cmd = [
-                "python",
+                entry.python_bin,
                 str(script),
                 "--config",
-                entry.config_path,
+                str(runtime_config),
                 "--model-key",
                 entry.medharness_model_key or entry.key,
                 "--input-jsonl",
@@ -223,6 +226,23 @@ class ReportGeneratorRegistry:
             return self._read_legacy_output(entry, output_jsonl, modality=modality, cmd=cmd)
 
     @staticmethod
+    def _write_legacy_config_overlay(entry: GeneratorEntry, output_path: Path) -> Path:
+        source = Path(entry.config_path)
+        if not source.exists() or entry.python_bin == "python":
+            return source
+        try:
+            payload = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return source
+        model_key = entry.medharness_model_key or entry.key
+        models = payload.get("models")
+        if not isinstance(models, dict) or not isinstance(models.get(model_key), dict):
+            return source
+        models[model_key]["python_bin"] = entry.python_bin
+        output_path.write_text(yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8")
+        return output_path
+
+    @staticmethod
     def _read_legacy_output(entry: GeneratorEntry, output_jsonl: Path, *, modality: str, cmd: list[str]) -> GeneratedReport:
         if not output_jsonl.exists():
             return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["legacy_output_missing"])
@@ -257,6 +277,7 @@ class ReportGeneratorRegistry:
                     notes=str(row.get("notes") or ""),
                     source_generation_jsonl=str(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(row.get("medharness_model_key") or row.get("model_key") or ""),
+                    python_bin=str(row.get("python_bin") or "python"),
                     script_path=str(row.get("script_path") or "/data/isbi/gzp/medHarness/scripts/run_report_generation.py"),
                     config_path=str(row.get("config_path") or "/data/isbi/gzp/medHarness/configs/reportgen_models.yaml"),
                     output_jsonl=str(row.get("output_jsonl") or ""),
@@ -299,6 +320,7 @@ class ReportGeneratorRegistry:
                     notes=str(row.get("notes") or ""),
                     source_generation_jsonl=str(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(key),
+                    python_bin=str(row.get("python_bin") or "python"),
                     script_path="/data/isbi/gzp/medHarness/scripts/run_report_generation.py",
                     config_path=str(path),
                 )

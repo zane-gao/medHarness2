@@ -4,7 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from medharness2.config import AppConfig, GeneratorConfig, LLMConfig
+from medharness2.config import AppConfig, GeneratorConfig, LLMConfig, load_config
 from medharness2.generators.registry import ReportGeneratorRegistry
 from medharness2.llm_client import LLMClient
 from medharness2.tools.tool2_extract import extract_findings
@@ -46,11 +46,47 @@ def test_artifact_generator_reads_existing_jsonl(tmp_path: Path):
     assert reports[0].source == "artifact_reuse"
 
 
+def test_fallback_records_failed_local_generation_attempt(tmp_path: Path):
+    missing_artifact = tmp_path / "missing.jsonl"
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=True,
+            default_models=["missing_artifact"],
+            local_models=[
+                {
+                    "key": "missing_artifact",
+                    "source": "artifact_reuse",
+                    "supported_modalities": ["xray", "cxr"],
+                    "source_generation_jsonl": str(missing_artifact),
+                }
+            ],
+        )
+    )
+    reports = generate_reports("image.png", "cxr", config=cfg, llm_client=LLMClient(cfg))
+    assert reports[0].source == "cloud_fallback"
+    assert reports[0].metadata["local_attempts"][0]["model"] == "missing_artifact"
+    assert "artifact_missing" in reports[0].metadata["local_attempts"][0]["warnings"]
+
+
 def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: Path):
     output_jsonl = tmp_path / "legacy_out.jsonl"
+    legacy_config = tmp_path / "legacy_models.yaml"
+    legacy_config.write_text(
+        "models:\n"
+        "  maira_2:\n"
+        "    python_bin: /stale/bin/python\n",
+        encoding="utf-8",
+    )
 
     def fake_run(cmd, check, capture_output, text, timeout):
+        assert cmd[0] == "/opt/isolated/bin/python"
         assert "/data/isbi/gzp/medHarness/scripts/run_report_generation.py" in cmd
+        config_path = Path(cmd[cmd.index("--config") + 1])
+        assert config_path != legacy_config
+        assert "/opt/isolated/bin/python" in config_path.read_text(encoding="utf-8")
+        input_path = Path(cmd[cmd.index("--input-jsonl") + 1])
+        input_row = json.loads(input_path.read_text(encoding="utf-8"))
+        assert Path(input_row["image_paths"][0]).is_absolute()
         out_index = cmd.index("--output-jsonl") + 1
         Path(cmd[out_index]).write_text(
             json.dumps({"model_key": "maira_2", "generated_text": "FINDINGS: Clear lungs.", "modality": "xray"})
@@ -70,6 +106,8 @@ def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: P
                     "source": "medharness_cli",
                     "supported_modalities": ["xray", "cxr"],
                     "medharness_model_key": "maira_2",
+                    "python_bin": "/opt/isolated/bin/python",
+                    "config_path": str(legacy_config),
                     "output_jsonl": str(output_jsonl),
                     "ready": True,
                 }
@@ -108,6 +146,11 @@ def test_registry_filters_all_compatible_by_source():
     assert "llava_rad" in selected
     assert "maira_2" not in selected
     assert set(selected.values()) == {"artifact_reuse"}
+
+
+def test_default_config_uses_maira2_compatible_python_bin():
+    registry = ReportGeneratorRegistry(load_config())
+    assert registry.entries["maira_2"].python_bin == "/data/miniconda3/envs/deepseek_2/bin/python"
 
 
 def test_cxr_rule_extractor_marks_negated_observation_absent():

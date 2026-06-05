@@ -195,6 +195,9 @@ Use `--model-source medharness_cli` when the intent is fresh local inference
 through the old medHarness runners. This should be combined with explicit
 `--model` values or a prior dry run, because it may load large local models such
 as MAIRA-2, CheXagent SRRG, MedGemma SRRG, Merlin fresh, or BrainGemma3D.
+For MAIRA-2, medHarness2's default config uses
+`/data/miniconda3/envs/deepseek_2/bin/python`, which currently matches the
+`transformers 4.48.2` environment described by the old readiness notes.
 
 `sample-data` also writes `summary.json` with modality/body-part/warning counts.
 `batch-readers` writes `failed_cases` and continues processing when an

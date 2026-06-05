@@ -37,6 +37,7 @@ generator:
       supported_modalities: [xray, cxr]
       supported_body_parts: [chest, lung]
       medharness_model_key: maira_2
+      python_bin: /data/miniconda3/envs/deepseek_2/bin/python
       script_path: /data/isbi/gzp/medHarness/scripts/run_report_generation.py
       config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
       device: cuda:0
