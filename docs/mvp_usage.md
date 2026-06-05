@@ -111,6 +111,9 @@ PYTHONPATH=src medharness2 workflow sample-data \
 Use `--limit 1` for a quick smoke and `--skip-ocr` when only checking DICOM and
 manifest parsing. All OCR caches, converted PNG/NIfTI/contact-sheet assets, and
 workflow outputs live under `outputs/` and should not be committed.
+When `llm.provider: mock`, OCR results are marked with `mock_ocr_used`. Add
+`--require-real-ocr` to reject mock OCR and surface
+`real_ocr_required_but_provider_is_mock` until a real VLM provider is configured.
 
 Then run the batch reader and department workflows:
 

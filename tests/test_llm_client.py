@@ -30,3 +30,16 @@ def test_openai_provider_requires_api_key(monkeypatch):
     client = LLMClient(AppConfig(llm=LLMConfig(provider="openai", max_retries=1)))
     with pytest.raises(LLMClientError):
         client.call("hello")
+
+
+def test_openai_multimodal_input_uses_data_urls(tmp_path):
+    png = tmp_path / "image.png"
+    png.write_bytes(b"\x89PNG\r\n\x1a\n")
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n")
+    image_input = LLMClient._build_input("look", str(png))
+    pdf_input = LLMClient._build_input("read", str(pdf))
+    assert image_input[0]["content"][1]["type"] == "input_image"
+    assert image_input[0]["content"][1]["image_url"].startswith("data:image/png;base64,")
+    assert pdf_input[0]["content"][0]["type"] == "input_file"
+    assert pdf_input[0]["content"][0]["file_data"].startswith("data:application/pdf;base64,")

@@ -94,6 +94,36 @@ def test_prepare_sample_dataset_continues_when_ocr_fails(tmp_path: Path):
     assert summary["warning_counts"]["ocr_failed:RuntimeError"] == 1
 
 
+def test_prepare_sample_dataset_marks_mock_ocr(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    _write_dicom(case_dir / "Y1", modality="CR", body_part="CHEST")
+    _write_blank_pdf(sample_root / "CR" / "CR001" / "report.pdf")
+    pd.DataFrame({"ID": ["CR001"], "Reader": ["reader_a"]}).to_excel(sample_root / "readers.xlsx", index=False)
+    rows = prepare_sample_dataset(sample_root, tmp_path / "out", config=AppConfig(llm=LLMConfig(provider="mock")))
+    assert "mock_ocr_used" in rows[0].warnings
+    summary = json.loads((tmp_path / "out" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["warning_counts"]["mock_ocr_used"] == 1
+
+
+def test_prepare_sample_dataset_require_real_ocr_rejects_mock_provider(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    _write_dicom(case_dir / "Y1", modality="CR", body_part="CHEST")
+    _write_blank_pdf(sample_root / "CR" / "CR001" / "report.pdf")
+    pd.DataFrame({"ID": ["CR001"], "Reader": ["reader_a"]}).to_excel(sample_root / "readers.xlsx", index=False)
+    rows = prepare_sample_dataset(
+        sample_root,
+        tmp_path / "out",
+        config=AppConfig(llm=LLMConfig(provider="mock")),
+        require_real_ocr=True,
+    )
+    assert "real_ocr_required_but_provider_is_mock" in rows[0].warnings
+    assert rows[0].report_text == ""
+
+
 def _write_blank_pdf(path: Path) -> None:
     doc = fitz.open()
     doc.new_page(width=200, height=200)

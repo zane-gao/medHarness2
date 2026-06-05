@@ -63,6 +63,8 @@ PYTHONPATH=src medharness2 workflow sample-data \
 For a low-cost structural check, keep the default `llm.provider: mock` or add
 `--skip-ocr`. With an OpenAI provider configured, report PDFs are sent through
 the multimodal Responses API; credentials must come from environment variables.
+Mock OCR is marked with `mock_ocr_used`; use `--require-real-ocr` when preparing
+data for real evaluation so mock text cannot be mistaken for extracted reports.
 
 Run the batch and department workflows from the generated manifest:
 

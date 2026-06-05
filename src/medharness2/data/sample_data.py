@@ -60,6 +60,7 @@ def prepare_sample_dataset(
     llm_client: LLMClient | None = None,
     limit: int | None = None,
     run_ocr: bool = True,
+    require_real_ocr: bool = False,
 ) -> list[CaseManifest]:
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
@@ -86,12 +87,24 @@ def prepare_sample_dataset(
         report_text_path = row.report_text
         warnings = [*row.warnings, *prepared.warnings]
         if run_ocr and row.report_pdf:
-            try:
-                ocr = extract_report_text(row.report_pdf, row.case_id, output_dir=out_dir / "ocr", config=cfg, llm_client=client)
-                report_text_path = ocr.cache_path
-                warnings.extend(ocr.warnings)
-            except Exception as exc:
-                warnings.append(f"ocr_failed:{type(exc).__name__}")
+            if cfg.llm.provider.lower() == "mock":
+                if require_real_ocr:
+                    warnings.append("real_ocr_required_but_provider_is_mock")
+                else:
+                    warnings.append("mock_ocr_used")
+                    try:
+                        ocr = extract_report_text(row.report_pdf, row.case_id, output_dir=out_dir / "ocr", config=cfg, llm_client=client)
+                        report_text_path = ocr.cache_path
+                        warnings.extend(ocr.warnings)
+                    except Exception as exc:
+                        warnings.append(f"ocr_failed:{type(exc).__name__}")
+            else:
+                try:
+                    ocr = extract_report_text(row.report_pdf, row.case_id, output_dir=out_dir / "ocr", config=cfg, llm_client=client)
+                    report_text_path = ocr.cache_path
+                    warnings.extend(ocr.warnings)
+                except Exception as exc:
+                    warnings.append(f"ocr_failed:{type(exc).__name__}")
         prepared_rows.append(
             CaseManifest(
                 case_id=row.case_id,
