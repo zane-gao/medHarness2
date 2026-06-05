@@ -192,6 +192,12 @@ PYTHONPATH=src medharness2 workflow analyze-run \
 This writes case routing, model/source, reader, modality/body-part, and quality
 gate failure tables without rerunning OCR or generation.
 
+The same final validation and analysis can be repeated with:
+
+```bash
+make final-sample-check
+```
+
 For a design-to-implementation checklist and current 52-case evidence, see
 `docs/design_implementation_audit_20260606.md`.
 

@@ -226,6 +226,7 @@ PYTHONPATH=src python -m medharness2.cli workflow validate-run \
 PYTHONPATH=src python -m medharness2.cli workflow analyze-run \
   --output-dir outputs/sample_data_2026-06-05_final_local_routed_52_20260606 \
   --analysis-dir outputs/sample_data_2026-06-05_final_local_routed_52_20260606/analysis
+make final-sample-check
 ```
 
 最近一次验证结果：
@@ -234,6 +235,7 @@ PYTHONPATH=src python -m medharness2.cli workflow analyze-run \
 - `pytest`: `101 passed, 19 warnings`。
 - `validate-run`: `passed=true`，`errors=[]`。
 - `analyze-run`: `cases=52`，`generated_reports=81`，`quality_failed=9`。
+- `make final-sample-check`: 通过；确认最终分析表 7 个产物均存在。
 
 ## 当前未完成或需后续增强
 
