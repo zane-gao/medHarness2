@@ -8,6 +8,7 @@ from medharness2.llm_client import LLMClient
 from medharness2.modules.pairwise_report import evaluate_pairwise
 from medharness2.modules.single_report import evaluate_single_report
 from medharness2.schema import GeneratedReport
+from medharness2.tools.quality_gate import apply_generation_quality_gate
 from medharness2.tools.tool7_modality import recognize_modality
 from medharness2.tools.tool8_generate import generate_reports
 from medharness2.tools.tool9_rank import select_top_k
@@ -54,6 +55,10 @@ def run_single_case(
             llm_client=client,
         )
     )
+    generated = [
+        apply_generation_quality_gate(report, modality=modality_key, body_part=body_part)
+        for report in generated
+    ]
     human_evaluation = evaluate_single_report(
         report_text,
         image_path=image,
@@ -73,12 +78,25 @@ def run_single_case(
         evaluation["model"] = report.model
         evaluation["source"] = report.source
         evaluation["warnings"] = report.warnings
+        evaluation["quality_gate"] = report.metadata.get("quality_gate", {"passed": True})
         generated_evaluations.append(evaluation)
+    ranking_inputs = [
+        evaluation
+        for evaluation in generated_evaluations
+        if evaluation.get("quality_gate", {}).get("passed", True)
+    ]
+    ranking_index_map = [
+        index
+        for index, evaluation in enumerate(generated_evaluations)
+        if evaluation.get("quality_gate", {}).get("passed", True)
+    ]
     rankings = select_top_k(
-        generated_evaluations,
+        ranking_inputs,
         weights=cfg.ranking.weights,
         top_k=top_n if top_n is not None else cfg.ranking.top_n,
     )
+    for row in rankings:
+        row["index"] = ranking_index_map[row["index"]]
     pairwise = []
     for row in rankings:
         evaluation = generated_evaluations[row["index"]]

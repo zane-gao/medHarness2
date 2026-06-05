@@ -204,6 +204,11 @@ calling the old medHarness runner. This reduces repeated model loading for
 fresh local runs. Mixed source requests, such as fresh models plus artifact
 reuse, keep the per-case path so artifact candidates are not dropped.
 
+Generated reports pass through a lightweight modality/body-part consistency
+gate before ranking. Obvious off-domain outputs, such as a brain MRI model
+returning a hip radiograph report, are kept in JSON with `quality_gate_failed`
+metadata but are excluded from Top-N and pairwise comparison.
+
 `sample-data` also writes `summary.json` with modality/body-part/warning counts.
 `batch-readers` writes `failed_cases` and continues processing when an
 individual case fails, so long full-dataset runs can be inspected and resumed

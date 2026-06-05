@@ -4,10 +4,11 @@ import json
 from pathlib import Path
 
 from medharness2.cli import main
-from medharness2.config import load_config
+from medharness2.config import AppConfig, GeneratorConfig, load_config
 from medharness2.llm_client import build_mock_client
 from medharness2.modules.pairwise_report import evaluate_pairwise
 from medharness2.modules.single_report import evaluate_single_report
+from medharness2.schema import GeneratedReport
 from medharness2.workflows.single_case import run_single_case
 
 
@@ -65,6 +66,67 @@ def test_cli_single_case(tmp_path: Path):
     assert code == 0
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert "pairwise_comparisons" in payload
+
+
+def test_single_case_quality_gate_blocks_off_domain_generated_report(tmp_path: Path):
+    report = tmp_path / "human.txt"
+    image = tmp_path / "brain.nii.gz"
+    output = tmp_path / "result.json"
+    report.write_text("FINDINGS: Brain MRI without acute infarct. IMPRESSION: No acute intracranial abnormality.", encoding="utf-8")
+    image.write_text("dummy", encoding="utf-8")
+    generated = GeneratedReport(
+        model="brain_gemma3d",
+        source="medharness_cli",
+        report="Findings: A left hip radiograph shows sclerosis of the femoral head.",
+        modality="mri",
+    )
+    result = run_single_case(
+        report_path=report,
+        image_path=image,
+        output_path=output,
+        modality="mri",
+        body_part="brain",
+        precomputed_generated_reports=[generated],
+        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        llm_client=build_mock_client(),
+    )
+    blocked = result["generated_reports"][0]
+    assert "quality_gate_failed" in blocked["warnings"]
+    assert "body_part_mismatch" in blocked["warnings"]
+    assert "modality_mismatch" in blocked["warnings"]
+    assert blocked["metadata"]["quality_gate"]["passed"] is False
+    assert result["rankings"] == []
+    assert result["pairwise_comparisons"] == []
+
+
+def test_single_case_quality_gate_keeps_matching_cxr_report(tmp_path: Path):
+    report = tmp_path / "human.txt"
+    image = tmp_path / "chest.png"
+    output = tmp_path / "result.json"
+    report.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal chest.", encoding="utf-8")
+    image.write_text("dummy", encoding="utf-8")
+    generated = GeneratedReport(
+        model="chexagent_srrg_findings_full",
+        source="medharness_cli",
+        report="FINDINGS: Lungs are clear. No pleural effusion or pneumothorax.",
+        modality="cxr",
+    )
+    result = run_single_case(
+        report_path=report,
+        image_path=image,
+        output_path=output,
+        modality="cxr",
+        body_part="chest",
+        top_n=1,
+        precomputed_generated_reports=[generated],
+        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        llm_client=build_mock_client(),
+    )
+    kept = result["generated_reports"][0]
+    assert kept["metadata"]["quality_gate"]["passed"] is True
+    assert "quality_gate_failed" not in kept["warnings"]
+    assert result["rankings"][0]["model"] == "chexagent_srrg_findings_full"
+    assert len(result["pairwise_comparisons"]) == 1
 
 
 def test_cli_sample_full(tmp_path: Path):

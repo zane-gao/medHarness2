@@ -85,6 +85,13 @@ Findings: The report is: A left hip radiograph shows a large area of increased d
 
 结论：BrainGemma3D 的本机接口和 Workflow 1 链路可以跑通，但本例输出明显偏离脑 MRI
 语义，出现 hip radiograph 内容。该结果只能作为接口 smoke，不应计入正式质量评测。
+后续新增的质量门控会将这类输出标记为 `quality_gate_failed`，并检测到：
+
+- `body_part_mismatch`：`hip`、`femoral`、`femur`。
+- `modality_mismatch`：`radiograph`。
+
+被门控拦截的候选会保留在 JSON 中，便于追踪模型失败模式，但不会进入 Top-N 或 pairwise
+正式比较。
 
 ## 总结
 
