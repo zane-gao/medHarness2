@@ -7,6 +7,7 @@ from medharness2.config import AppConfig, load_config
 from medharness2.llm_client import LLMClient
 from medharness2.modules.pairwise_report import evaluate_pairwise
 from medharness2.modules.single_report import evaluate_single_report
+from medharness2.schema import GeneratedReport
 from medharness2.tools.tool7_modality import recognize_modality
 from medharness2.tools.tool8_generate import generate_reports
 from medharness2.tools.tool9_rank import select_top_k
@@ -24,6 +25,7 @@ def run_single_case(
     top_n: int | None = None,
     model_keys: list[str] | None = None,
     model_sources: list[str] | None = None,
+    precomputed_generated_reports: list[GeneratedReport] | None = None,
     config: AppConfig | None = None,
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
@@ -38,15 +40,19 @@ def run_single_case(
     image = str((prepared_assets or {}).get("primary_image") or image_path)
     generation_image = str((prepared_assets or {}).get("volume_path") or (prepared_assets or {}).get("primary_image") or image_path)
     modality_key = modality or recognize_modality(image, config=cfg, llm_client=client)
-    generated = generate_reports(
-        generation_image,
-        modality_key,
-        reference_report=report_text,
-        model_keys=model_keys,
-        model_sources=model_sources,
-        body_part=body_part,
-        config=cfg,
-        llm_client=client,
+    generated = (
+        list(precomputed_generated_reports)
+        if precomputed_generated_reports is not None
+        else generate_reports(
+            generation_image,
+            modality_key,
+            reference_report=report_text,
+            model_keys=model_keys,
+            model_sources=model_sources,
+            body_part=body_part,
+            config=cfg,
+            llm_client=client,
+        )
     )
     human_evaluation = evaluate_single_report(
         report_text,

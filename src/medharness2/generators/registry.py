@@ -172,16 +172,13 @@ class ReportGeneratorRegistry:
             input_jsonl = tmp / "input.jsonl"
             output_jsonl = Path(entry.output_jsonl) if entry.output_jsonl else tmp / "generation.jsonl"
             runtime_config = self._write_legacy_config_overlay(entry, tmp / "reportgen_models.overlay.yaml")
-            asset_path = str(Path(image_path).expanduser().resolve())
-            row = {
-                "case_id": "medharness2_single_case",
-                "modality": "xray" if modality == "cxr" else modality,
-                "body_part": body_part or _default_body_part(modality),
-                "image_paths": [] if _looks_like_volume(asset_path) else [asset_path],
-                "volume_path": asset_path if _looks_like_volume(asset_path) else None,
-                "reference_report": reference_report or "",
-                "prompt": "Generate a radiology report for this study.",
-            }
+            row = _legacy_input_row(
+                case_id="medharness2_single_case",
+                image_path=image_path,
+                modality=modality,
+                body_part=body_part,
+                reference_report=reference_report,
+            )
             input_jsonl.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
             cmd = [
                 entry.python_bin,
@@ -225,6 +222,57 @@ class ReportGeneratorRegistry:
                 )
             return self._read_legacy_output(entry, output_jsonl, modality=modality, cmd=cmd)
 
+    def generate_batch(self, entry: GeneratorEntry, cases: list[dict[str, Any]]) -> dict[str, GeneratedReport]:
+        if entry.source != "medharness_cli" or not cases:
+            return {}
+        script = Path(entry.script_path)
+        if not script.exists():
+            return {}
+        with tempfile.TemporaryDirectory(prefix="medharness2_legacy_batch_") as tmpdir:
+            tmp = Path(tmpdir)
+            input_jsonl = tmp / "input.jsonl"
+            output_jsonl = tmp / "generation.jsonl"
+            runtime_config = self._write_legacy_config_overlay(entry, tmp / "reportgen_models.overlay.yaml")
+            input_rows = [
+                _legacy_input_row(
+                    case_id=str(case["case_id"]),
+                    image_path=str(case["image_path"]),
+                    modality=str(case["modality"]),
+                    body_part=str(case.get("body_part") or ""),
+                    reference_report=str(case.get("reference_report") or ""),
+                )
+                for case in cases
+            ]
+            input_jsonl.write_text(
+                "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in input_rows),
+                encoding="utf-8",
+            )
+            cmd = [
+                entry.python_bin,
+                str(script),
+                "--config",
+                str(runtime_config),
+                "--model-key",
+                entry.medharness_model_key or entry.key,
+                "--input-jsonl",
+                str(input_jsonl),
+                "--output-jsonl",
+                str(output_jsonl),
+                "--limit",
+                str(len(input_rows)),
+                "--device",
+                entry.device,
+                "--dtype",
+                entry.dtype,
+                "--max-new-tokens",
+                str(entry.max_new_tokens),
+            ]
+            try:
+                subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=entry.timeout_sec)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                return {}
+            return self._read_legacy_output_map(entry, output_jsonl, cmd=cmd)
+
     @staticmethod
     def _write_legacy_config_overlay(entry: GeneratorEntry, output_path: Path) -> Path:
         source = Path(entry.config_path)
@@ -261,6 +309,30 @@ class ReportGeneratorRegistry:
                     metadata={"cmd": _redacted_cmd(cmd), "adapter_status": row.get("adapter_status")},
                 )
         return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["legacy_output_empty"])
+
+    @staticmethod
+    def _read_legacy_output_map(entry: GeneratorEntry, output_jsonl: Path, *, cmd: list[str]) -> dict[str, GeneratedReport]:
+        if not output_jsonl.exists():
+            return {}
+        reports: dict[str, GeneratedReport] = {}
+        with output_jsonl.open("r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                case_id = str(row.get("case_id") or "")
+                if not case_id:
+                    continue
+                report = row.get("generated_text") or row.get("generated_report") or row.get("prediction_text") or row.get("Pred") or ""
+                reports[case_id] = GeneratedReport(
+                    model=str(row.get("model_key") or entry.key),
+                    source=entry.source,
+                    report=str(report),
+                    modality=str(row.get("modality") or ""),
+                    warnings=list(row.get("warnings") or []),
+                    metadata={"cmd": _redacted_cmd(cmd), "adapter_status": row.get("adapter_status")},
+                )
+        return reports
 
     @staticmethod
     def _load_entries(rows: list[dict[str, Any]]) -> list[GeneratorEntry]:
@@ -330,6 +402,26 @@ class ReportGeneratorRegistry:
 
 def _redacted_cmd(cmd: list[str]) -> list[str]:
     return [part if "token" not in part.lower() and "key" not in part.lower() else "<redacted>" for part in cmd]
+
+
+def _legacy_input_row(
+    *,
+    case_id: str,
+    image_path: str,
+    modality: str,
+    body_part: str | None,
+    reference_report: str | None,
+) -> dict[str, Any]:
+    asset_path = str(Path(image_path).expanduser().resolve())
+    return {
+        "case_id": case_id,
+        "modality": "xray" if modality == "cxr" else modality,
+        "body_part": body_part or _default_body_part(modality),
+        "image_paths": [] if _looks_like_volume(asset_path) else [asset_path],
+        "volume_path": asset_path if _looks_like_volume(asset_path) else None,
+        "reference_report": reference_report or "",
+        "prompt": "Generate a radiology report for this study.",
+    }
 
 
 def _looks_like_volume(path: str) -> bool:

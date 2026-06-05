@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -101,6 +102,182 @@ def test_batch_readers_and_department_workflows(tmp_path: Path):
     assert dept_output.exists()
     assert dept["statistics"]
     assert dept["reader_percentiles"]
+
+
+def test_batch_readers_batches_medharness_cli_generation(monkeypatch, tmp_path: Path):
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# fake legacy script\n", encoding="utf-8")
+    legacy_config = tmp_path / "reportgen_models.yaml"
+    legacy_config.write_text("models:\n  fake_fresh:\n    python_bin: python\n", encoding="utf-8")
+    report1 = tmp_path / "r1.txt"
+    report2 = tmp_path / "r2.txt"
+    image1 = tmp_path / "i1.png"
+    image2 = tmp_path / "i2.png"
+    report1.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal.", encoding="utf-8")
+    report2.write_text("FINDINGS: Mild right lung opacity. IMPRESSION: Opacity.", encoding="utf-8")
+    image1.write_text("dummy", encoding="utf-8")
+    image2.write_text("dummy", encoding="utf-8")
+    manifest = tmp_path / "manifest.jsonl"
+    rows = [
+        {
+            "case_id": "case1",
+            "reader": "doc_a",
+            "modality": "cxr",
+            "body_part": "chest",
+            "report_text": str(report1),
+            "image_paths": [str(image1)],
+            "derived_assets": {"primary_image": str(image1)},
+            "warnings": [],
+        },
+        {
+            "case_id": "case2",
+            "reader": "doc_b",
+            "modality": "cxr",
+            "body_part": "chest",
+            "report_text": str(report2),
+            "image_paths": [str(image2)],
+            "derived_assets": {"primary_image": str(image2)},
+            "warnings": [],
+        },
+    ]
+    manifest.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        input_path = Path(cmd[cmd.index("--input-jsonl") + 1])
+        output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+        input_rows = [json.loads(line) for line in input_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        calls.append([row["case_id"] for row in input_rows])
+        output_path.write_text(
+            "\n".join(
+                json.dumps(
+                    {
+                        "case_id": row["case_id"],
+                        "model_key": "fake_fresh",
+                        "generated_text": f"FINDINGS: Fresh report for {row['case_id']}.",
+                        "modality": row["modality"],
+                        "body_part": row["body_part"],
+                        "warnings": [],
+                        "adapter_status": "passed",
+                    }
+                )
+                for row in input_rows
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=True,
+            default_models=["fake_fresh"],
+            include_legacy_ready_models=False,
+            local_models=[
+                {
+                    "key": "fake_fresh",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["xray", "cxr"],
+                    "supported_body_parts": ["chest"],
+                    "medharness_model_key": "fake_fresh",
+                    "script_path": str(script),
+                    "config_path": str(legacy_config),
+                    "ready": True,
+                }
+            ],
+        ),
+    )
+    output = tmp_path / "workflow2.json"
+    result = run_batch_readers(manifest, output, config=cfg, model_keys=["fake_fresh"], model_sources=["medharness_cli"])
+    assert calls == [["case1", "case2"]]
+    assert result["failed_case_count"] == 0
+    for case in result["cases"]:
+        workflow1 = json.loads(Path(case["workflow1_output"]).read_text(encoding="utf-8"))
+        assert workflow1["generated_reports"][0]["model"] == "fake_fresh"
+        assert workflow1["generated_reports"][0]["source"] == "medharness_cli"
+
+
+def test_batch_readers_preserves_mixed_generator_sources(monkeypatch, tmp_path: Path):
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# fake legacy script\n", encoding="utf-8")
+    legacy_config = tmp_path / "reportgen_models.yaml"
+    legacy_config.write_text("models:\n  fake_fresh:\n    python_bin: python\n", encoding="utf-8")
+    artifact = tmp_path / "artifact.jsonl"
+    artifact.write_text(json.dumps({"generated_text": "FINDINGS: Artifact report.", "modality": "xray"}) + "\n", encoding="utf-8")
+    report = tmp_path / "report.txt"
+    image = tmp_path / "image.png"
+    report.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal.", encoding="utf-8")
+    image.write_text("dummy", encoding="utf-8")
+    manifest = tmp_path / "manifest.jsonl"
+    manifest.write_text(
+        json.dumps(
+            {
+                "case_id": "case1",
+                "reader": "doc_a",
+                "modality": "cxr",
+                "body_part": "chest",
+                "report_text": str(report),
+                "image_paths": [str(image)],
+                "derived_assets": {"primary_image": str(image)},
+                "warnings": [],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        input_path = Path(cmd[cmd.index("--input-jsonl") + 1])
+        output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+        input_row = json.loads(input_path.read_text(encoding="utf-8"))
+        output_path.write_text(
+            json.dumps(
+                {
+                    "case_id": input_row["case_id"],
+                    "model_key": "fake_fresh",
+                    "generated_text": "FINDINGS: Fresh report.",
+                    "modality": input_row["modality"],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=True,
+            default_models=["fake_fresh", "fake_artifact"],
+            include_legacy_ready_models=False,
+            local_models=[
+                {
+                    "key": "fake_fresh",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["xray", "cxr"],
+                    "supported_body_parts": ["chest"],
+                    "medharness_model_key": "fake_fresh",
+                    "script_path": str(script),
+                    "config_path": str(legacy_config),
+                    "ready": True,
+                },
+                {
+                    "key": "fake_artifact",
+                    "source": "artifact_reuse",
+                    "supported_modalities": ["xray", "cxr"],
+                    "supported_body_parts": ["chest"],
+                    "source_generation_jsonl": str(artifact),
+                },
+            ],
+        ),
+    )
+    output = tmp_path / "workflow2.json"
+    result = run_batch_readers(manifest, output, config=cfg)
+    workflow1 = json.loads(Path(result["cases"][0]["workflow1_output"]).read_text(encoding="utf-8"))
+    assert {report["model"] for report in workflow1["generated_reports"]} == {"fake_fresh", "fake_artifact"}
 
 
 def test_batch_readers_continues_when_case_workflow_fails(tmp_path: Path):

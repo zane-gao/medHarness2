@@ -6,7 +6,9 @@ from typing import Any
 
 from medharness2.config import AppConfig, load_config
 from medharness2.data.sample_data import load_manifest
+from medharness2.generators.registry import GeneratorEntry, ReportGeneratorRegistry
 from medharness2.llm_client import LLMClient
+from medharness2.schema import CaseManifest, GeneratedReport
 from medharness2.tools.tool10_modelwise import modelwise_weighted
 from medharness2.tools.tool12_statistics import calculate_statistics
 from medharness2.utils.io import write_json
@@ -34,6 +36,12 @@ def run_batch_readers(
     case_results: list[dict[str, Any]] = []
     failed_cases: list[dict[str, Any]] = []
     per_reader: dict[str, dict[str, Any]] = {}
+    precomputed_reports = _precompute_medharness_cli_reports(
+        rows,
+        config=cfg,
+        model_keys=model_keys,
+        model_sources=model_sources,
+    )
     for row in rows:
         try:
             report_text, report_path = _resolve_report_text(row.report_text)
@@ -49,6 +57,7 @@ def run_batch_readers(
                 body_part=row.body_part,
                 model_keys=model_keys,
                 model_sources=model_sources,
+                precomputed_generated_reports=precomputed_reports.get(row.case_id),
                 top_n=cfg.ranking.top_n,
                 config=cfg,
                 llm_client=client,
@@ -103,6 +112,58 @@ def run_batch_readers(
     }
     write_json(out, result)
     return result
+
+
+def _precompute_medharness_cli_reports(
+    rows: list[CaseManifest],
+    *,
+    config: AppConfig,
+    model_keys: list[str] | None,
+    model_sources: list[str] | None,
+) -> dict[str, list[GeneratedReport]]:
+    registry = ReportGeneratorRegistry(config)
+    grouped: dict[str, tuple[GeneratorEntry, list[dict[str, Any]]]] = {}
+    source_filter = set(model_sources or [])
+    for row in rows:
+        case_input = _case_generation_input(row)
+        if not case_input:
+            continue
+        entries = registry.select(row.modality, requested=model_keys, body_part=row.body_part, sources=source_filter)
+        if not entries or any(entry.source != "medharness_cli" for entry in entries):
+            continue
+        for entry in entries:
+            _, bucket = grouped.setdefault(entry.key, (entry, []))
+            bucket.append(case_input)
+    reports_by_case: dict[str, list[GeneratedReport]] = {}
+    for entry, cases in grouped.values():
+        generated = registry.generate_batch(entry, cases)
+        for case_id, report in generated.items():
+            if report.report:
+                reports_by_case.setdefault(case_id, []).append(report)
+    return reports_by_case
+
+
+def _case_generation_input(row: CaseManifest) -> dict[str, Any] | None:
+    report_text, report_path = _resolve_report_text(row.report_text)
+    if report_text is None and report_path is not None:
+        if not report_path.exists():
+            return None
+        report_text = report_path.read_text(encoding="utf-8")
+    image_path = (
+        row.derived_assets.get("volume_path")
+        or row.volume_path
+        or row.derived_assets.get("primary_image")
+        or (row.image_paths[0] if row.image_paths else "")
+    )
+    if not image_path:
+        return None
+    return {
+        "case_id": row.case_id,
+        "image_path": image_path,
+        "modality": row.modality,
+        "body_part": row.body_part,
+        "reference_report": report_text or "",
+    }
 
 
 def _resolve_report_text(value: str) -> tuple[str | None, Path | None]:

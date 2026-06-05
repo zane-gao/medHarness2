@@ -199,6 +199,11 @@ For MAIRA-2, medHarness2's default config uses
 `/data/miniconda3/envs/deepseek_2/bin/python`, which currently matches the
 `transformers 4.48.2` environment described by the old readiness notes.
 
+`workflow batch-readers` groups pure `medharness_cli` requests by model before
+calling the old medHarness runner. This reduces repeated model loading for
+fresh local runs. Mixed source requests, such as fresh models plus artifact
+reuse, keep the per-case path so artifact candidates are not dropped.
+
 `sample-data` also writes `summary.json` with modality/body-part/warning counts.
 `batch-readers` writes `failed_cases` and continues processing when an
 individual case fails, so long full-dataset runs can be inspected and resumed
