@@ -21,12 +21,14 @@ generator:
       title: CheXagent artifact
       source: artifact_reuse
       supported_modalities: [xray, cxr]
+      supported_body_parts: [chest, lung]
       source_generation_jsonl: /data/isbi/gzp/baseline/medLLM3/outputs/runs/chexagent_openi_full_weight_100/generation.jsonl
       notes: Existing CXR artifact from medHarness/medLLM3; fast default smoke path.
     - key: maira_2
       title: MAIRA-2 fresh
       source: medharness_cli
       supported_modalities: [xray, cxr]
+      supported_body_parts: [chest, lung]
       medharness_model_key: maira_2
       script_path: /data/isbi/gzp/medHarness/scripts/run_report_generation.py
       config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
@@ -36,6 +38,34 @@ generator:
       timeout_sec: 1800
       ready: true
       notes: Fresh adapter through the existing medHarness report generation CLI.
+    - key: merlin_fresh
+      title: Merlin Fresh
+      source: medharness_cli
+      supported_modalities: [ct]
+      supported_body_parts: [abdomen, pelvis, multi-organ]
+      medharness_model_key: merlin_fresh
+      script_path: /data/isbi/gzp/medHarness/scripts/run_report_generation.py
+      config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
+      device: cuda:0
+      dtype: bf16
+      max_new_tokens: 160
+      timeout_sec: 1800
+      ready: true
+      notes: Fresh abdominal CT adapter through legacy medHarness when a NIfTI volume is available.
+    - key: brain_gemma3d
+      title: BrainGemma3D
+      source: medharness_cli
+      supported_modalities: [mri]
+      supported_body_parts: [brain, head]
+      medharness_model_key: brain_gemma3d
+      script_path: /data/isbi/gzp/medHarness/scripts/run_report_generation.py
+      config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
+      device: cuda:0
+      dtype: bf16
+      max_new_tokens: 160
+      timeout_sec: 1800
+      ready: true
+      notes: Fresh brain MRI adapter through legacy medHarness when a NIfTI volume is available.
 
 ranking:
   top_n: 3

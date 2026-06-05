@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +17,7 @@ class GeneratorEntry:
     title: str
     source: str
     supported_modalities: list[str]
+    supported_body_parts: list[str] = field(default_factory=lambda: ["unknown"])
     ready: bool = False
     notes: str = ""
     source_generation_jsonl: str = ""
@@ -35,7 +36,7 @@ class ReportGeneratorRegistry:
         self.config = config
         self.entries = {entry.key: entry for entry in self._load_entries(config.generator.local_models)}
 
-    def select(self, modality: str, requested: list[str] | None = None) -> list[GeneratorEntry]:
+    def select(self, modality: str, requested: list[str] | None = None, body_part: str | None = None) -> list[GeneratorEntry]:
         keys = requested or self.config.generator.default_models
         selected: list[GeneratorEntry] = []
         for key in keys:
@@ -43,15 +44,25 @@ class ReportGeneratorRegistry:
             if not entry:
                 continue
             supported = {m.lower() for m in entry.supported_modalities}
-            if "unknown" in supported or modality.lower() in supported:
+            body_supported = {part.lower() for part in entry.supported_body_parts}
+            modality_ok = "unknown" in supported or modality.lower() in supported
+            body_ok = not body_part or "unknown" in body_supported or body_part.lower() in body_supported
+            if modality_ok and body_ok:
                 selected.append(entry)
         return selected
 
-    def generate(self, entry: GeneratorEntry, image_path: str, modality: str, reference_report: str | None = None) -> GeneratedReport:
+    def generate(
+        self,
+        entry: GeneratorEntry,
+        image_path: str,
+        modality: str,
+        reference_report: str | None = None,
+        body_part: str | None = None,
+    ) -> GeneratedReport:
         if entry.source == "artifact_reuse":
             return self._generate_artifact(entry, image_path=image_path, modality=modality)
         if entry.source == "medharness_cli":
-            return self._generate_medharness_cli(entry, image_path=image_path, modality=modality, reference_report=reference_report)
+            return self._generate_medharness_cli(entry, image_path=image_path, modality=modality, reference_report=reference_report, body_part=body_part)
         return self.generate_stub(entry, image_path=image_path, modality=modality, reference_report=reference_report)
 
     def generate_stub(self, entry: GeneratorEntry, image_path: str, modality: str, reference_report: str | None = None) -> GeneratedReport:
@@ -115,6 +126,7 @@ class ReportGeneratorRegistry:
         image_path: str,
         modality: str,
         reference_report: str | None,
+        body_part: str | None,
     ) -> GeneratedReport:
         script = Path(entry.script_path)
         if not script.exists():
@@ -126,8 +138,9 @@ class ReportGeneratorRegistry:
             row = {
                 "case_id": "medharness2_single_case",
                 "modality": "xray" if modality == "cxr" else modality,
-                "body_part": "chest",
-                "image_paths": [image_path],
+                "body_part": body_part or _default_body_part(modality),
+                "image_paths": [] if _looks_like_volume(image_path) else [image_path],
+                "volume_path": image_path if _looks_like_volume(image_path) else None,
                 "reference_report": reference_report or "",
                 "prompt": "Generate a radiology report for this study.",
             }
@@ -204,6 +217,7 @@ class ReportGeneratorRegistry:
                     title=str(row.get("title") or row.get("key") or ""),
                     source=str(row.get("source") or "local"),
                     supported_modalities=list(row.get("supported_modalities") or ["unknown"]),
+                    supported_body_parts=list(row.get("supported_body_parts") or ["unknown"]),
                     ready=bool(row.get("ready", False)),
                     notes=str(row.get("notes") or ""),
                     source_generation_jsonl=str(row.get("source_generation_jsonl") or ""),
@@ -222,3 +236,15 @@ class ReportGeneratorRegistry:
 
 def _redacted_cmd(cmd: list[str]) -> list[str]:
     return [part if "token" not in part.lower() and "key" not in part.lower() else "<redacted>" for part in cmd]
+
+
+def _looks_like_volume(path: str) -> bool:
+    return str(path).endswith((".nii", ".nii.gz", ".npy", ".npz"))
+
+
+def _default_body_part(modality: str) -> str:
+    if modality == "mri":
+        return "brain"
+    if modality == "ct":
+        return "abdomen"
+    return "chest"

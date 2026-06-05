@@ -14,10 +14,13 @@ from medharness2.utils.io import read_text, write_json
 
 
 def run_single_case(
-    report_path: str | Path,
-    image_path: str | Path,
-    output_path: str | Path,
+    report_path: str | Path | None = None,
+    image_path: str | Path | None = None,
+    output_path: str | Path | None = None,
+    report_text: str | None = None,
+    prepared_assets: dict[str, Any] | None = None,
     modality: str | None = None,
+    body_part: str | None = None,
     top_n: int | None = None,
     model_keys: list[str] | None = None,
     config: AppConfig | None = None,
@@ -25,14 +28,21 @@ def run_single_case(
 ) -> dict[str, Any]:
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
-    report_text = read_text(report_path)
-    image = str(image_path)
+    if image_path is None or output_path is None:
+        raise ValueError("Provide image_path and output_path.")
+    if report_text is None:
+        if report_path is None:
+            raise ValueError("Provide report_path or report_text.")
+        report_text = read_text(report_path)
+    image = str((prepared_assets or {}).get("primary_image") or image_path)
+    generation_image = str((prepared_assets or {}).get("volume_path") or (prepared_assets or {}).get("primary_image") or image_path)
     modality_key = modality or recognize_modality(image, config=cfg, llm_client=client)
     generated = generate_reports(
-        image,
+        generation_image,
         modality_key,
         reference_report=report_text,
         model_keys=model_keys,
+        body_part=body_part,
         config=cfg,
         llm_client=client,
     )
@@ -82,9 +92,11 @@ def run_single_case(
         )
     result = {
         "input": {
-            "report_path": str(report_path),
+            "report_path": str(report_path) if report_path is not None else None,
             "image_path": image,
             "modality": modality_key,
+            "body_part": body_part,
+            "prepared_assets": prepared_assets or {},
         },
         "human_evaluation": human_evaluation,
         "generated_reports": [report.to_json() for report in generated],

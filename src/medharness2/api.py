@@ -8,6 +8,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from medharness2.config import load_config
+from medharness2.data.sample_data import prepare_sample_dataset
+from medharness2.workflows.batch_readers import run_batch_readers
+from medharness2.workflows.department import run_department_comparison
 from medharness2.workflows.single_case import run_single_case
 
 
@@ -23,6 +26,27 @@ class SingleCaseRequest(BaseModel):
     top_n: int | None = None
     model_keys: list[str] | None = None
     config_path: str | None = None
+
+
+class SampleDataRequest(BaseModel):
+    sample_root: str
+    output_dir: str
+    limit: int | None = None
+    run_ocr: bool = True
+    config_path: str | None = None
+
+
+class BatchReadersRequest(BaseModel):
+    manifest_path: str
+    output_path: str
+    model_keys: list[str] | None = None
+    limit: int | None = None
+    config_path: str | None = None
+
+
+class DepartmentRequest(BaseModel):
+    batch_result_path: str
+    output_path: str
 
 
 @app.post("/workflow/single-case")
@@ -51,5 +75,49 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
             "pairwise_comparisons": len(result.get("pairwise_comparisons") or []),
             "rankings": len(result.get("rankings") or []),
         },
+        "result": result,
+    }
+
+
+@app.post("/workflow/sample-data")
+def sample_data(request: SampleDataRequest) -> dict[str, Any]:
+    cfg = load_config(request.config_path) if request.config_path else load_config()
+    rows = prepare_sample_dataset(
+        request.sample_root,
+        request.output_dir,
+        config=cfg,
+        limit=request.limit,
+        run_ocr=request.run_ocr,
+    )
+    return {
+        "manifest_path": str(Path(request.output_dir) / "manifest.jsonl"),
+        "case_count": len(rows),
+        "warnings": sorted({warning for row in rows for warning in row.warnings}),
+    }
+
+
+@app.post("/workflow/batch-readers")
+def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
+    cfg = load_config(request.config_path) if request.config_path else load_config()
+    result = run_batch_readers(
+        request.manifest_path,
+        request.output_path,
+        model_keys=request.model_keys,
+        limit=request.limit,
+        config=cfg,
+    )
+    return {
+        "output_path": request.output_path,
+        "summary": {"cases": result["case_count"], "readers": len(result["per_reader"])},
+        "result": result,
+    }
+
+
+@app.post("/workflow/department")
+def department(request: DepartmentRequest) -> dict[str, Any]:
+    result = run_department_comparison(request.batch_result_path, request.output_path)
+    return {
+        "output_path": request.output_path,
+        "summary": {"cases": result["case_count"], "readers": result["reader_count"]},
         "result": result,
     }

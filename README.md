@@ -15,6 +15,9 @@ human report + image path
 
 The core is a Python library. The CLI is a thin smoke-test and batch entrypoint.
 
+The expanded design also includes sample-data ingestion, VLM OCR hooks, DICOM
+asset preparation, batch reader evaluation, and department-level statistics.
+
 ## Install
 
 ```bash
@@ -44,6 +47,38 @@ That path calls `/data/isbi/gzp/medHarness/scripts/run_report_generation.py`
 with the model settings in `/data/isbi/gzp/medHarness/configs/reportgen_models.yaml`.
 It may require GPU memory and can take substantially longer than the default
 artifact smoke.
+
+## Sample Data Pipeline
+
+The hospital sample-data runner builds a manifest, prepares DICOM-derived
+assets, extracts scanned PDF report text through the configured VLM/OCR
+provider, and writes all generated artifacts under `outputs/`:
+
+```bash
+PYTHONPATH=src medharness2 workflow sample-data \
+  --sample-root /data/isbi/gzp/medHarness/data/sample_data_2026-06-05 \
+  --output-dir outputs/sample_data_2026-06-05
+```
+
+For a low-cost structural check, keep the default `llm.provider: mock` or add
+`--skip-ocr`. With an OpenAI provider configured, report PDFs are sent through
+the multimodal Responses API; credentials must come from environment variables.
+
+Run the batch and department workflows from the generated manifest:
+
+```bash
+PYTHONPATH=src medharness2 workflow batch-readers \
+  --manifest outputs/sample_data_2026-06-05/manifest.jsonl \
+  --output outputs/sample_data_2026-06-05/workflow2.json
+
+PYTHONPATH=src medharness2 workflow department \
+  --batch-result outputs/sample_data_2026-06-05/workflow2.json \
+  --output outputs/sample_data_2026-06-05/workflow3.json
+```
+
+Model routing filters local generators by modality and body part. Unsupported
+cases use the configured VLM/cloud fallback and record the reason in JSON
+warnings.
 
 ## Configuration
 

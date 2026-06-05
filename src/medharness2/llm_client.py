@@ -5,6 +5,9 @@ import os
 import time
 import urllib.error
 import urllib.request
+import base64
+import mimetypes
+from pathlib import Path
 from typing import Any
 
 from medharness2.config import AppConfig, LLMConfig, load_config
@@ -72,8 +75,29 @@ class LLMClient:
         raise LLMClientError(f"OpenAI Responses API call failed: {last_error}")
 
     @staticmethod
-    def _build_input(prompt: str, image_path: str | None) -> str:
+    def _build_input(prompt: str, image_path: str | None) -> str | list[dict[str, Any]]:
         if image_path:
+            path = Path(image_path)
+            if path.exists() and path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+                return [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "input_text", "text": prompt},
+                            {"type": "input_image", "image_url": _file_data_url(path)},
+                        ],
+                    }
+                ]
+            if path.exists() and path.is_file() and path.suffix.lower() == ".pdf":
+                return [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "input_file", "filename": path.name, "file_data": _file_data_url(path)},
+                            {"type": "input_text", "text": prompt},
+                        ],
+                    }
+                ]
             return f"{prompt}\n\nAssociated image or volume path: {image_path}"
         return prompt
 
@@ -104,3 +128,9 @@ def build_mock_client(response_json: dict[str, Any] | None = None) -> LLMClient:
 
         client.call = call  # type: ignore[method-assign]
     return client
+
+
+def _file_data_url(path: Path) -> str:
+    mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    data = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime};base64,{data}"

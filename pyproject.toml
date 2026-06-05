@@ -16,6 +16,15 @@ api = [
   "fastapi>=0.110",
   "uvicorn>=0.29",
 ]
+data = [
+  "PyMuPDF>=1.24",
+  "SimpleITK>=2.3",
+  "pandas>=2.0",
+  "openpyxl>=3.1",
+  "pydicom>=3.0",
+  "Pillow>=10.0",
+  "numpy>=1.26",
+]
 test = [
   "fastapi>=0.110",
   "httpx>=0.27",

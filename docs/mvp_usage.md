@@ -97,3 +97,33 @@ curl -X POST http://127.0.0.1:8000/workflow/single-case \
 ```
 
 Do not commit API keys or tokens.
+
+## Full Design Commands
+
+Build a manifest and prepared assets for the 2026-06-05 sample dataset:
+
+```bash
+PYTHONPATH=src medharness2 workflow sample-data \
+  --sample-root /data/isbi/gzp/medHarness/data/sample_data_2026-06-05 \
+  --output-dir outputs/sample_data_2026-06-05
+```
+
+Use `--limit 1` for a quick smoke and `--skip-ocr` when only checking DICOM and
+manifest parsing. All OCR caches, converted PNG/NIfTI/contact-sheet assets, and
+workflow outputs live under `outputs/` and should not be committed.
+
+Then run the batch reader and department workflows:
+
+```bash
+PYTHONPATH=src medharness2 workflow batch-readers \
+  --manifest outputs/sample_data_2026-06-05/manifest.jsonl \
+  --output outputs/sample_data_2026-06-05/workflow2.json
+
+PYTHONPATH=src medharness2 workflow department \
+  --batch-result outputs/sample_data_2026-06-05/workflow2.json \
+  --output outputs/sample_data_2026-06-05/workflow3.json
+```
+
+The default config stays low-cost. Explicitly request fresh local models with
+`--model maira_2`, `--model merlin_fresh`, or `--model brain_gemma3d` only when
+GPU memory and prepared assets are available.
