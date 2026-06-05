@@ -111,6 +111,17 @@ PYTHONPATH=src medharness2 models list --modality ct --body-part abdomen
 PYTHONPATH=src medharness2 models list --modality mri --body-part brain
 ```
 
+Preview local-model coverage for the whole sample dataset without running OCR,
+DICOM conversion, or model inference:
+
+```bash
+PYTHONPATH=src medharness2 workflow sample-full \
+  --sample-root /data/isbi/gzp/medHarness/data/sample_data_2026-06-05 \
+  --output-dir outputs/sample_data_2026-06-05_local_route_plan \
+  --dry-run \
+  --all-compatible-local-models
+```
+
 Select local models explicitly with repeated `--model`, for example:
 
 ```bash

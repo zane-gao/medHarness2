@@ -93,6 +93,14 @@ def test_registry_discovers_ready_legacy_report_generation_models():
     assert "brain_gemma3d" in brain_mri
 
 
+def test_registry_star_selects_all_compatible_local_generators():
+    registry = ReportGeneratorRegistry(AppConfig())
+    selected = {entry.key for entry in registry.select("cxr", requested=["*"], body_part="chest")}
+    assert "maira_2" in selected
+    assert "chexagent_srrg_findings_full" in selected
+    assert "brain_gemma3d" not in selected
+
+
 def test_cxr_rule_extractor_marks_negated_observation_absent():
     graph = extract_findings("FINDINGS: There is no pneumothorax. Mild right lung opacity.", modality="cxr", backend="cxr_rule")
     pneumothorax = [item for item in graph["findings"] if item["observation"] == "pneumothorax"][0]

@@ -166,6 +166,19 @@ while allowing the full local pool, including MAIRA-2, CheXagent SRRG,
 MedGemma SRRG, Merlin artifact/fresh, and BrainGemma3D, to be used when the
 device and inputs are ready.
 
+Before launching expensive fresh inference, run a route-plan dry run:
+
+```bash
+PYTHONPATH=src medharness2 workflow sample-full \
+  --sample-root /data/isbi/gzp/medHarness/data/sample_data_2026-06-05 \
+  --output-dir outputs/sample_data_2026-06-05_local_route_plan \
+  --dry-run \
+  --all-compatible-local-models
+```
+
+This writes `route_plan.json` only. It does not run OCR, DICOM conversion,
+Workflow 1/2/3, or any local model inference.
+
 `sample-data` also writes `summary.json` with modality/body-part/warning counts.
 `batch-readers` writes `failed_cases` and continues processing when an
 individual case fails, so long full-dataset runs can be inspected and resumed

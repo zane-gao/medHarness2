@@ -4,12 +4,69 @@ from pathlib import Path
 from typing import Any
 
 from medharness2.config import AppConfig, load_config
+from medharness2.data.sample_data import build_sample_manifest
 from medharness2.data.sample_data import prepare_sample_dataset
+from medharness2.generators.registry import ReportGeneratorRegistry
 from medharness2.llm_client import LLMClient
 from medharness2.utils.io import write_json
 from medharness2.validation.sample_run import validate_sample_run
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
+
+
+def plan_sample_full_routes(
+    sample_root: str | Path,
+    output_dir: str | Path,
+    *,
+    config: AppConfig | None = None,
+    limit: int | None = None,
+    model_keys: list[str] | None = None,
+) -> dict[str, Any]:
+    cfg = config or load_config()
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    raw_manifest_path = out_dir / "route_plan.manifest.raw.jsonl"
+    rows = build_sample_manifest(sample_root, raw_manifest_path)
+    if limit is not None:
+        rows = rows[:limit]
+    registry = ReportGeneratorRegistry(cfg)
+    cases: list[dict[str, Any]] = []
+    local_candidate_count = 0
+    fallback_count = 0
+    for row in rows:
+        entries = registry.select(row.modality, requested=model_keys, body_part=row.body_part)
+        if entries:
+            local_candidate_count += 1
+        else:
+            fallback_count += 1
+        cases.append(
+            {
+                "case_id": row.case_id,
+                "reader": row.reader,
+                "modality": row.modality,
+                "body_part": row.body_part,
+                "compatible_model_keys": [entry.key for entry in entries],
+                "compatible_model_sources": {entry.key: entry.source for entry in entries},
+                "fallback_needed": not entries,
+                "warnings": row.warnings,
+            }
+        )
+    result = {
+        "sample_root": str(sample_root),
+        "output_dir": str(out_dir),
+        "paths": {
+            "raw_manifest": str(raw_manifest_path),
+            "route_plan": str(out_dir / "route_plan.json"),
+        },
+        "summary": {
+            "case_count": len(cases),
+            "cases_with_local_candidates": local_candidate_count,
+            "cases_requiring_fallback": fallback_count,
+        },
+        "cases": cases,
+    }
+    write_json(out_dir / "route_plan.json", result)
+    return result
 
 
 def run_sample_full(

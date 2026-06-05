@@ -180,5 +180,31 @@ def test_api_sample_full(tmp_path: Path):
     assert (output_dir / "run_summary.json").exists()
 
 
+def test_api_sample_full_dry_run_all_compatible(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
+    output_dir = tmp_path / "run"
+    client = TestClient(app)
+    response = client.post(
+        "/workflow/sample-full",
+        json={
+            "sample_root": str(sample_root),
+            "output_dir": str(output_dir),
+            "limit": 1,
+            "dry_run": True,
+            "all_compatible_local_models": True,
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["dry_run"] is True
+    assert body["summary"]["cases_with_local_candidates"] == 1
+    assert "maira_2" in body["result"]["cases"][0]["compatible_model_keys"]
+    assert not (output_dir / "workflow2.json").exists()
+
+
 def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

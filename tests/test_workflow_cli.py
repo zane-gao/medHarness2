@@ -112,6 +112,33 @@ def test_cli_sample_full(tmp_path: Path):
     assert payload["validation"]["passed"] is True
 
 
+def test_cli_sample_full_dry_run_all_compatible(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
+    output_dir = tmp_path / "run"
+    code = main(
+        [
+            "workflow",
+            "sample-full",
+            "--sample-root",
+            str(sample_root),
+            "--output-dir",
+            str(output_dir),
+            "--limit",
+            "1",
+            "--dry-run",
+            "--all-compatible-local-models",
+        ]
+    )
+    assert code == 0
+    route_plan = json.loads((output_dir / "route_plan.json").read_text(encoding="utf-8"))
+    assert "maira_2" in route_plan["cases"][0]["compatible_model_keys"]
+    assert not (output_dir / "workflow2.json").exists()
+
+
 def test_cli_models_list_shows_local_ready_generators(capsys):
     code = main(["models", "list", "--modality", "cxr", "--body-part", "chest"])
     captured = capsys.readouterr()

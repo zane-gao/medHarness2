@@ -8,7 +8,7 @@ from medharness2.data.sample_data import prepare_sample_dataset
 from medharness2.generators.registry import ReportGeneratorRegistry
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
-from medharness2.workflows.sample_full import run_sample_full
+from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full
 from medharness2.workflows.single_case import run_single_case
 from medharness2.validation.sample_run import validate_sample_run
 
@@ -31,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     single.add_argument("--modality")
     single.add_argument("--top-n", type=int)
     single.add_argument("--model", action="append", dest="models")
+    single.add_argument("--all-compatible-local-models", action="store_true")
     single.add_argument("--config")
     sample = workflow_sub.add_parser("sample-data")
     sample.add_argument("--sample-root", required=True)
@@ -49,12 +50,15 @@ def build_parser() -> argparse.ArgumentParser:
     sample_full.add_argument("--force-ocr", action="store_true")
     sample_full.add_argument("--expected-cases", type=int)
     sample_full.add_argument("--model", action="append", dest="models")
+    sample_full.add_argument("--all-compatible-local-models", action="store_true")
+    sample_full.add_argument("--dry-run", action="store_true")
     sample_full.add_argument("--config")
     batch = workflow_sub.add_parser("batch-readers")
     batch.add_argument("--manifest", required=True)
     batch.add_argument("--output", required=True)
     batch.add_argument("--limit", type=int)
     batch.add_argument("--model", action="append", dest="models")
+    batch.add_argument("--all-compatible-local-models", action="store_true")
     batch.add_argument("--config")
     department = workflow_sub.add_parser("department")
     department.add_argument("--batch-result", required=True)
@@ -89,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
             output_path=Path(args.output),
             modality=args.modality,
             top_n=args.top_n,
-            model_keys=args.models,
+            model_keys=_model_keys(args),
             config=config,
         )
         print(f"wrote medHarness2 single-case output to {args.output}")
@@ -111,12 +115,29 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "workflow" and args.workflow == "sample-full":
         config = load_config(args.config) if args.config else load_config()
+        model_keys = _model_keys(args)
+        if args.dry_run:
+            result = plan_sample_full_routes(
+                args.sample_root,
+                args.output_dir,
+                config=config,
+                limit=args.limit,
+                model_keys=model_keys,
+            )
+            print(f"wrote medHarness2 sample route plan to {Path(args.output_dir) / 'route_plan.json'}")
+            print(
+                "cases="
+                f"{result['summary']['case_count']} "
+                f"local_candidates={result['summary']['cases_with_local_candidates']} "
+                f"fallback={result['summary']['cases_requiring_fallback']}"
+            )
+            return 0
         result = run_sample_full(
             args.sample_root,
             args.output_dir,
             config=config,
             limit=args.limit,
-            model_keys=args.models,
+            model_keys=model_keys,
             run_ocr=not args.skip_ocr,
             require_real_ocr=args.require_real_ocr,
             force_ocr=args.force_ocr,
@@ -135,7 +156,7 @@ def main(argv: list[str] | None = None) -> int:
         result = run_batch_readers(
             args.manifest,
             args.output,
-            model_keys=args.models,
+            model_keys=_model_keys(args),
             limit=args.limit,
             config=config,
         )
@@ -158,6 +179,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if result["passed"] else 1
     parser.error("unsupported command")
     return 2
+
+
+def _model_keys(args: argparse.Namespace) -> list[str] | None:
+    if getattr(args, "all_compatible_local_models", False):
+        return ["*"]
+    return getattr(args, "models", None)
 
 
 if __name__ == "__main__":

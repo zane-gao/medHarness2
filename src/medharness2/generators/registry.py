@@ -44,6 +44,8 @@ class ReportGeneratorRegistry:
             self.entries.setdefault(entry.key, entry)
 
     def select(self, modality: str, requested: list[str] | None = None, body_part: str | None = None) -> list[GeneratorEntry]:
+        if requested and "*" in requested:
+            return self.compatible_entries(modality, body_part=body_part)
         keys = requested or self.config.generator.default_models
         selected: list[GeneratorEntry] = []
         for key in keys:
@@ -53,7 +55,7 @@ class ReportGeneratorRegistry:
             supported = {m.lower() for m in entry.supported_modalities}
             body_supported = {part.lower() for part in entry.supported_body_parts}
             modality_ok = "unknown" in supported or modality.lower() in supported
-            body_ok = not body_part or "unknown" in body_supported or body_part.lower() in body_supported
+            body_ok = _body_part_ok(body_part, body_supported)
             if modality_ok and body_ok:
                 selected.append(entry)
         return selected
@@ -64,7 +66,7 @@ class ReportGeneratorRegistry:
             supported = {m.lower() for m in entry.supported_modalities}
             body_supported = {part.lower() for part in entry.supported_body_parts}
             modality_ok = "unknown" in supported or modality.lower() in supported
-            body_ok = not body_part or "unknown" in body_supported or body_part.lower() in body_supported
+            body_ok = _body_part_ok(body_part, body_supported)
             if modality_ok and body_ok:
                 result.append(entry)
         return sorted(result, key=lambda item: (item.source != "medharness_cli", item.key))
@@ -325,3 +327,9 @@ def _normalize_modalities(values: list[Any]) -> list[str]:
         if key in {"xray", "x-ray", "xr", "cr", "dx"}:
             result.append("cxr")
     return list(dict.fromkeys(result))
+
+
+def _body_part_ok(body_part: str | None, supported: set[str]) -> bool:
+    if not body_part or body_part.lower() == "unknown":
+        return True
+    return "unknown" in supported or body_part.lower() in supported

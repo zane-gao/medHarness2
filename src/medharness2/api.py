@@ -11,7 +11,7 @@ from medharness2.config import load_config
 from medharness2.data.sample_data import prepare_sample_dataset
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
-from medharness2.workflows.sample_full import run_sample_full
+from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full
 from medharness2.workflows.single_case import run_single_case
 from medharness2.validation.sample_run import validate_sample_run
 
@@ -45,6 +45,8 @@ class SampleFullRequest(BaseModel):
     output_dir: str
     limit: int | None = None
     model_keys: list[str] | None = None
+    all_compatible_local_models: bool = False
+    dry_run: bool = False
     run_ocr: bool = True
     require_real_ocr: bool = False
     force_ocr: bool = False
@@ -124,12 +126,26 @@ def sample_data(request: SampleDataRequest) -> dict[str, Any]:
 @app.post("/workflow/sample-full")
 def sample_full(request: SampleFullRequest) -> dict[str, Any]:
     cfg = load_config(request.config_path) if request.config_path else load_config()
+    model_keys = ["*"] if request.all_compatible_local_models else request.model_keys
+    if request.dry_run:
+        result = plan_sample_full_routes(
+            request.sample_root,
+            request.output_dir,
+            config=cfg,
+            limit=request.limit,
+            model_keys=model_keys,
+        )
+        return {
+            "output_dir": request.output_dir,
+            "summary": {"dry_run": True, **result["summary"]},
+            "result": result,
+        }
     result = run_sample_full(
         request.sample_root,
         request.output_dir,
         config=cfg,
         limit=request.limit,
-        model_keys=request.model_keys,
+        model_keys=model_keys,
         run_ocr=request.run_ocr,
         require_real_ocr=request.require_real_ocr,
         force_ocr=request.force_ocr,

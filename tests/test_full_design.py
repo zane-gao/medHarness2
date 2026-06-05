@@ -12,7 +12,7 @@ from medharness2.tools.tool12_statistics import calculate_statistics, percentile
 from medharness2.tools.tool6_structure_diff import compare_structure
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
-from medharness2.workflows.sample_full import run_sample_full
+from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full
 
 
 def test_tool6_compares_report_structure():
@@ -166,3 +166,26 @@ def test_sample_full_workflow_orchestrates_manifest_batch_department_and_validat
     assert Path(result["paths"]["run_summary"]).exists()
     payload = json.loads(Path(result["paths"]["run_summary"]).read_text(encoding="utf-8"))
     assert payload["validation"]["passed"] is True
+
+
+def test_sample_full_dry_run_plans_all_compatible_local_models_without_outputs(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    image_path = case_dir / "Y1"
+    image_path.write_text("dummy", encoding="utf-8")
+    report_pdf = sample_root / "CR" / "CR001" / "report.pdf"
+    report_pdf.write_text("dummy pdf", encoding="utf-8")
+    output_dir = tmp_path / "run"
+    result = plan_sample_full_routes(
+        sample_root,
+        output_dir,
+        config=AppConfig(),
+        limit=1,
+        model_keys=["*"],
+    )
+    assert result["summary"]["case_count"] == 1
+    assert result["summary"]["cases_with_local_candidates"] == 1
+    assert "maira_2" in result["cases"][0]["compatible_model_keys"]
+    assert Path(result["paths"]["route_plan"]).exists()
+    assert not (output_dir / "workflow2.json").exists()
