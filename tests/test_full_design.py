@@ -100,3 +100,36 @@ def test_batch_readers_and_department_workflows(tmp_path: Path):
     assert dept_output.exists()
     assert dept["statistics"]
     assert dept["reader_percentiles"]
+
+
+def test_batch_readers_continues_when_case_workflow_fails(tmp_path: Path):
+    missing_report = tmp_path / "missing.txt"
+    image = tmp_path / "image.dcm"
+    image.write_text("dummy", encoding="utf-8")
+    manifest = tmp_path / "manifest.jsonl"
+    manifest.write_text(
+        json.dumps(
+            {
+                "case_id": "bad_case",
+                "reader": "doc_a",
+                "modality": "cxr",
+                "body_part": "chest",
+                "report_text": str(missing_report),
+                "image_paths": [str(image)],
+                "derived_assets": {"primary_image": str(image)},
+                "warnings": [],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        generator=GeneratorConfig(cloud_fallback_enabled=True, default_models=[], local_models=[]),
+    )
+    output = tmp_path / "workflow2.json"
+    result = run_batch_readers(manifest, output, config=cfg)
+    assert result["case_count"] == 0
+    assert result["failed_case_count"] == 1
+    assert result["failed_cases"][0]["case_id"] == "bad_case"
+    assert "FileNotFoundError" in result["failed_cases"][0]["error"]

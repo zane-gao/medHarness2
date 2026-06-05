@@ -31,24 +31,36 @@ def run_batch_readers(
     case_dir = out.parent / "workflow2_cases"
     case_dir.mkdir(parents=True, exist_ok=True)
     case_results: list[dict[str, Any]] = []
+    failed_cases: list[dict[str, Any]] = []
     per_reader: dict[str, dict[str, Any]] = {}
     for row in rows:
-        report_text, report_path = _resolve_report_text(row.report_text)
-        image_path = row.derived_assets.get("primary_image") or row.volume_path or (row.image_paths[0] if row.image_paths else "")
-        case_output = case_dir / f"{row.case_id}.json"
-        workflow1 = run_single_case(
-            report_path=report_path,
-            report_text=report_text,
-            image_path=image_path,
-            output_path=case_output,
-            prepared_assets={**row.derived_assets, "volume_path": row.volume_path} if row.derived_assets or row.volume_path else {},
-            modality=row.modality,
-            body_part=row.body_part,
-            model_keys=model_keys,
-            top_n=cfg.ranking.top_n,
-            config=cfg,
-            llm_client=client,
-        )
+        try:
+            report_text, report_path = _resolve_report_text(row.report_text)
+            image_path = row.derived_assets.get("primary_image") or row.volume_path or (row.image_paths[0] if row.image_paths else "")
+            case_output = case_dir / f"{row.case_id}.json"
+            workflow1 = run_single_case(
+                report_path=report_path,
+                report_text=report_text,
+                image_path=image_path,
+                output_path=case_output,
+                prepared_assets={**row.derived_assets, "volume_path": row.volume_path} if row.derived_assets or row.volume_path else {},
+                modality=row.modality,
+                body_part=row.body_part,
+                model_keys=model_keys,
+                top_n=cfg.ranking.top_n,
+                config=cfg,
+                llm_client=client,
+            )
+        except Exception as exc:
+            failed_cases.append(
+                {
+                    "case_id": row.case_id,
+                    "reader": row.reader,
+                    "error": f"{type(exc).__name__}: {exc}",
+                    "warnings": row.warnings,
+                }
+            )
+            continue
         human_metrics = dict(workflow1.get("human_evaluation", {}).get("composite_inputs") or {})
         generated_metrics = [
             {
@@ -81,7 +93,9 @@ def run_batch_readers(
     result = {
         "manifest_path": str(manifest_path),
         "case_count": len(case_results),
+        "failed_case_count": len(failed_cases),
         "cases": case_results,
+        "failed_cases": failed_cases,
         "per_reader": per_reader,
         "statistics": calculate_statistics([case["human_metrics"] for case in case_results]),
     }
@@ -94,6 +108,8 @@ def _resolve_report_text(value: str) -> tuple[str | None, Path | None]:
         return "FINDINGS: Report text unavailable.\nIMPRESSION: Report text unavailable.", None
     path = Path(value)
     if path.exists():
+        return None, path
+    if path.is_absolute() or path.suffix.lower() in {".txt", ".md", ".json", ".pdf"}:
         return None, path
     return value, None
 

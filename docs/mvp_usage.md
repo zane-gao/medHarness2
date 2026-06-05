@@ -127,3 +127,8 @@ PYTHONPATH=src medharness2 workflow department \
 The default config stays low-cost. Explicitly request fresh local models with
 `--model maira_2`, `--model merlin_fresh`, or `--model brain_gemma3d` only when
 GPU memory and prepared assets are available.
+
+`sample-data` also writes `summary.json` with modality/body-part/warning counts.
+`batch-readers` writes `failed_cases` and continues processing when an
+individual case fails, so long full-dataset runs can be inspected and resumed
+without losing all prior work.

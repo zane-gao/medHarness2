@@ -11,6 +11,7 @@ from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, ge
 
 from medharness2.config import AppConfig, LLMConfig
 from medharness2.data.sample_data import build_sample_manifest
+from medharness2.data.sample_data import prepare_sample_dataset
 from medharness2.ocr import extract_report_text
 from medharness2.preprocessing.dicom import prepare_case_assets
 
@@ -70,6 +71,27 @@ def test_prepare_case_assets_converts_cr_dicom_to_png(tmp_path: Path):
     assert prepared.derived_assets["primary_image"].endswith(".png")
     assert Path(prepared.derived_assets["primary_image"]).exists()
     assert prepared.image_paths[0].endswith(".png")
+
+
+def test_prepare_sample_dataset_continues_when_ocr_fails(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    _write_dicom(case_dir / "Y1", modality="CR", body_part="CHEST")
+    _write_blank_pdf(sample_root / "CR" / "CR001" / "report.pdf")
+    pd.DataFrame({"ID": ["CR001"], "Reader": ["reader_a"]}).to_excel(sample_root / "readers.xlsx", index=False)
+
+    class FailingClient:
+        def call(self, *args, **kwargs):
+            raise RuntimeError("ocr unavailable")
+
+    rows = prepare_sample_dataset(sample_root, tmp_path / "out", llm_client=FailingClient())
+    assert len(rows) == 1
+    assert any("ocr_failed:RuntimeError" in warning for warning in rows[0].warnings)
+    assert Path(tmp_path / "out" / "summary.json").exists()
+    summary = json.loads((tmp_path / "out" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["case_count"] == 1
+    assert summary["warning_counts"]["ocr_failed:RuntimeError"] == 1
 
 
 def _write_blank_pdf(path: Path) -> None:
