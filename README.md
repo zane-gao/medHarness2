@@ -100,8 +100,10 @@ This writes `manifest.jsonl`, `workflow2.json`, `workflow3.json`, and
 `run_summary.json`, then runs the validation gate.
 
 Model routing filters local generators by modality and body part. Unsupported
-cases use the configured VLM/cloud fallback and record the reason in JSON
-warnings.
+cases use the configured fallback provider, which can be a local VLM, cloud
+VLM/API, or mock provider. The generated JSON records the exact
+`source`/warning, such as `local_vlm_fallback_used`, `cloud_fallback_used`, or
+`mock_fallback_used`.
 
 Inspect compatible local generators before a run:
 

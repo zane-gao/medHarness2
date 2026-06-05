@@ -15,6 +15,7 @@ def generate_reports(
     model_keys: list[str] | None = None,
     model_sources: list[str] | None = None,
     body_part: str | None = None,
+    fallback_image_path: str | None = None,
     config: AppConfig | None = None,
     llm_client: LLMClient | None = None,
 ) -> list[GeneratedReport]:
@@ -46,19 +47,22 @@ def generate_reports(
         prompt = f"Generate a concise radiology report for modality={modality}, body_part={body_part or 'unknown'}."
         if reference_report:
             prompt += f"\nReference report for context:\n{reference_report}"
-        text = client.call(prompt, image_path=image_path)
+        text = client.call(prompt, image_path=fallback_image_path or image_path)
+        fallback_source = _fallback_source(cfg.llm.provider)
         reports.append(
             GeneratedReport(
                 model=cfg.llm.model,
-                source="cloud_fallback",
+                source=fallback_source,
                 report=text,
                 modality=modality,
                 warnings=[
-                    "cloud_fallback_used",
+                    f"{fallback_source}_used",
                     "no_compatible_local_generator" if not selected_entries else "compatible_local_generator_returned_no_text",
                 ],
                 metadata={
                     "body_part": body_part,
+                    "fallback_provider": cfg.llm.provider,
+                    "fallback_source": fallback_source,
                     "requested_models": model_keys or cfg.generator.default_models,
                     "requested_sources": model_sources or [],
                     "local_attempts": failed_attempts,
@@ -76,3 +80,14 @@ def generate_reports(
             )
         )
     return reports
+
+
+def _fallback_source(provider: str) -> str:
+    key = provider.lower()
+    if key in {"openai", "openai_responses"}:
+        return "cloud_fallback"
+    if key in {"local_vlm_cli", "medharness_cli_vlm", "local_hf_vlm", "hf_vlm_local"}:
+        return "local_vlm_fallback"
+    if key == "mock":
+        return "mock_fallback"
+    return "llm_fallback"

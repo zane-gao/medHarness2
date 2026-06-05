@@ -44,6 +44,21 @@ def test_validate_sample_run_reports_missing_workflow_outputs(tmp_path: Path):
     assert "missing_workflow3_json" in result["errors"]
 
 
+def test_validate_sample_run_accepts_subset_workflow_without_summary(tmp_path: Path):
+    _write_manifest(tmp_path / "manifest.jsonl", 2, with_report_text=True)
+    for i in range(2):
+        _write_json(tmp_path / "ocr" / f"case{i}.ocr.json", {"case_id": f"case{i}", "method": "vlm_ocr", "provider": "local_hf_vlm"})
+    _write_json(tmp_path / "workflow2.json", {"case_count": 2, "failed_case_count": 0, "per_reader": {"r": {}}})
+    _write_json(tmp_path / "workflow3.json", {"case_count": 2, "reader_count": 1, "reader_percentiles": {"r": {}}})
+
+    result = validate_sample_run(tmp_path, expected_cases=2, require_real_ocr=True)
+
+    assert result["passed"] is True
+    assert "missing_summary_json" not in result["errors"]
+    assert "missing_summary_json" in result["warnings"]
+    assert result["summary"]["case_count"] == 2
+
+
 def _write_run(path: Path, *, warning_counts: dict[str, int], failed_case_count: int, ocr_provider: str | None = None) -> None:
     _write_json(path / "summary.json", {"case_count": 2, "warning_counts": warning_counts})
     _write_manifest(path / "manifest.jsonl", 2, with_report_text=True)

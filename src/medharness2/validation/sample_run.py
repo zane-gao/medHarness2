@@ -16,8 +16,13 @@ def validate_sample_run(
     root = Path(output_dir)
     errors: list[str] = []
     warnings: list[str] = []
-    summary = _read_json(root / "summary.json", errors, "summary")
+    summary_path = root / "summary.json"
+    summary = _read_json(summary_path, errors, "summary") if summary_path.exists() else {}
+    if not summary_path.exists():
+        warnings.append("missing_summary_json")
     manifest_rows = _read_manifest(root / "manifest.jsonl", errors)
+    if not summary and manifest_rows:
+        summary = _summary_from_manifest(manifest_rows)
     workflow2 = _read_json(root / "workflow2.json", errors, "workflow2") if require_workflows else {}
     workflow3 = _read_json(root / "workflow3.json", errors, "workflow3") if require_workflows else {}
 
@@ -112,6 +117,36 @@ def _manifest_warning_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
         for warning in row.get("warnings") or []:
             counts[str(warning)] += 1
     return dict(counts)
+
+
+def _summary_from_manifest(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    modality_counts: Counter[str] = Counter()
+    body_part_counts: Counter[str] = Counter()
+    cases_with_report_text = 0
+    cases_with_primary_image = 0
+    cases_with_volume = 0
+    for row in rows:
+        modality = str(row.get("modality") or "")
+        body_part = str(row.get("body_part") or "")
+        if modality:
+            modality_counts[modality] += 1
+        if body_part:
+            body_part_counts[body_part] += 1
+        if row.get("report_text"):
+            cases_with_report_text += 1
+        if row.get("primary_image") or row.get("image_paths"):
+            cases_with_primary_image += 1
+        if row.get("volume_path") or (row.get("derived_assets") or {}).get("volume_path"):
+            cases_with_volume += 1
+    return {
+        "case_count": len(rows),
+        "modality_counts": dict(sorted(modality_counts.items())),
+        "body_part_counts": dict(sorted(body_part_counts.items())),
+        "warning_counts": _manifest_warning_counts(rows),
+        "cases_with_report_text": cases_with_report_text,
+        "cases_with_primary_image": cases_with_primary_image,
+        "cases_with_volume": cases_with_volume,
+    }
 
 
 def _merge_counts(*counts: dict[str, Any]) -> dict[str, int]:

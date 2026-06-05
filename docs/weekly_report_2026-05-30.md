@@ -65,6 +65,8 @@
 - Merlin 真实 OCR 腹部 CT 7 例 batch：完整 CT abdomen 子集均生成 `merlin_fresh / medharness_cli`，Workflow 2/3 失败 0 例，质量门控失败 0。
 - BrainGemma3D 脑 MRI 初始 smoke：接口可跑通，但因 series 选择和 prompt 适配不足，输出曾出现 hip radiograph / chest-lung 内容；质量门控正确拦截，不进入 Top-N 和 pairwise。
 - BrainGemma3D 真实 OCR 脑 MRI 7 例 batch：修正 MRI brain series 选择策略和 series-aware prompt 后，完整 MRI brain 子集均生成 `brain_gemma3d / medharness_cli`，Workflow 2/3 失败 0 例，质量门控失败 0。
+- CT chest 真实 OCR artifact 7 例 batch：`ct_chat` 和 `dia_llama` 均走 `artifact_reuse`，Workflow 2/3 失败 0 例；其中 `ct_chat` 7/7 通过质量门控，`dia_llama` 7/7 因部位不匹配被拦截，不进入正式排名。
+- 剩余 20 例无本地 report-trained 候选样本：使用本机 Qwen3-VL 4B 作为 `local_hf_vlm` fallback 跑通 `cxr/abdomen` 9 例和 `ct/head` 11 例，Workflow 2/3 失败 0 例；18/20 通过质量门控，2 例 head CT 输出胸部内容并被拦截。
 - 基于真实 OCR manifest 的 Workflow 2/3 smoke：52 例、0 failed cases、6 个 reader；生成侧限定为 artifact reuse 且关闭 fallback，因此该运行是工程闭环，不是最终正式模型排名。
 
 针对 BrainGemma3D 暴露出的质量问题，新增了轻量 modality/body-part 一致性门控，并进一步修正 MRI brain DICOM series 选择：优先 FLAIR，无 FLAIR 时优先 T2，否则回退最大 series；legacy runner prompt 会根据 `selected_series_type` 使用 FLAIR、T2 或 generic brain MRI prompt。明显 off-domain 输出会保留在 JSON 中并标记 `quality_gate_failed`，但不会进入 Top-N 和 pairwise 正式比较。
@@ -78,6 +80,7 @@
 - Tool4 hazard 仍是 MVP 规则估计，后续需要接 evaluator 或本地 LLM，并保留 deterministic fallback。
 - BrainGemma3D 已在 7 例 MRI brain 子集上跑通并通过质量门控，但 2 例只能回退到 FGR 最大 series，且 NIfTI 生成存在 non-uniform sampling 警告；后续仍需加强 MRI spacing/orientation 处理。
 - 当前 batch 优化只覆盖纯 `medharness_cli` 请求，后续可继续扩展到更多模型和更细的失败恢复机制。
+- `local_hf_vlm` fallback 已能补齐 CR abdomen 与 CT head 的工程空白，但它不是 report-trained 报告生成模型；正式统计时必须和 MAIRA-2、Merlin、BrainGemma3D、CT-CHAT 等本机 report-trained/artifact 路线分开标记。
 
 ## 七、下周计划
 
@@ -85,7 +88,7 @@
 
 1. 在真实 OCR manifest 基础上扩展 CXR fresh 小批量：MAIRA-2、CheXagent SRRG、MedGemma SRRG 多模型候选池。
 2. 针对 BrainGemma3D 做 MRI spacing/orientation 核查，并考虑补齐 impression section 后处理。
-3. 对无本地 report-trained 模型的 CR abdomen 与 CT head，明确通用 VLM fallback/debug baseline 的统计边界。
+3. 对无本地 report-trained 模型的 CR abdomen 与 CT head，继续保留 `local_vlm_fallback` 的 debug baseline，并寻找更匹配的本地 report-trained 模型或可复现路线。
 4. 强化 Tool2 structured finding extractor，统一 observation、location、measurement、certainty、negation schema。
 5. 为 FastAPI 增加 run id、状态查询和结果索引，为后续平台化做准备。
 

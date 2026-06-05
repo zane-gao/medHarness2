@@ -64,7 +64,8 @@ def test_fallback_records_failed_local_generation_attempt(tmp_path: Path):
         )
     )
     reports = generate_reports("image.png", "cxr", config=cfg, llm_client=LLMClient(cfg))
-    assert reports[0].source == "cloud_fallback"
+    assert reports[0].source == "mock_fallback"
+    assert reports[0].metadata["fallback_provider"] == "mock"
     assert reports[0].metadata["local_attempts"][0]["model"] == "missing_artifact"
     assert "artifact_missing" in reports[0].metadata["local_attempts"][0]["warnings"]
 

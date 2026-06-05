@@ -7,10 +7,10 @@ from medharness2.schema import GeneratedReport
 
 
 _BODY_PART_CONFLICTS = {
-    "brain": ["hip", "femoral", "femur", "pelvis", "liver", "kidney", "spleen", "lung", "chest"],
-    "head": ["hip", "femoral", "femur", "pelvis", "liver", "kidney", "spleen", "lung", "chest"],
+    "brain": ["hip", "femoral", "femur", "pelvis", "liver", "kidney", "spleen", "lung", "chest", "胸部", "双肺", "肺部", "右肺", "左肺"],
+    "head": ["hip", "femoral", "femur", "pelvis", "liver", "kidney", "spleen", "lung", "chest", "胸部", "双肺", "肺部", "右肺", "左肺"],
     "chest": ["hip", "femoral", "femur", "liver", "kidney", "spleen", "brain"],
-    "abdomen": ["hip", "femoral", "femur", "brain", "lung", "pneumothorax"],
+    "abdomen": ["hip", "femoral", "femur", "brain"],
 }
 
 _MODALITY_CONFLICTS = {
@@ -44,7 +44,7 @@ def check_generation_quality(text: str, *, modality: str | None, body_part: str 
 
     modality_key = (modality or "").lower()
     modality_terms = _MODALITY_CONFLICTS.get(modality_key, [])
-    modality_matches = _matched_terms(normalized, modality_terms)
+    modality_matches = _matched_terms(_mask_followup_modality_mentions(normalized), modality_terms)
     if modality_matches:
         warnings.append("modality_mismatch")
         conflicts["modality"] = modality_matches
@@ -68,3 +68,34 @@ def _matched_terms(text: str, terms: list[str]) -> list[str]:
         if re.search(rf"(?<![a-z0-9]){re.escape(term.strip())}(?![a-z0-9])", text):
             matches.append(term.strip())
     return matches
+
+
+def _mask_followup_modality_mentions(text: str) -> str:
+    masked = text
+    masked = _mask_followup_sentences(masked)
+    followup_patterns = [
+        r"\bconsider\s+(?:a\s+|an\s+)?(?:ct|mri|computed tomography|magnetic resonance)\b",
+        r"\brecommend(?:ed|s|ing)?\s+(?:a\s+|an\s+)?(?:follow[- ]?up\s+)?(?:ct|mri|computed tomography|magnetic resonance)\b",
+        r"\bfurther\s+(?:ct|mri|computed tomography|magnetic resonance)\b",
+        r"\b(?:ct|mri)\s+if\b",
+        r"\be\.g\.,?\s*(?:ct|mri|computed tomography|magnetic resonance)\b",
+    ]
+    for pattern in followup_patterns:
+        masked = re.sub(pattern, " followup imaging ", masked)
+    return masked
+
+
+def _mask_followup_sentences(text: str) -> str:
+    cues = ("consider", "recommend", "follow", "further", "建议", "必要时", "进一步", "随诊", "评估")
+    modality_terms = ("ct", "mri", "computed tomography", "magnetic resonance", "核磁", "磁共振")
+    parts = re.split(r"([。.!?；;])", text)
+    masked_parts: list[str] = []
+    for index in range(0, len(parts), 2):
+        sentence = parts[index]
+        delimiter = parts[index + 1] if index + 1 < len(parts) else ""
+        lower = sentence.lower()
+        if any(cue in lower for cue in cues) and any(term in lower for term in modality_terms):
+            sentence = re.sub(r"(?<![a-z0-9])(?:ct|mri|computed tomography|magnetic resonance)(?![a-z0-9])", " followup imaging ", sentence, flags=re.IGNORECASE)
+            sentence = sentence.replace("核磁", "followup imaging").replace("磁共振", "followup imaging")
+        masked_parts.append(sentence + delimiter)
+    return "".join(masked_parts)

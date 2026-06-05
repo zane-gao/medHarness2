@@ -129,6 +129,49 @@ def test_single_case_quality_gate_keeps_matching_cxr_report(tmp_path: Path):
     assert len(result["pairwise_comparisons"]) == 1
 
 
+def test_single_case_fallback_uses_primary_image_instead_of_volume(tmp_path: Path):
+    report = tmp_path / "human.txt"
+    primary = tmp_path / "contact_sheet.png"
+    volume = tmp_path / "volume.nii.gz"
+    output = tmp_path / "result.json"
+    report.write_text("FINDINGS: Head CT without hemorrhage. IMPRESSION: No acute abnormality.", encoding="utf-8")
+    primary.write_bytes(b"\x89PNG\r\n\x1a\n")
+    volume.write_text("volume", encoding="utf-8")
+
+    class RecordingClient:
+        def __init__(self):
+            self.generation_image_path = None
+
+        def call(self, prompt, image_path=None, **kwargs):
+            if kwargs.get("response_json") is not None:
+                return json.dumps(kwargs["response_json"])
+            if prompt.startswith("Generate a concise radiology report"):
+                self.generation_image_path = image_path
+                return "FINDINGS: No acute intracranial hemorrhage. IMPRESSION: No acute abnormality."
+            return "{}"
+
+    client = RecordingClient()
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=True,
+            default_models=[],
+            local_models=[],
+            include_legacy_ready_models=False,
+        )
+    )
+    run_single_case(
+        report_path=report,
+        image_path=primary,
+        output_path=output,
+        prepared_assets={"primary_image": str(primary), "volume_path": str(volume)},
+        modality="ct",
+        body_part="head",
+        config=cfg,
+        llm_client=client,
+    )
+    assert client.generation_image_path == str(primary)
+
+
 def test_cli_sample_full(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"

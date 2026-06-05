@@ -51,6 +51,7 @@ def run_single_case(
             model_keys=model_keys,
             model_sources=model_sources,
             body_part=body_part,
+            fallback_image_path=image,
             config=cfg,
             llm_client=client,
         )

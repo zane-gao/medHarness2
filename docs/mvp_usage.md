@@ -6,7 +6,7 @@ This MVP validates the core single-case loop while keeping local model access
 pluggable:
 
 1. Read one human report.
-2. Generate candidate AI reports through local registry or cloud fallback.
+2. Generate candidate AI reports through local registry or configured fallback.
 3. Evaluate human and generated reports.
 4. Rank generated reports.
 5. Compare the human report with Top-N generated reports.
@@ -62,8 +62,10 @@ configuration.
   to `placeholder` for non-CXR smoke tests.
 - `generator.local_models` contains both fast artifact reuse and fresh legacy
   medHarness adapters.
-- `generator.cloud_fallback_enabled: true` allows the LLM provider to create a
-  fallback report only when no local generator returns usable text.
+- `generator.cloud_fallback_enabled: true` keeps the legacy config switch for
+  generation fallback. The actual fallback can still be local when
+  `llm.provider` is `local_hf_vlm` or `local_vlm_cli`; JSON records whether the
+  output came from `local_vlm_fallback`, `cloud_fallback`, or `mock_fallback`.
 
 ## Output Contract
 
