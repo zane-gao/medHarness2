@@ -68,6 +68,7 @@
 - CT chest 真实 OCR artifact 7 例 batch：`ct_chat` 和 `dia_llama` 均走 `artifact_reuse`，Workflow 2/3 失败 0 例；其中 `ct_chat` 7/7 通过质量门控，`dia_llama` 7/7 因部位不匹配被拦截，不进入正式排名。
 - 剩余 20 例无本地 report-trained 候选样本：使用本机 Qwen3-VL 4B 作为 `local_hf_vlm` fallback 跑通 `cxr/abdomen` 9 例和 `ct/head` 11 例，Workflow 2/3 失败 0 例；18/20 通过质量门控，2 例 head CT 输出胸部内容并被拦截。
 - 最终 52 例 local-routed 合并目录：将 CXR fresh、Merlin fresh、BrainGemma3D fresh、CT chest artifact 和 20 例本地 VLM fallback 子批次合并为 `outputs/sample_data_2026-06-05_final_local_routed_52_20260606`；Workflow 1 JSON 52 个，Workflow 2/3 失败 0 例，`validate-run --require-real-ocr` 通过。
+- 最终 52 例分析表：新增 `analyze-run`，输出 `case_routes.csv`、`model_source_summary.csv`、`reader_summary.csv`、`modality_body_part_summary.csv`、`quality_gate_failures.csv` 和 Markdown 摘要；当前统计为 52 例、81 条生成报告、72 条排名/pairwise、9 条质量门控失败。
 - 基于真实 OCR manifest 的 Workflow 2/3 smoke：52 例、0 failed cases、6 个 reader；生成侧限定为 artifact reuse 且关闭 fallback，因此该运行是工程闭环，不是最终正式模型排名。
 
 针对 BrainGemma3D 暴露出的质量问题，新增了轻量 modality/body-part 一致性门控，并进一步修正 MRI brain DICOM series 选择：优先 FLAIR，无 FLAIR 时优先 T2，否则回退最大 series；legacy runner prompt 会根据 `selected_series_type` 使用 FLAIR、T2 或 generic brain MRI prompt。明显 off-domain 输出会保留在 JSON 中并标记 `quality_gate_failed`，但不会进入 Top-N 和 pairwise 正式比较。

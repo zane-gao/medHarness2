@@ -181,6 +181,17 @@ PYTHONPATH=src medharness2 workflow merge-batches \
 The merged output writes `workflow2.json`, `workflow3.json`, `run_summary.json`,
 and one copied Workflow 1 JSON per case under `workflow2_cases/`.
 
+Create report-ready CSV and Markdown summaries from a completed run:
+
+```bash
+PYTHONPATH=src medharness2 workflow analyze-run \
+  --output-dir outputs/sample_data_2026-06-05_final_local_routed_52_20260606 \
+  --analysis-dir outputs/sample_data_2026-06-05_final_local_routed_52_20260606/analysis
+```
+
+This writes case routing, model/source, reader, modality/body-part, and quality
+gate failure tables without rerunning OCR or generation.
+
 ## Configuration
 
 `config/default.yaml` keeps provider choices outside the code:

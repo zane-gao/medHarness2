@@ -7,6 +7,7 @@ from medharness2.config import load_config
 from medharness2.data.sample_data import prepare_sample_dataset
 from medharness2.generators.registry import ReportGeneratorRegistry
 from medharness2.workflows.batch_readers import run_batch_readers
+from medharness2.workflows.analyze_run import analyze_run
 from medharness2.workflows.department import run_department_comparison
 from medharness2.workflows.merge_batches import merge_batch_results
 from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full
@@ -75,6 +76,9 @@ def build_parser() -> argparse.ArgumentParser:
     merge.add_argument("--manifest")
     merge.add_argument("--expected-cases", type=int)
     merge.add_argument("--require-real-ocr", action="store_true")
+    analyze = workflow_sub.add_parser("analyze-run")
+    analyze.add_argument("--output-dir", required=True)
+    analyze.add_argument("--analysis-dir")
     validate = workflow_sub.add_parser("validate-run")
     validate.add_argument("--output-dir", required=True)
     validate.add_argument("--expected-cases", type=int)
@@ -229,6 +233,16 @@ def main(argv: list[str] | None = None) -> int:
             f"validation_passed={validation['passed']}"
         )
         return 0 if validation["passed"] else 1
+    if args.command == "workflow" and args.workflow == "analyze-run":
+        result = analyze_run(args.output_dir, args.analysis_dir)
+        print(f"wrote medHarness2 run analysis to {result['analysis_dir']}")
+        print(
+            "cases="
+            f"{result['case_count']} "
+            f"generated_reports={result['generated_report_count']} "
+            f"quality_failed={result['quality_gate_failed_count']}"
+        )
+        return 0
     if args.command == "workflow" and args.workflow == "validate-run":
         result = validate_sample_run(
             args.output_dir,

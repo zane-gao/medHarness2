@@ -207,6 +207,13 @@ def test_api_merge_batches(tmp_path: Path):
     assert body["summary"]["validation_passed"] is True
     assert body["summary"]["cases"] == 1
     assert (output_dir / "workflow3.json").exists()
+    response = client.post(
+        "/workflow/analyze-run",
+        json={"output_dir": str(output_dir), "analysis_dir": str(tmp_path / "analysis")},
+    )
+    assert response.status_code == 200
+    assert response.json()["summary"]["generated_reports"] == 1
+    assert (tmp_path / "analysis" / "analysis_summary.md").exists()
 
 
 def test_api_preflight_reports_blockers(tmp_path: Path):

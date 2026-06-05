@@ -165,3 +165,48 @@ Workflow 1 汇总：
 - 本地 VLM fallback/debug：CR abdomen、CT head。
 
 这一区分已经体现在 `source`、`warnings` 和 `merge_metadata` 中。
+
+## 分析表
+
+为便于汇报和后续论文统计，本次新增 `analyze-run` 并对最终 52 例目录生成
+CSV/Markdown 分析表。
+
+命令：
+
+```bash
+PYTHONPATH=src python -m medharness2.cli workflow analyze-run \
+  --output-dir outputs/sample_data_2026-06-05_final_local_routed_52_20260606 \
+  --analysis-dir outputs/sample_data_2026-06-05_final_local_routed_52_20260606/analysis
+```
+
+结果：
+
+```text
+cases=52
+generated_reports=81
+quality_failed=9
+```
+
+分析产物：
+
+```text
+analysis/analysis_summary.json
+analysis/analysis_summary.md
+analysis/case_routes.csv
+analysis/model_source_summary.csv
+analysis/reader_summary.csv
+analysis/modality_body_part_summary.csv
+analysis/quality_gate_failures.csv
+```
+
+核心统计：
+
+- generated reports: 81。
+- rankings: 72。
+- pairwise comparisons: 72。
+- source counts: `medharness_cli=47`，`artifact_reuse=14`，`local_vlm_fallback=20`。
+- quality gate failed: 9。
+- `quality_gate_failures.csv` 明确列出 7 条 `dia_llama / artifact_reuse` 和 2 条
+  `qwen3-vl-4b / local_vlm_fallback` 的部位不匹配问题。
+
+这些分析表只汇总当前 JSON 结果，不重新运行 OCR 或生成模型。

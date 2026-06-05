@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from medharness2.config import load_config
 from medharness2.data.sample_data import prepare_sample_dataset
+from medharness2.workflows.analyze_run import analyze_run
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
 from medharness2.workflows.merge_batches import merge_batch_results
@@ -78,6 +79,11 @@ class MergeBatchesRequest(BaseModel):
     manifest_path: str | None = None
     expected_cases: int | None = None
     require_real_ocr: bool = False
+
+
+class AnalyzeRunRequest(BaseModel):
+    output_dir: str
+    analysis_dir: str | None = None
 
 
 class ValidateRunRequest(BaseModel):
@@ -241,6 +247,20 @@ def merge_batches(request: MergeBatchesRequest) -> dict[str, Any]:
         },
         "result": result,
         "validation": validation,
+    }
+
+
+@app.post("/workflow/analyze-run")
+def analyze_run_endpoint(request: AnalyzeRunRequest) -> dict[str, Any]:
+    result = analyze_run(request.output_dir, request.analysis_dir)
+    return {
+        "analysis_dir": result["analysis_dir"],
+        "summary": {
+            "cases": result["case_count"],
+            "generated_reports": result["generated_report_count"],
+            "quality_failed": result["quality_gate_failed_count"],
+        },
+        "result": result,
     }
 
 

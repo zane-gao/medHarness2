@@ -275,6 +275,19 @@ PYTHONPATH=src medharness2 workflow merge-batches \
 This creates a unified result directory and verifies manifest coverage. It does
 not rerun OCR or generation; each case keeps `source_batch_result` provenance.
 
+Generate CSV and Markdown analysis tables from a completed run:
+
+```bash
+PYTHONPATH=src medharness2 workflow analyze-run \
+  --output-dir outputs/sample_data_2026-06-05_final_local_routed_52_20260606 \
+  --analysis-dir outputs/sample_data_2026-06-05_final_local_routed_52_20260606/analysis
+```
+
+The analysis output includes `case_routes.csv`, `model_source_summary.csv`,
+`reader_summary.csv`, `modality_body_part_summary.csv`,
+`quality_gate_failures.csv`, `analysis_summary.json`, and
+`analysis_summary.md`.
+
 Validate the completed output directory before reporting it as a usable run:
 
 ```bash
