@@ -51,7 +51,7 @@
 
 已完成的关键验证：
 
-- 单元与集成测试：`python -m pytest -q` 当前为 `69 passed`。
+- 单元与集成测试：`python -m pytest -q` 当前为 `85 passed, 19 warnings`。
 - 语法/导入检查：`python -m compileall src tests` 通过。
 - 52 例 artifact-only 全链路：52 例完成，Workflow 2 失败 0 例，Workflow 3 reader 数 6。
 - MAIRA-2 单例 fresh smoke：`maira_2 / medharness_cli`，生成非空报告并进入 pairwise。
@@ -63,10 +63,11 @@
 - Merlin fresh 腹部 CT smoke：`merlin_fresh / medharness_cli`，生成非空腹部 CT 报告。
 - Merlin 真实 OCR 腹部 CT 2 例 batch：基于 Qwen3-VL 4B OCR cache 和派生 NIfTI，2 例均生成 `merlin_fresh / medharness_cli`，Workflow 2/3 失败 0 例。
 - Merlin 真实 OCR 腹部 CT 7 例 batch：完整 CT abdomen 子集均生成 `merlin_fresh / medharness_cli`，Workflow 2/3 失败 0 例，质量门控失败 0。
-- BrainGemma3D 脑 MRI smoke：接口可跑通，但输出出现 hip radiograph 内容，已标记为接口 smoke，不作为正式质量结果。
+- BrainGemma3D 脑 MRI 初始 smoke：接口可跑通，但因 series 选择和 prompt 适配不足，输出曾出现 hip radiograph / chest-lung 内容；质量门控正确拦截，不进入 Top-N 和 pairwise。
+- BrainGemma3D 真实 OCR 脑 MRI 7 例 batch：修正 MRI brain series 选择策略和 series-aware prompt 后，完整 MRI brain 子集均生成 `brain_gemma3d / medharness_cli`，Workflow 2/3 失败 0 例，质量门控失败 0。
 - 基于真实 OCR manifest 的 Workflow 2/3 smoke：52 例、0 failed cases、6 个 reader；生成侧限定为 artifact reuse 且关闭 fallback，因此该运行是工程闭环，不是最终正式模型排名。
 
-针对 BrainGemma3D 暴露出的质量问题，新增了轻量 modality/body-part 一致性门控。明显 off-domain 输出会保留在 JSON 中并标记 `quality_gate_failed`，但不会进入 Top-N 和 pairwise 正式比较。
+针对 BrainGemma3D 暴露出的质量问题，新增了轻量 modality/body-part 一致性门控，并进一步修正 MRI brain DICOM series 选择：优先 FLAIR，无 FLAIR 时优先 T2，否则回退最大 series；legacy runner prompt 会根据 `selected_series_type` 使用 FLAIR、T2 或 generic brain MRI prompt。明显 off-domain 输出会保留在 JSON 中并标记 `quality_gate_failed`，但不会进入 Top-N 和 pairwise 正式比较。
 
 ## 六、当前限制与风险
 
@@ -75,7 +76,7 @@
 - PDF 报告 OCR 默认配置仍是 mock provider；目前已补充 `local_vlm_cli` 和 `local_hf_vlm` 两条本地 VLM OCR 入口。旧项目 `qwen25vl_7b_instruct` 软链指向的 HF snapshot 缺失，dry-run 为 `debug_asset_missing`；已进一步接入 `/data/cyf/shared_data/hd_data/qwen3-vl-4B`，完成 52 例扫描 PDF 真实 OCR，并通过 `validate-run --require-real-ocr`。
 - Tool2 的 CXR rule extractor 仍是 MVP 规则版，后续需要接更稳定的结构化抽取 backend。
 - Tool4 hazard 仍是 MVP 规则估计，后续需要接 evaluator 或本地 LLM，并保留 deterministic fallback。
-- BrainGemma3D 虽然接口可跑通，但本批样本输出存在部位语义跑偏，需要进一步核对真实输入预处理、模型适配和质量门控。
+- BrainGemma3D 已在 7 例 MRI brain 子集上跑通并通过质量门控，但 2 例只能回退到 FGR 最大 series，且 NIfTI 生成存在 non-uniform sampling 警告；后续仍需加强 MRI spacing/orientation 处理。
 - 当前 batch 优化只覆盖纯 `medharness_cli` 请求，后续可继续扩展到更多模型和更细的失败恢复机制。
 
 ## 七、下周计划
@@ -83,7 +84,7 @@
 下周建议按以下顺序推进：
 
 1. 在真实 OCR manifest 基础上扩展 CXR fresh 小批量：MAIRA-2、CheXagent SRRG、MedGemma SRRG 多模型候选池。
-2. 针对 BrainGemma3D 做输入预处理核查和质量门控增强，决定是否进入正式候选池。
+2. 针对 BrainGemma3D 做 MRI spacing/orientation 核查，并考虑补齐 impression section 后处理。
 3. 对无本地 report-trained 模型的 CR abdomen 与 CT head，明确通用 VLM fallback/debug baseline 的统计边界。
 4. 强化 Tool2 structured finding extractor，统一 observation、location、measurement、certainty、negation schema。
 5. 为 FastAPI 增加 run id、状态查询和结果索引，为后续平台化做准备。

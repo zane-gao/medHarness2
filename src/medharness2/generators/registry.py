@@ -213,6 +213,7 @@ class ReportGeneratorRegistry:
                 modality=modality,
                 body_part=body_part,
                 reference_report=reference_report,
+                prompt=None,
             )
             input_jsonl.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
             cmd = [
@@ -275,6 +276,7 @@ class ReportGeneratorRegistry:
                     modality=str(case["modality"]),
                     body_part=str(case.get("body_part") or ""),
                     reference_report=str(case.get("reference_report") or ""),
+                    prompt=str(case.get("prompt") or "") or None,
                 )
                 for case in cases
             ]
@@ -454,6 +456,7 @@ def _legacy_input_row(
     modality: str,
     body_part: str | None,
     reference_report: str | None,
+    prompt: str | None = None,
 ) -> dict[str, Any]:
     asset_path = str(Path(image_path).expanduser().resolve())
     return {
@@ -463,8 +466,33 @@ def _legacy_input_row(
         "image_paths": [] if _looks_like_volume(asset_path) else [asset_path],
         "volume_path": asset_path if _looks_like_volume(asset_path) else None,
         "reference_report": reference_report or "",
-        "prompt": "Generate a radiology report for this study.",
+        "prompt": prompt or _legacy_prompt(modality, body_part),
     }
+
+
+def _legacy_prompt(
+    modality: str,
+    body_part: str | None,
+    *,
+    selected_series_type: str | None = None,
+    selected_series_description: str | None = None,
+) -> str:
+    body = (body_part or _default_body_part(modality)).lower()
+    if modality == "mri" and body == "brain":
+        selected = (selected_series_type or "").lower()
+        description = (selected_series_description or "").lower()
+        if selected == "t2" or ("t2" in description and "flair" not in description):
+            return "Generate a radiology report for this brain MRI T2 scan."
+        if selected == "flair" or "flair" in description:
+            return "Generate a radiology report for this brain MRI FLAIR scan."
+        if selected or description:
+            return "Generate a radiology report for this brain MRI study."
+        return "Generate a radiology report for this brain MRI FLAIR scan."
+    if modality == "ct" and body in {"abdomen", "pelvis", "multi-organ"}:
+        return "Generate a radiology report for this abdominal CT study."
+    if modality in {"cxr", "xray", "x-ray"} and body in {"chest", "lung"}:
+        return "Analyze the chest X-ray images and write a radiology report."
+    return "Generate a radiology report for this study."
 
 
 def _looks_like_volume(path: str) -> bool:

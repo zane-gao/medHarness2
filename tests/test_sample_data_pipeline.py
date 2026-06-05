@@ -190,6 +190,126 @@ def test_prepare_case_assets_converts_cr_dicom_to_png(tmp_path: Path):
     assert prepared.image_paths[0].endswith(".png")
 
 
+def test_prepare_case_assets_prefers_flair_series_for_brain_mri(monkeypatch, tmp_path: Path):
+    fgr_uid = generate_uid()
+    flair_uid = generate_uid()
+    paths: list[str] = []
+    for index in range(3):
+        path = tmp_path / f"fgr_{index}.dcm"
+        _write_dicom(
+            path,
+            modality="MR",
+            body_part="BRAIN",
+            series_uid=fgr_uid,
+            instance_number=index + 1,
+            series_description="FGR",
+        )
+        paths.append(str(path))
+    for index in range(2):
+        path = tmp_path / f"flair_{index}.dcm"
+        _write_dicom(
+            path,
+            modality="MR",
+            body_part="BRAIN",
+            series_uid=flair_uid,
+            instance_number=index + 1,
+            series_description="T2_FLAIR_8mm",
+        )
+        paths.append(str(path))
+
+    selected_descriptions: list[str] = []
+
+    def fake_write_series_volume(image_paths, output_path, warnings):
+        ds = pydicom.dcmread(image_paths[0], stop_before_pixels=True, force=True)
+        selected_descriptions.append(str(ds.SeriesDescription))
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("volume", encoding="utf-8")
+        return str(output_path)
+
+    def fake_write_contact_sheet(image_paths, output_path, warnings, *, num_slices=9):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("sheet", encoding="utf-8")
+        return str(output_path)
+
+    monkeypatch.setattr("medharness2.preprocessing.dicom._write_series_volume", fake_write_series_volume)
+    monkeypatch.setattr("medharness2.preprocessing.dicom._write_contact_sheet", fake_write_contact_sheet)
+    prepared = prepare_case_assets(
+        {
+            "case_id": "MR001",
+            "modality": "mri",
+            "body_part": "brain",
+            "image_paths": paths,
+            "report_pdf": "",
+            "warnings": [],
+        },
+        tmp_path / "derived",
+    )
+    assert selected_descriptions == ["T2_FLAIR_8mm"]
+    assert prepared.derived_assets["selected_series_description"] == "T2_FLAIR_8mm"
+    assert prepared.derived_assets["series_selection_reason"] == "brain_mri_flair_preferred"
+    assert prepared.derived_assets["selected_series_type"] == "flair"
+
+
+def test_prepare_case_assets_prefers_t2_series_when_flair_absent(monkeypatch, tmp_path: Path):
+    fgr_uid = generate_uid()
+    t2_uid = generate_uid()
+    paths: list[str] = []
+    for index in range(3):
+        path = tmp_path / f"fgr_{index}.dcm"
+        _write_dicom(
+            path,
+            modality="MR",
+            body_part="BRAIN",
+            series_uid=fgr_uid,
+            instance_number=index + 1,
+            series_description="FGR",
+        )
+        paths.append(str(path))
+    for index in range(2):
+        path = tmp_path / f"t2_{index}.dcm"
+        _write_dicom(
+            path,
+            modality="MR",
+            body_part="BRAIN",
+            series_uid=t2_uid,
+            instance_number=index + 1,
+            series_description="T2_FSE_8mm",
+        )
+        paths.append(str(path))
+
+    selected_descriptions: list[str] = []
+
+    def fake_write_series_volume(image_paths, output_path, warnings):
+        ds = pydicom.dcmread(image_paths[0], stop_before_pixels=True, force=True)
+        selected_descriptions.append(str(ds.SeriesDescription))
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("volume", encoding="utf-8")
+        return str(output_path)
+
+    def fake_write_contact_sheet(image_paths, output_path, warnings, *, num_slices=9):
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text("sheet", encoding="utf-8")
+        return str(output_path)
+
+    monkeypatch.setattr("medharness2.preprocessing.dicom._write_series_volume", fake_write_series_volume)
+    monkeypatch.setattr("medharness2.preprocessing.dicom._write_contact_sheet", fake_write_contact_sheet)
+    prepared = prepare_case_assets(
+        {
+            "case_id": "MR001",
+            "modality": "mri",
+            "body_part": "brain",
+            "image_paths": paths,
+            "report_pdf": "",
+            "warnings": [],
+        },
+        tmp_path / "derived",
+    )
+    assert selected_descriptions == ["T2_FSE_8mm"]
+    assert prepared.derived_assets["selected_series_description"] == "T2_FSE_8mm"
+    assert prepared.derived_assets["series_selection_reason"] == "brain_mri_t2_preferred"
+    assert prepared.derived_assets["selected_series_type"] == "t2"
+
+
 def test_prepare_sample_dataset_continues_when_ocr_fails(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
@@ -271,7 +391,17 @@ def _write_blank_pdf(path: Path) -> None:
     doc.save(path)
 
 
-def _write_dicom(path: Path, *, modality: str, body_part: str, rows: int = 4, columns: int = 4) -> None:
+def _write_dicom(
+    path: Path,
+    *,
+    modality: str,
+    body_part: str,
+    rows: int = 4,
+    columns: int = 4,
+    series_uid: str | None = None,
+    instance_number: int = 1,
+    series_description: str | None = None,
+) -> None:
     import numpy as np
 
     file_meta = FileMetaDataset()
@@ -285,8 +415,10 @@ def _write_dicom(path: Path, *, modality: str, body_part: str, rows: int = 4, co
     ds.PatientID = "1"
     ds.Modality = modality
     ds.BodyPartExamined = body_part
-    ds.SeriesInstanceUID = generate_uid()
-    ds.InstanceNumber = 1
+    ds.SeriesInstanceUID = series_uid or generate_uid()
+    ds.InstanceNumber = instance_number
+    if series_description:
+        ds.SeriesDescription = series_description
     ds.Rows = rows
     ds.Columns = columns
     ds.SamplesPerPixel = 1

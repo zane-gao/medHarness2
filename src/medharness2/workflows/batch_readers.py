@@ -6,7 +6,7 @@ from typing import Any
 
 from medharness2.config import AppConfig, load_config
 from medharness2.data.sample_data import load_manifest
-from medharness2.generators.registry import GeneratorEntry, ReportGeneratorRegistry
+from medharness2.generators.registry import GeneratorEntry, ReportGeneratorRegistry, _legacy_prompt
 from medharness2.llm_client import LLMClient
 from medharness2.schema import CaseManifest, GeneratedReport
 from medharness2.tools.tool10_modelwise import modelwise_weighted
@@ -163,7 +163,17 @@ def _case_generation_input(row: CaseManifest) -> dict[str, Any] | None:
         "modality": row.modality,
         "body_part": row.body_part,
         "reference_report": report_text or "",
+        "prompt": _case_generation_prompt(row),
     }
+
+
+def _case_generation_prompt(row: CaseManifest) -> str:
+    return _legacy_prompt(
+        row.modality,
+        row.body_part,
+        selected_series_type=str(row.derived_assets.get("selected_series_type") or ""),
+        selected_series_description=str(row.derived_assets.get("selected_series_description") or ""),
+    )
 
 
 def _resolve_report_text(value: str) -> tuple[str | None, Path | None]:

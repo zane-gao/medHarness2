@@ -9,6 +9,7 @@ from medharness2.generators.registry import ReportGeneratorRegistry
 from medharness2.llm_client import LLMClient
 from medharness2.tools.tool2_extract import extract_findings
 from medharness2.tools.tool8_generate import generate_reports
+from medharness2.workflows.batch_readers import run_batch_readers
 
 
 def test_artifact_generator_reads_existing_jsonl(tmp_path: Path):
@@ -118,6 +119,138 @@ def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: P
     assert reports[0].model == "maira_2"
     assert reports[0].source == "medharness_cli"
     assert reports[0].report == "FINDINGS: Clear lungs."
+
+
+def test_legacy_cli_generator_uses_brain_mri_prompt_for_braingemma(monkeypatch, tmp_path: Path):
+    seen_prompt = ""
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        nonlocal seen_prompt
+        input_path = Path(cmd[cmd.index("--input-jsonl") + 1])
+        output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+        input_row = json.loads(input_path.read_text(encoding="utf-8"))
+        seen_prompt = input_row["prompt"]
+        output_path.write_text(
+            json.dumps({"model_key": "brain_gemma3d", "generated_text": "FINDINGS: Brain MRI report.", "modality": "mri"})
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    volume = tmp_path / "brain.nii.gz"
+    volume.write_text("volume", encoding="utf-8")
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["brain_gemma3d"],
+            local_models=[
+                {
+                    "key": "brain_gemma3d",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["mri"],
+                    "supported_body_parts": ["brain"],
+                    "medharness_model_key": "brain_gemma3d",
+                    "ready": True,
+                }
+            ],
+        )
+    )
+    reports = generate_reports(str(volume), "mri", body_part="brain", reference_report="human report", config=cfg)
+    assert reports[0].model == "brain_gemma3d"
+    assert "brain MRI FLAIR" in seen_prompt
+
+
+def test_batch_reader_uses_selected_mri_series_prompt_for_legacy_cli(monkeypatch, tmp_path: Path):
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# fake legacy script\n", encoding="utf-8")
+    legacy_config = tmp_path / "reportgen_models.yaml"
+    legacy_config.write_text("models:\n  brain_gemma3d:\n    python_bin: python\n", encoding="utf-8")
+    report = tmp_path / "report.txt"
+    volume = tmp_path / "brain.nii.gz"
+    report.write_text("FINDINGS: Brain lesion. IMPRESSION: Brain lesion.", encoding="utf-8")
+    volume.write_text("volume", encoding="utf-8")
+    manifest = tmp_path / "manifest.jsonl"
+    manifest.write_text(
+        json.dumps(
+            {
+                "case_id": "case1",
+                "reader": "doc_a",
+                "modality": "mri",
+                "body_part": "brain",
+                "report_text": str(report),
+                "image_paths": [],
+                "volume_path": str(volume),
+                "derived_assets": {
+                    "volume_path": str(volume),
+                    "selected_series_type": "t2",
+                    "selected_series_description": "T2_FSE_8mm",
+                },
+                "warnings": [],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    seen_prompts: list[str] = []
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        input_path = Path(cmd[cmd.index("--input-jsonl") + 1])
+        output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+        input_row = json.loads(input_path.read_text(encoding="utf-8"))
+        seen_prompts.append(input_row["prompt"])
+        output_path.write_text(
+            json.dumps(
+                {
+                    "case_id": input_row["case_id"],
+                    "model_key": "brain_gemma3d",
+                    "generated_text": "FINDINGS: Brain MRI report.",
+                    "modality": "mri",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["brain_gemma3d"],
+            include_legacy_ready_models=False,
+            local_models=[
+                {
+                    "key": "brain_gemma3d",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["mri"],
+                    "supported_body_parts": ["brain"],
+                    "medharness_model_key": "brain_gemma3d",
+                    "script_path": str(script),
+                    "config_path": str(legacy_config),
+                    "ready": True,
+                }
+            ],
+        ),
+    )
+    result = run_batch_readers(manifest, tmp_path / "workflow2.json", config=cfg, model_keys=["brain_gemma3d"], model_sources=["medharness_cli"])
+    assert result["failed_case_count"] == 0
+    assert seen_prompts == ["Generate a radiology report for this brain MRI T2 scan."]
+
+
+def test_legacy_prompt_uses_generic_brain_mri_for_unknown_series():
+    from medharness2.generators.registry import _legacy_prompt
+
+    assert (
+        _legacy_prompt(
+            "mri",
+            "brain",
+            selected_series_type="largest",
+            selected_series_description="FGR",
+        )
+        == "Generate a radiology report for this brain MRI study."
+    )
 
 
 def test_registry_discovers_ready_legacy_report_generation_models():

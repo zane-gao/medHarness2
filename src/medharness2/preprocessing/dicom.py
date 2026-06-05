@@ -31,10 +31,12 @@ def prepare_case_assets(case_manifest: CaseManifest | dict[str, Any], output_dir
         )
 
     groups = _group_series(case.image_paths)
-    largest = max(groups.values(), key=len) if groups else case.image_paths
-    volume_path = _write_series_volume(largest, out_dir / "volume.nii.gz", warnings)
-    contact_sheet = _write_contact_sheet(largest, out_dir / "contact_sheet.png", warnings)
-    derived = {"series_count": len(groups) or 1}
+    selected, selection = _select_series(groups, case.modality, case.body_part)
+    if not selected:
+        selected = case.image_paths
+    volume_path = _write_series_volume(selected, out_dir / "volume.nii.gz", warnings)
+    contact_sheet = _write_contact_sheet(selected, out_dir / "contact_sheet.png", warnings)
+    derived = {"series_count": len(groups) or 1, **selection}
     if contact_sheet:
         derived["contact_sheet"] = contact_sheet
         derived["primary_image"] = contact_sheet
@@ -82,6 +84,78 @@ def _group_series(image_paths: list[str]) -> dict[str, list[str]]:
             key = "unknown"
         groups[key].append(path)
     return {key: _sort_by_instance(paths) for key, paths in groups.items()}
+
+
+def _select_series(groups: dict[str, list[str]], modality: str, body_part: str | None) -> tuple[list[str], dict[str, Any]]:
+    if not groups:
+        return [], {}
+    ranked = [
+        (key, paths, _series_metadata(paths[0]) if paths else {})
+        for key, paths in groups.items()
+    ]
+    selected_key, selected_paths, selected_meta = max(ranked, key=lambda item: len(item[1]))
+    reason = "largest_series"
+    selected_type = "largest"
+    if modality == "mri" and (body_part or "").lower() == "brain":
+        flair_candidates = [
+            (key, paths, meta, _brain_mri_series_score(meta))
+            for key, paths, meta in ranked
+            if _brain_mri_series_score(meta) > 0
+        ]
+        if flair_candidates:
+            selected_key, selected_paths, selected_meta, _score = max(
+                flair_candidates,
+                key=lambda item: (item[3], len(item[1])),
+            )
+            selected_type = _brain_mri_series_type(selected_meta)
+            reason = f"brain_mri_{selected_type}_preferred"
+    selection = {
+        "selected_series_key": selected_key,
+        "selected_series_count": len(selected_paths),
+        "series_selection_reason": reason,
+        "selected_series_type": selected_type,
+    }
+    description = selected_meta.get("series_description")
+    if description:
+        selection["selected_series_description"] = description
+    return selected_paths, selection
+
+
+def _series_metadata(path: str) -> dict[str, str]:
+    try:
+        import pydicom
+
+        ds = pydicom.dcmread(
+            path,
+            stop_before_pixels=True,
+            force=True,
+            specific_tags=["SeriesDescription", "ProtocolName", "SequenceName"],
+        )
+    except Exception:
+        return {}
+    return {
+        "series_description": str(getattr(ds, "SeriesDescription", "") or ""),
+        "protocol_name": str(getattr(ds, "ProtocolName", "") or ""),
+        "sequence_name": str(getattr(ds, "SequenceName", "") or ""),
+    }
+
+
+def _brain_mri_series_score(metadata: dict[str, str]) -> int:
+    series_type = _brain_mri_series_type(metadata)
+    if series_type == "flair":
+        return 100
+    if series_type == "t2":
+        return 20
+    return 0
+
+
+def _brain_mri_series_type(metadata: dict[str, str]) -> str:
+    text = " ".join(metadata.values()).lower()
+    if "flair" in text:
+        return "flair"
+    if "t2" in text:
+        return "t2"
+    return ""
 
 
 def _sort_by_instance(paths: list[str]) -> list[str]:
