@@ -35,6 +35,7 @@ class SampleDataRequest(BaseModel):
     limit: int | None = None
     run_ocr: bool = True
     require_real_ocr: bool = False
+    force_ocr: bool = False
     config_path: str | None = None
 
 
@@ -98,6 +99,7 @@ def sample_data(request: SampleDataRequest) -> dict[str, Any]:
         limit=request.limit,
         run_ocr=request.run_ocr,
         require_real_ocr=request.require_real_ocr,
+        force_ocr=request.force_ocr,
     )
     return {
         "manifest_path": str(Path(request.output_dir) / "manifest.jsonl"),

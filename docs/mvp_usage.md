@@ -114,6 +114,10 @@ workflow outputs live under `outputs/` and should not be committed.
 When `llm.provider: mock`, OCR results are marked with `mock_ocr_used`. Add
 `--require-real-ocr` to reject mock OCR and surface
 `real_ocr_required_but_provider_is_mock` until a real VLM provider is configured.
+OCR caches are resumable: a later real-provider run can reuse caches whose
+`.ocr.json` records real provenance, and it refreshes mock or unknown caches
+when `--require-real-ocr` is set. Use `--force-ocr` to deliberately regenerate
+all report text caches in the selected run.
 
 Then run the batch reader and department workflows:
 

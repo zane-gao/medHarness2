@@ -30,6 +30,7 @@ def build_parser() -> argparse.ArgumentParser:
     sample.add_argument("--limit", type=int)
     sample.add_argument("--skip-ocr", action="store_true")
     sample.add_argument("--require-real-ocr", action="store_true")
+    sample.add_argument("--force-ocr", action="store_true")
     sample.add_argument("--config")
     batch = workflow_sub.add_parser("batch-readers")
     batch.add_argument("--manifest", required=True)
@@ -74,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
             limit=args.limit,
             run_ocr=not args.skip_ocr,
             require_real_ocr=args.require_real_ocr,
+            force_ocr=args.force_ocr,
         )
         print(f"wrote medHarness2 sample manifest to {Path(args.output_dir) / 'manifest.jsonl'}")
         print(f"cases={len(rows)}")

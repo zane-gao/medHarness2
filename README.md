@@ -65,6 +65,9 @@ For a low-cost structural check, keep the default `llm.provider: mock` or add
 the multimodal Responses API; credentials must come from environment variables.
 Mock OCR is marked with `mock_ocr_used`; use `--require-real-ocr` when preparing
 data for real evaluation so mock text cannot be mistaken for extracted reports.
+Existing OCR caches are reused only when their `.ocr.json` provenance is
+compatible with the requested mode. Add `--force-ocr` to refresh report text
+caches deliberately.
 
 Run the batch and department workflows from the generated manifest:
 

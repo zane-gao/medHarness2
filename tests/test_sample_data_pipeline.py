@@ -17,7 +17,11 @@ from medharness2.preprocessing.dicom import prepare_case_assets
 
 
 class StaticOCRClient:
+    def __init__(self):
+        self.calls = 0
+
     def call(self, prompt: str, image_path: str | None = None, **kwargs):
+        self.calls += 1
         assert image_path and image_path.endswith(".pdf")
         return "FINDINGS: OCR text.\nIMPRESSION: OCR impression."
 
@@ -40,6 +44,77 @@ def test_extract_report_text_uses_vlm_for_scanned_pdf(tmp_path: Path):
     meta = json.loads((tmp_path / "ocr" / "case1.ocr.json").read_text(encoding="utf-8"))
     assert meta["provider"] == "mock"
     assert meta["method"] == "vlm_ocr"
+
+
+def test_extract_report_text_refreshes_unknown_cache_when_real_ocr_required(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    _write_blank_pdf(pdf)
+    ocr_dir = tmp_path / "ocr"
+    ocr_dir.mkdir()
+    (ocr_dir / "case1.txt").write_text("old cached text\n", encoding="utf-8")
+    client = StaticOCRClient()
+    result = extract_report_text(
+        pdf,
+        case_id="case1",
+        output_dir=ocr_dir,
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=client,
+        require_real=True,
+    )
+    assert client.calls == 1
+    assert result.text.startswith("FINDINGS: OCR text")
+    meta = json.loads((ocr_dir / "case1.ocr.json").read_text(encoding="utf-8"))
+    assert meta["provider"] == "openai"
+
+
+def test_extract_report_text_reuses_real_ocr_cache_when_real_ocr_required(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    _write_blank_pdf(pdf)
+    ocr_dir = tmp_path / "ocr"
+    ocr_dir.mkdir()
+    (ocr_dir / "case1.txt").write_text("real cached text\n", encoding="utf-8")
+    (ocr_dir / "case1.ocr.json").write_text(
+        json.dumps({"case_id": "case1", "method": "vlm_ocr", "provider": "openai"}) + "\n",
+        encoding="utf-8",
+    )
+
+    class FailingClient:
+        def call(self, *args, **kwargs):
+            raise AssertionError("real OCR cache should be reused")
+
+    result = extract_report_text(
+        pdf,
+        case_id="case1",
+        output_dir=ocr_dir,
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=FailingClient(),
+        require_real=True,
+    )
+    assert result.text == "real cached text\n"
+    assert result.method == "cache"
+
+
+def test_extract_report_text_force_refreshes_cache(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    _write_blank_pdf(pdf)
+    ocr_dir = tmp_path / "ocr"
+    ocr_dir.mkdir()
+    (ocr_dir / "case1.txt").write_text("real cached text\n", encoding="utf-8")
+    (ocr_dir / "case1.ocr.json").write_text(
+        json.dumps({"case_id": "case1", "method": "vlm_ocr", "provider": "openai"}) + "\n",
+        encoding="utf-8",
+    )
+    client = StaticOCRClient()
+    result = extract_report_text(
+        pdf,
+        case_id="case1",
+        output_dir=ocr_dir,
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=client,
+        force=True,
+    )
+    assert client.calls == 1
+    assert result.text.startswith("FINDINGS: OCR text")
 
 
 def test_build_sample_manifest_reads_reader_map_and_dicom_headers(tmp_path: Path):
@@ -125,6 +200,30 @@ def test_prepare_sample_dataset_require_real_ocr_rejects_mock_provider(tmp_path:
     )
     assert "real_ocr_required_but_provider_is_mock" in rows[0].warnings
     assert rows[0].report_text == ""
+
+
+def test_prepare_sample_dataset_refreshes_mock_cache_when_real_ocr_required(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    _write_dicom(case_dir / "Y1", modality="CR", body_part="CHEST")
+    _write_blank_pdf(sample_root / "CR" / "CR001" / "report.pdf")
+    pd.DataFrame({"ID": ["CR001"], "Reader": ["reader_a"]}).to_excel(sample_root / "readers.xlsx", index=False)
+    out_dir = tmp_path / "out"
+
+    prepare_sample_dataset(sample_root, out_dir, config=AppConfig(llm=LLMConfig(provider="mock")))
+    client = StaticOCRClient()
+    rows = prepare_sample_dataset(
+        sample_root,
+        out_dir,
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=client,
+        require_real_ocr=True,
+    )
+    assert client.calls == 1
+    assert "mock_ocr_used" not in rows[0].warnings
+    meta = json.loads((out_dir / "ocr" / "CR001.ocr.json").read_text(encoding="utf-8"))
+    assert meta["provider"] == "openai"
 
 
 def _write_blank_pdf(path: Path) -> None:
