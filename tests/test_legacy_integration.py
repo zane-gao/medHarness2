@@ -131,6 +131,30 @@ def test_registry_discovers_ready_legacy_report_generation_models():
     assert "brain_gemma3d" in brain_mri
 
 
+def test_registry_exposes_legacy_model_readiness_metadata():
+    registry = ReportGeneratorRegistry(AppConfig())
+    maira = registry.entries["maira_2"]
+    assert maira.report_trained is True
+    assert maira.category == "report_trained_target"
+    assert maira.fresh_inference is True
+    assert maira.readiness_metadata()["route_role"] == "fresh_report_trained_local"
+    assert "CXR findings" in maira.report_training
+
+    chexagent = registry.entries["chexagent"]
+    assert chexagent.fresh_inference is False
+    assert chexagent.readiness_metadata()["route_role"] == "artifact_report_trained_local"
+
+
+def test_registry_excludes_legacy_quality_blocked_models_from_formal_routes():
+    registry = ReportGeneratorRegistry(AppConfig())
+    cxr_models = {entry.key for entry in registry.compatible_entries("cxr", body_part="chest")}
+    assert "chexagent_srrg_findings_full" in cxr_models
+    assert "lingshu_srrg_impression" in cxr_models
+    assert "chexagent_srrg_findings" not in cxr_models
+    assert "lingshu_srrg_findings" not in cxr_models
+    assert "qwen25vl_7b_instruct" not in registry.entries
+
+
 def test_registry_star_selects_all_compatible_local_generators():
     registry = ReportGeneratorRegistry(AppConfig())
     selected = {entry.key for entry in registry.select("cxr", requested=["*"], body_part="chest")}

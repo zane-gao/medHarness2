@@ -363,7 +363,12 @@ def test_sample_full_dry_run_plans_all_compatible_local_models_without_outputs(t
     )
     assert result["summary"]["case_count"] == 1
     assert result["summary"]["cases_with_local_candidates"] == 1
+    assert result["summary"]["fresh_local_candidate_count"] >= 1
     assert "maira_2" in result["cases"][0]["compatible_model_keys"]
+    readiness = result["cases"][0]["compatible_model_readiness"]["maira_2"]
+    assert readiness["report_trained"] is True
+    assert readiness["fresh_inference"] is True
+    assert readiness["route_role"] == "fresh_report_trained_local"
     assert Path(result["paths"]["route_plan"]).exists()
     assert not (output_dir / "workflow2.json").exists()
 

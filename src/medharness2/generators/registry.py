@@ -13,6 +13,15 @@ from medharness2.config import AppConfig
 from medharness2.schema import GeneratedReport
 
 
+_LEGACY_FORMAL_ROUTE_EXCLUDE = {
+    "chexagent_srrg_findings",
+    "chexagent_srrg_impression",
+    "lingshu_srrg_findings",
+    "histgen",
+    "pathgenic",
+}
+
+
 @dataclass
 class GeneratorEntry:
     key: str
@@ -21,6 +30,10 @@ class GeneratorEntry:
     supported_modalities: list[str]
     supported_body_parts: list[str] = field(default_factory=lambda: ["unknown"])
     ready: bool = False
+    category: str = "local"
+    report_trained: bool = False
+    report_training: str = ""
+    fresh_inference: bool = False
     notes: str = ""
     source_generation_jsonl: str = ""
     medharness_model_key: str = ""
@@ -32,6 +45,28 @@ class GeneratorEntry:
     dtype: str = "bf16"
     max_new_tokens: int = 160
     timeout_sec: int = 1800
+
+    def readiness_metadata(self) -> dict[str, Any]:
+        return {
+            "category": self.category,
+            "report_trained": self.report_trained,
+            "report_training": self.report_training,
+            "fresh_inference": self.fresh_inference,
+            "ready": self.ready,
+            "source": self.source,
+            "route_role": self.route_role,
+            "notes": self.notes,
+        }
+
+    @property
+    def route_role(self) -> str:
+        if self.report_trained and self.fresh_inference:
+            return "fresh_report_trained_local"
+        if self.report_trained and self.source == "artifact_reuse":
+            return "artifact_report_trained_local"
+        if self.ready:
+            return "local_ready_non_report_trained"
+        return "local_not_ready"
 
 
 class ReportGeneratorRegistry:
@@ -346,6 +381,10 @@ class ReportGeneratorRegistry:
                     supported_modalities=list(row.get("supported_modalities") or ["unknown"]),
                     supported_body_parts=list(row.get("supported_body_parts") or ["unknown"]),
                     ready=bool(row.get("ready", str(row.get("source") or "") == "artifact_reuse")),
+                    category=str(row.get("category") or _default_category(str(row.get("source") or "local"))),
+                    report_trained=bool(row.get("report_trained", _default_report_trained(str(row.get("source") or "")))),
+                    report_training=str(row.get("report_training") or ""),
+                    fresh_inference=bool(row.get("fresh_inference", str(row.get("source") or "") == "medharness_cli")),
                     notes=str(row.get("notes") or ""),
                     source_generation_jsonl=str(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(row.get("medharness_model_key") or row.get("model_key") or ""),
@@ -375,7 +414,7 @@ class ReportGeneratorRegistry:
             return []
         entries: list[GeneratorEntry] = []
         for key, row in models.items():
-            if not isinstance(row, dict) or not _is_legacy_report_generator_ready(row):
+            if not isinstance(row, dict) or not _is_legacy_report_generator_ready(str(key), row):
                 continue
             adapter = str(row.get("adapter") or "")
             source = "artifact_reuse" if adapter == "artifact_reuse" else "medharness_cli"
@@ -389,6 +428,10 @@ class ReportGeneratorRegistry:
                     supported_modalities=modalities,
                     supported_body_parts=body_parts,
                     ready=True,
+                    category=str(row.get("category") or ""),
+                    report_trained=bool(row.get("report_trained", False)),
+                    report_training=str(row.get("report_training") or ""),
+                    fresh_inference=source != "artifact_reuse",
                     notes=str(row.get("notes") or ""),
                     source_generation_jsonl=str(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(key),
@@ -436,7 +479,9 @@ def _default_body_part(modality: str) -> str:
     return "chest"
 
 
-def _is_legacy_report_generator_ready(row: dict[str, Any]) -> bool:
+def _is_legacy_report_generator_ready(key: str, row: dict[str, Any]) -> bool:
+    if key in _LEGACY_FORMAL_ROUTE_EXCLUDE:
+        return False
     if not bool(row.get("report_trained", False)):
         return False
     category = str(row.get("category") or "")
@@ -462,3 +507,15 @@ def _body_part_ok(body_part: str | None, supported: set[str]) -> bool:
     if not body_part or body_part.lower() == "unknown":
         return True
     return "unknown" in supported or body_part.lower() in supported
+
+
+def _default_category(source: str) -> str:
+    if source == "medharness_cli":
+        return "report_trained_target"
+    if source == "artifact_reuse":
+        return "ready_or_artifact"
+    return "local"
+
+
+def _default_report_trained(source: str) -> bool:
+    return source in {"artifact_reuse", "medharness_cli"}

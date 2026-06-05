@@ -33,6 +33,9 @@ def plan_sample_full_routes(
     registry = ReportGeneratorRegistry(cfg)
     cases: list[dict[str, Any]] = []
     local_candidate_count = 0
+    fresh_local_candidate_count = 0
+    artifact_local_candidate_count = 0
+    report_trained_candidate_count = 0
     fallback_count = 0
     for row in rows:
         entries = registry.select(
@@ -45,6 +48,9 @@ def plan_sample_full_routes(
             local_candidate_count += 1
         else:
             fallback_count += 1
+        fresh_local_candidate_count += sum(1 for entry in entries if entry.fresh_inference)
+        artifact_local_candidate_count += sum(1 for entry in entries if entry.source == "artifact_reuse")
+        report_trained_candidate_count += sum(1 for entry in entries if entry.report_trained)
         cases.append(
             {
                 "case_id": row.case_id,
@@ -53,6 +59,7 @@ def plan_sample_full_routes(
                 "body_part": row.body_part,
                 "compatible_model_keys": [entry.key for entry in entries],
                 "compatible_model_sources": {entry.key: entry.source for entry in entries},
+                "compatible_model_readiness": {entry.key: entry.readiness_metadata() for entry in entries},
                 "fallback_needed": not entries,
                 "warnings": row.warnings,
             }
@@ -68,6 +75,9 @@ def plan_sample_full_routes(
             "case_count": len(cases),
             "cases_with_local_candidates": local_candidate_count,
             "cases_requiring_fallback": fallback_count,
+            "fresh_local_candidate_count": fresh_local_candidate_count,
+            "artifact_local_candidate_count": artifact_local_candidate_count,
+            "report_trained_candidate_count": report_trained_candidate_count,
         },
         "cases": cases,
     }
