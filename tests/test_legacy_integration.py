@@ -82,6 +82,17 @@ def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: P
     assert reports[0].report == "FINDINGS: Clear lungs."
 
 
+def test_registry_discovers_ready_legacy_report_generation_models():
+    registry = ReportGeneratorRegistry(AppConfig())
+    keys = set(registry.entries)
+    assert {"maira_2", "chexagent_srrg_findings_full", "medgemma_srrg_findings", "brain_gemma3d"} <= keys
+    cxr = {entry.key for entry in registry.compatible_entries("cxr", body_part="chest")}
+    assert {"maira_2", "chexagent_srrg_findings_full", "chexagent_srrg_impression_full"} <= cxr
+    assert "brain_gemma3d" not in cxr
+    brain_mri = {entry.key for entry in registry.compatible_entries("mri", body_part="brain")}
+    assert "brain_gemma3d" in brain_mri
+
+
 def test_cxr_rule_extractor_marks_negated_observation_absent():
     graph = extract_findings("FINDINGS: There is no pneumothorax. Mild right lung opacity.", modality="cxr", backend="cxr_rule")
     pneumothorax = [item for item in graph["findings"] if item["observation"] == "pneumothorax"][0]

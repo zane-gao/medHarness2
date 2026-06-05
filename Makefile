@@ -2,12 +2,15 @@ PYTHON ?= python
 PYTHONPATH ?= src
 OUTPUT_DIR ?= outputs
 LEGACY_CXR_MANIFEST ?= /data/isbi/gzp/medHarness/resources/smoke_data/cxr/manifest.jsonl
+SAMPLE_ROOT ?= /data/isbi/gzp/medHarness/data/sample_data_2026-06-05
+SAMPLE_OUTPUT_DIR ?= $(OUTPUT_DIR)/sample_data_2026-06-05_full
+SAMPLE_LIMIT ?= 1
 
 SHELL := /bin/bash
-.SHELLFLAGS := -eu -o pipefail -c
+.SHELLFLAGS := -e -o pipefail -c
 .ONESHELL:
 
-.PHONY: test smoke smoke-legacy-cxr smoke-maira2
+.PHONY: test smoke smoke-legacy-cxr smoke-maira2 sample-full-smoke
 
 test:
 	$(PYTHON) -m compileall src tests
@@ -41,3 +44,10 @@ smoke-maira2:
 		--model maira_2 \
 		--top-n 1 \
 		--output $(OUTPUT_DIR)/maira2_smoke_result.json
+
+sample-full-smoke:
+	PYTHONPATH=$(PYTHONPATH) $(PYTHON) -m medharness2.cli workflow sample-full \
+		--sample-root $(SAMPLE_ROOT) \
+		--output-dir $(SAMPLE_OUTPUT_DIR) \
+		--limit $(SAMPLE_LIMIT) \
+		--expected-cases $(SAMPLE_LIMIT)

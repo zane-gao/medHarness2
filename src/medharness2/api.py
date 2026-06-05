@@ -11,6 +11,7 @@ from medharness2.config import load_config
 from medharness2.data.sample_data import prepare_sample_dataset
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
+from medharness2.workflows.sample_full import run_sample_full
 from medharness2.workflows.single_case import run_single_case
 from medharness2.validation.sample_run import validate_sample_run
 
@@ -36,6 +37,18 @@ class SampleDataRequest(BaseModel):
     run_ocr: bool = True
     require_real_ocr: bool = False
     force_ocr: bool = False
+    config_path: str | None = None
+
+
+class SampleFullRequest(BaseModel):
+    sample_root: str
+    output_dir: str
+    limit: int | None = None
+    model_keys: list[str] | None = None
+    run_ocr: bool = True
+    require_real_ocr: bool = False
+    force_ocr: bool = False
+    expected_cases: int | None = None
     config_path: str | None = None
 
 
@@ -105,6 +118,31 @@ def sample_data(request: SampleDataRequest) -> dict[str, Any]:
         "manifest_path": str(Path(request.output_dir) / "manifest.jsonl"),
         "case_count": len(rows),
         "warnings": sorted({warning for row in rows for warning in row.warnings}),
+    }
+
+
+@app.post("/workflow/sample-full")
+def sample_full(request: SampleFullRequest) -> dict[str, Any]:
+    cfg = load_config(request.config_path) if request.config_path else load_config()
+    result = run_sample_full(
+        request.sample_root,
+        request.output_dir,
+        config=cfg,
+        limit=request.limit,
+        model_keys=request.model_keys,
+        run_ocr=request.run_ocr,
+        require_real_ocr=request.require_real_ocr,
+        force_ocr=request.force_ocr,
+        expected_cases=request.expected_cases,
+    )
+    return {
+        "output_dir": request.output_dir,
+        "summary": {
+            **result["summary"],
+            "validation_passed": result["validation"]["passed"],
+            "validation_errors": result["validation"]["errors"],
+        },
+        "result": result,
     }
 
 

@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 from medharness2.config import AppConfig
 from medharness2.schema import GeneratedReport
 
@@ -34,7 +36,12 @@ class GeneratorEntry:
 class ReportGeneratorRegistry:
     def __init__(self, config: AppConfig):
         self.config = config
-        self.entries = {entry.key: entry for entry in self._load_entries(config.generator.local_models)}
+        entries = self._load_entries(config.generator.local_models)
+        if config.generator.include_legacy_ready_models:
+            entries.extend(self._load_legacy_entries(config.generator.legacy_config_path))
+        self.entries = {}
+        for entry in entries:
+            self.entries.setdefault(entry.key, entry)
 
     def select(self, modality: str, requested: list[str] | None = None, body_part: str | None = None) -> list[GeneratorEntry]:
         keys = requested or self.config.generator.default_models
@@ -50,6 +57,17 @@ class ReportGeneratorRegistry:
             if modality_ok and body_ok:
                 selected.append(entry)
         return selected
+
+    def compatible_entries(self, modality: str, body_part: str | None = None) -> list[GeneratorEntry]:
+        result: list[GeneratorEntry] = []
+        for entry in self.entries.values():
+            supported = {m.lower() for m in entry.supported_modalities}
+            body_supported = {part.lower() for part in entry.supported_body_parts}
+            modality_ok = "unknown" in supported or modality.lower() in supported
+            body_ok = not body_part or "unknown" in body_supported or body_part.lower() in body_supported
+            if modality_ok and body_ok:
+                result.append(entry)
+        return sorted(result, key=lambda item: (item.source != "medharness_cli", item.key))
 
     def generate(
         self,
@@ -218,7 +236,7 @@ class ReportGeneratorRegistry:
                     source=str(row.get("source") or "local"),
                     supported_modalities=list(row.get("supported_modalities") or ["unknown"]),
                     supported_body_parts=list(row.get("supported_body_parts") or ["unknown"]),
-                    ready=bool(row.get("ready", False)),
+                    ready=bool(row.get("ready", str(row.get("source") or "") == "artifact_reuse")),
                     notes=str(row.get("notes") or ""),
                     source_generation_jsonl=str(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(row.get("medharness_model_key") or row.get("model_key") or ""),
@@ -232,6 +250,43 @@ class ReportGeneratorRegistry:
                 )
             )
         return [entry for entry in entries if entry.key]
+
+    @staticmethod
+    def _load_legacy_entries(config_path: str | Path) -> list[GeneratorEntry]:
+        path = Path(config_path)
+        if not path.exists():
+            return []
+        try:
+            payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except Exception:
+            return []
+        models = payload.get("models") or {}
+        if not isinstance(models, dict):
+            return []
+        entries: list[GeneratorEntry] = []
+        for key, row in models.items():
+            if not isinstance(row, dict) or not _is_legacy_report_generator_ready(row):
+                continue
+            adapter = str(row.get("adapter") or "")
+            source = "artifact_reuse" if adapter == "artifact_reuse" else "medharness_cli"
+            modalities = _normalize_modalities(row.get("supported_modalities") or ["unknown"])
+            body_parts = [str(item).lower() for item in row.get("supported_body_parts") or ["unknown"]]
+            entries.append(
+                GeneratorEntry(
+                    key=str(key),
+                    title=str(row.get("title") or key),
+                    source=source,
+                    supported_modalities=modalities,
+                    supported_body_parts=body_parts,
+                    ready=True,
+                    notes=str(row.get("notes") or ""),
+                    source_generation_jsonl=str(row.get("source_generation_jsonl") or ""),
+                    medharness_model_key=str(key),
+                    script_path="/data/isbi/gzp/medHarness/scripts/run_report_generation.py",
+                    config_path=str(path),
+                )
+            )
+        return entries
 
 
 def _redacted_cmd(cmd: list[str]) -> list[str]:
@@ -248,3 +303,25 @@ def _default_body_part(modality: str) -> str:
     if modality == "ct":
         return "abdomen"
     return "chest"
+
+
+def _is_legacy_report_generator_ready(row: dict[str, Any]) -> bool:
+    if not bool(row.get("report_trained", False)):
+        return False
+    category = str(row.get("category") or "")
+    if category not in {"ready_or_artifact", "report_trained_target"}:
+        return False
+    adapter = str(row.get("adapter") or "")
+    if adapter == "artifact_reuse":
+        return bool(row.get("source_generation_jsonl"))
+    return adapter not in {"source_audit_only", "blocked_no_public_weights", "gated_waitlist", ""}
+
+
+def _normalize_modalities(values: list[Any]) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        key = str(value).lower()
+        result.append(key)
+        if key in {"xray", "x-ray", "xr", "cr", "dx"}:
+            result.append("cxr")
+    return list(dict.fromkeys(result))

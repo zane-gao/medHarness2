@@ -65,3 +65,57 @@ def test_cli_single_case(tmp_path: Path):
     assert code == 0
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert "pairwise_comparisons" in payload
+
+
+def test_cli_sample_full(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "llm:",
+                "  provider: mock",
+                "extractor:",
+                "  backend: placeholder",
+                "generator:",
+                "  cloud_fallback_enabled: true",
+                "  default_models: []",
+                "  local_models: []",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    output_dir = tmp_path / "run"
+    code = main(
+        [
+            "workflow",
+            "sample-full",
+            "--sample-root",
+            str(sample_root),
+            "--output-dir",
+            str(output_dir),
+            "--limit",
+            "1",
+            "--expected-cases",
+            "1",
+            "--config",
+            str(config_path),
+        ]
+    )
+    assert code == 0
+    payload = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
+    assert payload["validation"]["passed"] is True
+
+
+def test_cli_models_list_shows_local_ready_generators(capsys):
+    code = main(["models", "list", "--modality", "cxr", "--body-part", "chest"])
+    captured = capsys.readouterr()
+    assert code == 0
+    assert "maira_2" in captured.out
+    assert "chexagent_srrg_findings_full" in captured.out
+    assert "brain_gemma3d" not in captured.out

@@ -18,6 +18,12 @@ The core is a Python library. The CLI is a thin smoke-test and batch entrypoint.
 The expanded design also includes sample-data ingestion, VLM OCR hooks, DICOM
 asset preparation, batch reader evaluation, and department-level statistics.
 
+Report generation can use the local resources already prepared under
+`/data/isbi/gzp/medHarness`. medHarness2 auto-discovers ready legacy report
+generation models from
+`/data/isbi/gzp/medHarness/configs/reportgen_models.yaml`; cloud APIs are only
+one fallback path, not the required generation path.
+
 ## Install
 
 ```bash
@@ -81,9 +87,43 @@ PYTHONPATH=src medharness2 workflow department \
   --output outputs/sample_data_2026-06-05/workflow3.json
 ```
 
+Or run the full sample-data chain in one command:
+
+```bash
+PYTHONPATH=src medharness2 workflow sample-full \
+  --sample-root /data/isbi/gzp/medHarness/data/sample_data_2026-06-05 \
+  --output-dir outputs/sample_data_2026-06-05 \
+  --expected-cases 52
+```
+
+This writes `manifest.jsonl`, `workflow2.json`, `workflow3.json`, and
+`run_summary.json`, then runs the validation gate.
+
 Model routing filters local generators by modality and body part. Unsupported
 cases use the configured VLM/cloud fallback and record the reason in JSON
 warnings.
+
+Inspect compatible local generators before a run:
+
+```bash
+PYTHONPATH=src medharness2 models list --modality cxr --body-part chest
+PYTHONPATH=src medharness2 models list --modality ct --body-part abdomen
+PYTHONPATH=src medharness2 models list --modality mri --body-part brain
+```
+
+Select local models explicitly with repeated `--model`, for example:
+
+```bash
+PYTHONPATH=src medharness2 workflow sample-full \
+  --sample-root /data/isbi/gzp/medHarness/data/sample_data_2026-06-05 \
+  --output-dir outputs/sample_data_2026-06-05_local \
+  --expected-cases 52 \
+  --model maira_2 \
+  --model chexagent_srrg_findings_full \
+  --model medgemma_srrg_findings \
+  --model merlin \
+  --model brain_gemma3d
+```
 
 Validate a completed sample-data run before treating it as an evaluable result:
 

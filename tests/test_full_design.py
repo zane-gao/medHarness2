@@ -12,6 +12,7 @@ from medharness2.tools.tool12_statistics import calculate_statistics, percentile
 from medharness2.tools.tool6_structure_diff import compare_structure
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
+from medharness2.workflows.sample_full import run_sample_full
 
 
 def test_tool6_compares_report_structure():
@@ -133,3 +134,35 @@ def test_batch_readers_continues_when_case_workflow_fails(tmp_path: Path):
     assert result["failed_case_count"] == 1
     assert result["failed_cases"][0]["case_id"] == "bad_case"
     assert "FileNotFoundError" in result["failed_cases"][0]["error"]
+
+
+def test_sample_full_workflow_orchestrates_manifest_batch_department_and_validation(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    image_path = case_dir / "Y1"
+    image_path.write_text("dummy", encoding="utf-8")
+    report_pdf = sample_root / "CR" / "CR001" / "report.pdf"
+    report_pdf.write_text("dummy pdf", encoding="utf-8")
+    output_dir = tmp_path / "run"
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        generator=GeneratorConfig(cloud_fallback_enabled=True, default_models=[], local_models=[]),
+    )
+    result = run_sample_full(
+        sample_root,
+        output_dir,
+        config=cfg,
+        limit=1,
+        expected_cases=1,
+    )
+    assert result["summary"]["case_count"] == 1
+    assert result["summary"]["workflow2_case_count"] == 1
+    assert result["summary"]["workflow3_case_count"] == 1
+    assert result["validation"]["passed"] is True
+    assert Path(result["paths"]["manifest"]).exists()
+    assert Path(result["paths"]["workflow2"]).exists()
+    assert Path(result["paths"]["workflow3"]).exists()
+    assert Path(result["paths"]["run_summary"]).exists()
+    payload = json.loads(Path(result["paths"]["run_summary"]).read_text(encoding="utf-8"))
+    assert payload["validation"]["passed"] is True

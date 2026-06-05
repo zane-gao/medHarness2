@@ -33,6 +33,8 @@ class GeneratorConfig:
     cloud_fallback_enabled: bool = True
     default_models: list[str] = field(default_factory=lambda: ["local_readiness_stub"])
     local_models: list[dict[str, Any]] = field(default_factory=list)
+    include_legacy_ready_models: bool = True
+    legacy_config_path: str = "/data/isbi/gzp/medHarness/configs/reportgen_models.yaml"
 
 
 @dataclass

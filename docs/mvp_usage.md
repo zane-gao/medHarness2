@@ -131,9 +131,40 @@ PYTHONPATH=src medharness2 workflow department \
   --output outputs/sample_data_2026-06-05/workflow3.json
 ```
 
+For an end-to-end run, use the orchestration entrypoint:
+
+```bash
+PYTHONPATH=src medharness2 workflow sample-full \
+  --sample-root /data/isbi/gzp/medHarness/data/sample_data_2026-06-05 \
+  --output-dir outputs/sample_data_2026-06-05 \
+  --expected-cases 52
+```
+
+It executes `sample-data`, `batch-readers`, `department`, and `validate-run`,
+then writes `run_summary.json` with paths, case counts, failed-case counts, and
+validation status. Use `make sample-full-smoke` for a limit-1 structural smoke.
+
 The default config stays low-cost. Explicitly request fresh local models with
 `--model maira_2`, `--model merlin_fresh`, or `--model brain_gemma3d` only when
 GPU memory and prepared assets are available.
+
+medHarness2 also auto-discovers ready local report-generation resources from
+`/data/isbi/gzp/medHarness/configs/reportgen_models.yaml`, which is the
+machine-readable companion to
+`/data/isbi/gzp/medHarness/docs/report_generation_model_readiness.md`. Use the
+model listing command to inspect compatible local candidates:
+
+```bash
+PYTHONPATH=src medharness2 models list --modality cxr --body-part chest
+PYTHONPATH=src medharness2 models list --modality ct --body-part abdomen
+PYTHONPATH=src medharness2 models list --modality mri --body-part brain
+```
+
+For a local-model run, pass repeated `--model` values to `single-case`,
+`batch-readers`, or `sample-full`. This keeps low-cost smoke defaults stable
+while allowing the full local pool, including MAIRA-2, CheXagent SRRG,
+MedGemma SRRG, Merlin artifact/fresh, and BrainGemma3D, to be used when the
+device and inputs are ready.
 
 `sample-data` also writes `summary.json` with modality/body-part/warning counts.
 `batch-readers` writes `failed_cases` and continues processing when an
