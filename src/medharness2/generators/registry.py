@@ -43,14 +43,22 @@ class ReportGeneratorRegistry:
         for entry in entries:
             self.entries.setdefault(entry.key, entry)
 
-    def select(self, modality: str, requested: list[str] | None = None, body_part: str | None = None) -> list[GeneratorEntry]:
+    def select(
+        self,
+        modality: str,
+        requested: list[str] | None = None,
+        body_part: str | None = None,
+        sources: set[str] | None = None,
+    ) -> list[GeneratorEntry]:
         if requested and "*" in requested:
-            return self.compatible_entries(modality, body_part=body_part)
+            return self.compatible_entries(modality, body_part=body_part, sources=sources)
         keys = requested or self.config.generator.default_models
         selected: list[GeneratorEntry] = []
         for key in keys:
             entry = self.entries.get(key)
             if not entry:
+                continue
+            if sources and entry.source not in sources:
                 continue
             supported = {m.lower() for m in entry.supported_modalities}
             body_supported = {part.lower() for part in entry.supported_body_parts}
@@ -60,9 +68,16 @@ class ReportGeneratorRegistry:
                 selected.append(entry)
         return selected
 
-    def compatible_entries(self, modality: str, body_part: str | None = None) -> list[GeneratorEntry]:
+    def compatible_entries(
+        self,
+        modality: str,
+        body_part: str | None = None,
+        sources: set[str] | None = None,
+    ) -> list[GeneratorEntry]:
         result: list[GeneratorEntry] = []
         for entry in self.entries.values():
+            if sources and entry.source not in sources:
+                continue
             supported = {m.lower() for m in entry.supported_modalities}
             body_supported = {part.lower() for part in entry.supported_body_parts}
             modality_ok = "unknown" in supported or modality.lower() in supported

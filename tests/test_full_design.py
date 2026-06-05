@@ -189,3 +189,25 @@ def test_sample_full_dry_run_plans_all_compatible_local_models_without_outputs(t
     assert "maira_2" in result["cases"][0]["compatible_model_keys"]
     assert Path(result["paths"]["route_plan"]).exists()
     assert not (output_dir / "workflow2.json").exists()
+
+
+def test_sample_full_dry_run_filters_local_models_by_source(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
+    output_dir = tmp_path / "run"
+    result = plan_sample_full_routes(
+        sample_root,
+        output_dir,
+        config=AppConfig(),
+        limit=1,
+        model_keys=["*"],
+        model_sources=["artifact_reuse"],
+    )
+    keys = result["cases"][0]["compatible_model_keys"]
+    assert "chexagent" in keys
+    assert "llava_rad" in keys
+    assert "maira_2" not in keys
+    assert set(result["cases"][0]["compatible_model_sources"].values()) == {"artifact_reuse"}

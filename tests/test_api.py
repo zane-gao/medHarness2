@@ -206,5 +206,30 @@ def test_api_sample_full_dry_run_all_compatible(tmp_path: Path):
     assert not (output_dir / "workflow2.json").exists()
 
 
+def test_api_sample_full_dry_run_filters_model_source(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
+    output_dir = tmp_path / "run"
+    client = TestClient(app)
+    response = client.post(
+        "/workflow/sample-full",
+        json={
+            "sample_root": str(sample_root),
+            "output_dir": str(output_dir),
+            "limit": 1,
+            "dry_run": True,
+            "all_compatible_local_models": True,
+            "model_sources": ["artifact_reuse"],
+        },
+    )
+    assert response.status_code == 200
+    keys = response.json()["result"]["cases"][0]["compatible_model_keys"]
+    assert "chexagent" in keys
+    assert "maira_2" not in keys
+
+
 def _write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

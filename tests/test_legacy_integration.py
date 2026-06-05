@@ -101,6 +101,15 @@ def test_registry_star_selects_all_compatible_local_generators():
     assert "brain_gemma3d" not in selected
 
 
+def test_registry_filters_all_compatible_by_source():
+    registry = ReportGeneratorRegistry(AppConfig())
+    selected = {entry.key: entry.source for entry in registry.select("cxr", requested=["*"], body_part="chest", sources={"artifact_reuse"})}
+    assert "chexagent" in selected
+    assert "llava_rad" in selected
+    assert "maira_2" not in selected
+    assert set(selected.values()) == {"artifact_reuse"}
+
+
 def test_cxr_rule_extractor_marks_negated_observation_absent():
     graph = extract_findings("FINDINGS: There is no pneumothorax. Mild right lung opacity.", modality="cxr", backend="cxr_rule")
     pneumothorax = [item for item in graph["findings"] if item["observation"] == "pneumothorax"][0]

@@ -21,6 +21,7 @@ def plan_sample_full_routes(
     config: AppConfig | None = None,
     limit: int | None = None,
     model_keys: list[str] | None = None,
+    model_sources: list[str] | None = None,
 ) -> dict[str, Any]:
     cfg = config or load_config()
     out_dir = Path(output_dir)
@@ -34,7 +35,12 @@ def plan_sample_full_routes(
     local_candidate_count = 0
     fallback_count = 0
     for row in rows:
-        entries = registry.select(row.modality, requested=model_keys, body_part=row.body_part)
+        entries = registry.select(
+            row.modality,
+            requested=model_keys,
+            body_part=row.body_part,
+            sources=set(model_sources or []),
+        )
         if entries:
             local_candidate_count += 1
         else:
@@ -77,6 +83,7 @@ def run_sample_full(
     llm_client: LLMClient | None = None,
     limit: int | None = None,
     model_keys: list[str] | None = None,
+    model_sources: list[str] | None = None,
     run_ocr: bool = True,
     require_real_ocr: bool = False,
     force_ocr: bool = False,
@@ -102,6 +109,7 @@ def run_sample_full(
         manifest_path,
         workflow2_path,
         model_keys=model_keys,
+        model_sources=model_sources,
         config=cfg,
         llm_client=llm_client,
     )

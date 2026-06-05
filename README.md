@@ -122,6 +122,18 @@ PYTHONPATH=src medharness2 workflow sample-full \
   --all-compatible-local-models
 ```
 
+To avoid launching GPU-heavy fresh models, restrict the local pool to reusable
+artifacts:
+
+```bash
+PYTHONPATH=src medharness2 workflow sample-full \
+  --sample-root /data/isbi/gzp/medHarness/data/sample_data_2026-06-05 \
+  --output-dir outputs/sample_data_2026-06-05_artifact_only \
+  --expected-cases 52 \
+  --all-compatible-local-models \
+  --model-source artifact_reuse
+```
+
 Select local models explicitly with repeated `--model`, for example:
 
 ```bash

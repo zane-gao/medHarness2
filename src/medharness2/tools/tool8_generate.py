@@ -13,6 +13,7 @@ def generate_reports(
     modality: str,
     reference_report: str | None = None,
     model_keys: list[str] | None = None,
+    model_sources: list[str] | None = None,
     body_part: str | None = None,
     config: AppConfig | None = None,
     llm_client: LLMClient | None = None,
@@ -21,7 +22,12 @@ def generate_reports(
     client = llm_client or LLMClient(cfg)
     registry = ReportGeneratorRegistry(cfg)
     reports: list[GeneratedReport] = []
-    selected_entries = registry.select(modality, requested=model_keys, body_part=body_part)
+    selected_entries = registry.select(
+        modality,
+        requested=model_keys,
+        body_part=body_part,
+        sources=set(model_sources or []),
+    )
     for entry in selected_entries:
         generated = registry.generate(entry, image_path, modality, reference_report=reference_report, body_part=body_part)
         if generated.report:
@@ -41,7 +47,11 @@ def generate_reports(
                     "cloud_fallback_used",
                     "no_compatible_local_generator" if not selected_entries else "compatible_local_generator_returned_no_text",
                 ],
-                metadata={"body_part": body_part, "requested_models": model_keys or cfg.generator.default_models},
+                metadata={
+                    "body_part": body_part,
+                    "requested_models": model_keys or cfg.generator.default_models,
+                    "requested_sources": model_sources or [],
+                },
             )
         )
     if not reports:

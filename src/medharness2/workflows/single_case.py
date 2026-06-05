@@ -23,6 +23,7 @@ def run_single_case(
     body_part: str | None = None,
     top_n: int | None = None,
     model_keys: list[str] | None = None,
+    model_sources: list[str] | None = None,
     config: AppConfig | None = None,
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
@@ -42,6 +43,7 @@ def run_single_case(
         modality_key,
         reference_report=report_text,
         model_keys=model_keys,
+        model_sources=model_sources,
         body_part=body_part,
         config=cfg,
         llm_client=client,

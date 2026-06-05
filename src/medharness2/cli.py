@@ -31,6 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     single.add_argument("--modality")
     single.add_argument("--top-n", type=int)
     single.add_argument("--model", action="append", dest="models")
+    single.add_argument("--model-source", action="append", dest="model_sources")
     single.add_argument("--all-compatible-local-models", action="store_true")
     single.add_argument("--config")
     sample = workflow_sub.add_parser("sample-data")
@@ -50,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     sample_full.add_argument("--force-ocr", action="store_true")
     sample_full.add_argument("--expected-cases", type=int)
     sample_full.add_argument("--model", action="append", dest="models")
+    sample_full.add_argument("--model-source", action="append", dest="model_sources")
     sample_full.add_argument("--all-compatible-local-models", action="store_true")
     sample_full.add_argument("--dry-run", action="store_true")
     sample_full.add_argument("--config")
@@ -58,6 +60,7 @@ def build_parser() -> argparse.ArgumentParser:
     batch.add_argument("--output", required=True)
     batch.add_argument("--limit", type=int)
     batch.add_argument("--model", action="append", dest="models")
+    batch.add_argument("--model-source", action="append", dest="model_sources")
     batch.add_argument("--all-compatible-local-models", action="store_true")
     batch.add_argument("--config")
     department = workflow_sub.add_parser("department")
@@ -94,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
             modality=args.modality,
             top_n=args.top_n,
             model_keys=_model_keys(args),
+            model_sources=args.model_sources,
             config=config,
         )
         print(f"wrote medHarness2 single-case output to {args.output}")
@@ -123,6 +127,7 @@ def main(argv: list[str] | None = None) -> int:
                 config=config,
                 limit=args.limit,
                 model_keys=model_keys,
+                model_sources=args.model_sources,
             )
             print(f"wrote medHarness2 sample route plan to {Path(args.output_dir) / 'route_plan.json'}")
             print(
@@ -138,6 +143,7 @@ def main(argv: list[str] | None = None) -> int:
             config=config,
             limit=args.limit,
             model_keys=model_keys,
+            model_sources=args.model_sources,
             run_ocr=not args.skip_ocr,
             require_real_ocr=args.require_real_ocr,
             force_ocr=args.force_ocr,
@@ -157,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
             args.manifest,
             args.output,
             model_keys=_model_keys(args),
+            model_sources=args.model_sources,
             limit=args.limit,
             config=config,
         )

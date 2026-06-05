@@ -179,6 +179,23 @@ PYTHONPATH=src medharness2 workflow sample-full \
 This writes `route_plan.json` only. It does not run OCR, DICOM conversion,
 Workflow 1/2/3, or any local model inference.
 
+To use the local pool without launching GPU-heavy fresh models, restrict the
+source to reusable artifacts:
+
+```bash
+PYTHONPATH=src medharness2 workflow sample-full \
+  --sample-root /data/isbi/gzp/medHarness/data/sample_data_2026-06-05 \
+  --output-dir outputs/sample_data_2026-06-05_artifact_only \
+  --expected-cases 52 \
+  --all-compatible-local-models \
+  --model-source artifact_reuse
+```
+
+Use `--model-source medharness_cli` when the intent is fresh local inference
+through the old medHarness runners. This should be combined with explicit
+`--model` values or a prior dry run, because it may load large local models such
+as MAIRA-2, CheXagent SRRG, MedGemma SRRG, Merlin fresh, or BrainGemma3D.
+
 `sample-data` also writes `summary.json` with modality/body-part/warning counts.
 `batch-readers` writes `failed_cases` and continues processing when an
 individual case fails, so long full-dataset runs can be inspected and resumed

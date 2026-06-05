@@ -27,6 +27,7 @@ class SingleCaseRequest(BaseModel):
     modality: str | None = None
     top_n: int | None = None
     model_keys: list[str] | None = None
+    model_sources: list[str] | None = None
     config_path: str | None = None
 
 
@@ -45,6 +46,7 @@ class SampleFullRequest(BaseModel):
     output_dir: str
     limit: int | None = None
     model_keys: list[str] | None = None
+    model_sources: list[str] | None = None
     all_compatible_local_models: bool = False
     dry_run: bool = False
     run_ocr: bool = True
@@ -58,6 +60,7 @@ class BatchReadersRequest(BaseModel):
     manifest_path: str
     output_path: str
     model_keys: list[str] | None = None
+    model_sources: list[str] | None = None
     limit: int | None = None
     config_path: str | None = None
 
@@ -90,6 +93,7 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
             modality=request.modality,
             top_n=request.top_n,
             model_keys=request.model_keys,
+            model_sources=request.model_sources,
             config=cfg,
         )
     return {
@@ -134,6 +138,7 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
             config=cfg,
             limit=request.limit,
             model_keys=model_keys,
+            model_sources=request.model_sources,
         )
         return {
             "output_dir": request.output_dir,
@@ -146,6 +151,7 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
         config=cfg,
         limit=request.limit,
         model_keys=model_keys,
+        model_sources=request.model_sources,
         run_ocr=request.run_ocr,
         require_real_ocr=request.require_real_ocr,
         force_ocr=request.force_ocr,
@@ -169,6 +175,7 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
         request.manifest_path,
         request.output_path,
         model_keys=request.model_keys,
+        model_sources=request.model_sources,
         limit=request.limit,
         config=cfg,
     )
