@@ -34,6 +34,11 @@ the exact candidate IDs. The initial quality-first candidate set is:
 - `qwen-vl-ocr-latest` as an OCR-specialized cloud comparator;
 - local `qwen3-vl-4b` as the existing reproducible baseline.
 
+Every candidate uses a frozen, non-truncating output budget. In particular, the
+local baseline is rerun with a substantially larger `max_new_tokens` value than
+the legacy value of `384` and must pass the same section-completeness checks.
+Legacy truncated cache text is not an eligible baseline result.
+
 Before the clinical benchmark, each cloud candidate receives a synthetic image
 containing an image-only nonce and exact report-like text. A model advances only
 if it returns the nonce and text from the image. Text-only replies, unsupported
