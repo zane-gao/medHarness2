@@ -75,7 +75,10 @@ annotation status.
 6. Join pages in source order.
 7. Derive clinical findings/impression text separately. Normalization is
    extractive: output characters must be traceable to raw OCR spans.
-8. Run quality checks and write the versioned OCR artifact and text cache.
+8. Check provider finish reason, token usage, section completeness, sentence
+   termination, and response shape. A suspected length truncation retries with
+   a larger explicit output budget and remains a failure if still incomplete.
+9. Write the versioned OCR artifact and text cache only after quality checks.
 
 The generic LLM client continues to accept a single image. PDF rendering and
 page iteration belong in the OCR module, avoiding a broad multimodal API change.
@@ -89,7 +92,8 @@ Each OCR artifact records at least:
 - retained and skipped pages;
 - render DPI, image dimensions, ink ratio, and page image SHA-256;
 - provider, exact model, endpoint host, role, and route snapshot hash;
-- attempt count, latency, and explicit errors;
+- attempt count, latency, provider finish reason, token usage, output-token
+  budget, and explicit errors;
 - raw page-response SHA-256 and combined raw-text SHA-256;
 - extractive clinical-text SHA-256 and source-span mapping;
 - quality warnings and fallback status.
@@ -133,6 +137,9 @@ flag or select source spans but may not silently rewrite the primary text.
   force flag.
 - Missing findings or impression triggers a quality warning and optional
   explicit second OCR route, not fabricated content.
+- A length finish reason, missing visible terminal section, or output ending in
+  the middle of a report sentence is treated as truncation and cannot satisfy
+  strict OCR success.
 - Any non-extractive clinical normalization fails closed and preserves raw OCR.
 
 ## Verification
