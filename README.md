@@ -1,64 +1,60 @@
 # medHarness2
 
-MVP radiology report evaluation harness.
+medHarness2 是一个用于评估放射学报告的最小可行工具集（MVP）。
 
-The current MVP implements one single-case workflow:
+当前 MVP 实现了单病例工作流：
 
 ```text
-human report + image path
-  -> generate AI reports
-  -> evaluate reports
-  -> rank Top-N generated reports
-  -> compare human report against Top-N
-  -> write JSON
+人工报告 + 影像路径
+  -> 生成 AI 报告
+  -> 评估报告
+  -> 对生成报告进行排序并选出 Top-N
+  -> 将人工报告与 Top-N 报告进行比较
+  -> 写入 JSON 结果
 ```
 
-The core is a Python library. The CLI is a thin smoke-test and batch entrypoint.
+项目核心是 Python 库，CLI 仅作为轻量级冒烟测试和批处理入口。
 
-The expanded design also includes sample-data ingestion, VLM OCR hooks, DICOM
-asset preparation, batch reader evaluation, and department-level statistics.
+扩展设计还包括样例数据导入、VLM OCR 接口、DICOM 资源准备、批量阅片者评估，以及科室级统计分析。
 
-Report generation can use the local resources already prepared under
-`/data/isbi/gzp/medHarness`. medHarness2 auto-discovers ready legacy report
-generation models from
-`/data/isbi/gzp/medHarness/configs/reportgen_models.yaml`; cloud APIs are only
-one fallback path, not the required generation path.
+报告生成可复用 `/data/isbi/gzp/medHarness` 下已经准备好的本地资源。medHarness2 会从
+`/data/isbi/gzp/medHarness/configs/reportgen_models.yaml` 自动发现可用的旧版报告生成模型；
+云端 API 只是备用路径，并非报告生成的必要条件。
 
-## Install
+## 安装
 
 ```bash
-cd /data/isbi/gzp/medHarness2
+cd /path/to/medHarness2
 python -m pip install -e ".[test]"
 ```
 
-## Quick Smoke
+文档中的 `/data/isbi/gzp/...` 是项目既有的数据与模型路径约定。如果部署环境的挂载点不同，
+请在本地配置文件或命令行参数中替换为实际路径，不要将私有环境路径或凭据提交到仓库。
+
+## 快速冒烟测试
 
 ```bash
-cd /data/isbi/gzp/medHarness2
+cd /path/to/medHarness2
 make smoke
 ```
 
-By default, the MVP uses the `chexagent` artifact configured in
-`config/default.yaml`. This is a fast smoke path that reuses an existing
-generation JSONL rather than running fresh GPU inference.
+默认情况下，MVP 使用 `config/default.yaml` 中配置的 `chexagent` 产物。这条快速冒烟路径会复用
+已有的生成结果 JSONL，不会重新执行 GPU 推理。
 
-To exercise the legacy medHarness fresh-generation adapter, request a model
-explicitly:
+如需测试旧版 medHarness 的即时生成适配器，请显式指定模型：
 
 ```bash
 make smoke-maira2
 ```
 
-That path calls `/data/isbi/gzp/medHarness/scripts/run_report_generation.py`
-with the model settings in `/data/isbi/gzp/medHarness/configs/reportgen_models.yaml`.
-It may require GPU memory and can take substantially longer than the default
-artifact smoke.
+该流程会使用 `/data/isbi/gzp/medHarness/configs/reportgen_models.yaml` 中的模型设置，调用
+`/data/isbi/gzp/medHarness/scripts/run_report_generation.py`。与默认的产物复用流程相比，
+它可能需要更多 GPU 显存，运行时间也会明显更长。
 
-## Sample Data Pipeline
+## 样例数据流水线
 
-The hospital sample-data runner builds a manifest, prepares DICOM-derived
-assets, extracts scanned PDF report text through the configured VLM/OCR
-provider, and writes all generated artifacts under `outputs/`:
+医院样例数据运行器会生成清单、准备 DICOM 衍生资源、通过配置的 VLM/OCR 服务提取扫描版
+PDF 报告文本，并将所有产物写入 `outputs/`：
 
 ```bash
 PYTHONPATH=src medharness2 workflow sample-data \
@@ -66,16 +62,13 @@ PYTHONPATH=src medharness2 workflow sample-data \
   --output-dir outputs/sample_data_2026-06-05
 ```
 
-For a low-cost structural check, keep the default `llm.provider: mock` or add
-`--skip-ocr`. With an OpenAI provider configured, report PDFs are sent through
-the multimodal Responses API; credentials must come from environment variables.
-Mock OCR is marked with `mock_ocr_used`; use `--require-real-ocr` when preparing
-data for real evaluation so mock text cannot be mistaken for extracted reports.
-Existing OCR caches are reused only when their `.ocr.json` provenance is
-compatible with the requested mode. Add `--force-ocr` to refresh report text
-caches deliberately.
+如只需低成本检查数据结构，可保留默认的 `llm.provider: mock`，或添加 `--skip-ocr`。
+配置 OpenAI 服务后，报告 PDF 会通过多模态 Responses API 发送，凭据必须由环境变量提供。
+模拟 OCR 结果会带有 `mock_ocr_used` 标记；准备正式评估数据时应使用 `--require-real-ocr`，
+避免把模拟文本误认为真实提取结果。只有现有 `.ocr.json` 缓存的来源信息与当前模式兼容时，
+系统才会复用缓存；如需明确刷新报告文本缓存，请添加 `--force-ocr`。
 
-Run the batch and department workflows from the generated manifest:
+基于生成的清单运行批量工作流和科室工作流：
 
 ```bash
 PYTHONPATH=src medharness2 workflow batch-readers \
@@ -87,7 +80,7 @@ PYTHONPATH=src medharness2 workflow department \
   --output outputs/sample_data_2026-06-05/workflow3.json
 ```
 
-Or run the full sample-data chain in one command:
+也可以用一条命令运行完整的样例数据流程：
 
 ```bash
 PYTHONPATH=src medharness2 workflow sample-full \
@@ -96,16 +89,14 @@ PYTHONPATH=src medharness2 workflow sample-full \
   --expected-cases 52
 ```
 
-This writes `manifest.jsonl`, `workflow2.json`, `workflow3.json`, and
-`run_summary.json`, then runs the validation gate.
+该命令会写入 `manifest.jsonl`、`workflow2.json`、`workflow3.json` 和 `run_summary.json`，
+随后执行验证门禁。
 
-Model routing filters local generators by modality and body part. Unsupported
-cases use the configured fallback provider, which can be a local VLM, cloud
-VLM/API, or mock provider. The generated JSON records the exact
-`source`/warning, such as `local_vlm_fallback_used`, `cloud_fallback_used`, or
-`mock_fallback_used`.
+模型路由会按成像模态和身体部位筛选本地生成器。不受支持的病例会使用配置的备用服务，
+可以是本地 VLM、云端 VLM/API 或模拟服务。生成的 JSON 会记录准确的 `source` 和警告信息，
+例如 `local_vlm_fallback_used`、`cloud_fallback_used` 或 `mock_fallback_used`。
 
-Inspect compatible local generators before a run:
+运行前可查看兼容的本地生成器：
 
 ```bash
 PYTHONPATH=src medharness2 models list --modality cxr --body-part chest
@@ -113,8 +104,7 @@ PYTHONPATH=src medharness2 models list --modality ct --body-part abdomen
 PYTHONPATH=src medharness2 models list --modality mri --body-part brain
 ```
 
-Preview local-model coverage for the whole sample dataset without running OCR,
-DICOM conversion, or model inference:
+如需预览整个样例数据集的本地模型覆盖情况，同时避免运行 OCR、DICOM 转换或模型推理：
 
 ```bash
 PYTHONPATH=src medharness2 workflow sample-full \
@@ -124,8 +114,7 @@ PYTHONPATH=src medharness2 workflow sample-full \
   --all-compatible-local-models
 ```
 
-To avoid launching GPU-heavy fresh models, restrict the local pool to reusable
-artifacts:
+如需避免启动 GPU 开销较大的即时生成模型，可将本地模型池限制为可复用产物：
 
 ```bash
 PYTHONPATH=src medharness2 workflow sample-full \
@@ -136,7 +125,7 @@ PYTHONPATH=src medharness2 workflow sample-full \
   --model-source artifact_reuse
 ```
 
-Select local models explicitly with repeated `--model`, for example:
+可以重复使用 `--model` 显式选择多个本地模型，例如：
 
 ```bash
 PYTHONPATH=src medharness2 workflow sample-full \
@@ -150,7 +139,7 @@ PYTHONPATH=src medharness2 workflow sample-full \
   --model brain_gemma3d
 ```
 
-Validate a completed sample-data run before treating it as an evaluable result:
+在将样例数据运行结果用于评估前，请先完成验证：
 
 ```bash
 PYTHONPATH=src medharness2 workflow validate-run \
@@ -158,12 +147,11 @@ PYTHONPATH=src medharness2 workflow validate-run \
   --expected-cases 52
 ```
 
-Add `--require-real-ocr` for non-mock evaluation. This checks each report text
-cache for explicit OCR provenance and rejects mock or unknown OCR outputs.
+正式的非模拟评估应添加 `--require-real-ocr`。该选项会检查每份报告文本缓存是否包含明确的
+OCR 来源信息，并拒绝模拟或来源未知的 OCR 输出。
 
-When expensive local batches are run by modality/body-part subsets, merge the
-validated batch outputs into one auditable 52-case result without rerunning
-models:
+如果高成本的本地批处理按模态或身体部位拆分运行，可将通过验证的批次输出合并成一份可审计的
+52 病例结果，无需重新运行模型：
 
 ```bash
 PYTHONPATH=src medharness2 workflow merge-batches \
@@ -178,10 +166,10 @@ PYTHONPATH=src medharness2 workflow merge-batches \
   --batch-result outputs/local_hf_fallback_remaining_20_qualityfix_20260606/workflow2.json
 ```
 
-The merged output writes `workflow2.json`, `workflow3.json`, `run_summary.json`,
-and one copied Workflow 1 JSON per case under `workflow2_cases/`.
+合并流程会写入 `workflow2.json`、`workflow3.json` 和 `run_summary.json`，并在
+`workflow2_cases/` 下为每个病例复制一份工作流 1 JSON。
 
-Create report-ready CSV and Markdown summaries from a completed run:
+可从已完成的运行结果生成用于报告的 CSV 和 Markdown 摘要：
 
 ```bash
 PYTHONPATH=src medharness2 workflow analyze-run \
@@ -189,37 +177,32 @@ PYTHONPATH=src medharness2 workflow analyze-run \
   --analysis-dir outputs/sample_data_2026-06-05_final_local_routed_52_20260606/analysis
 ```
 
-This writes case routing, model/source, reader, modality/body-part, and quality
-gate failure tables without rerunning OCR or generation.
+该命令不会重新运行 OCR 或报告生成，而是输出病例路由、模型与来源、阅片者、模态与身体部位，
+以及质量门禁失败记录等表格。
 
-The same final validation and analysis can be repeated with:
+也可以使用以下命令重复执行最终验证和分析：
 
 ```bash
 make final-sample-check
 ```
 
-For a design-to-implementation checklist and current 52-case evidence, see
-`docs/design_implementation_audit_20260606.md`.
+设计到实现的检查清单及当前 52 病例证据见
+`docs/design_implementation_audit_20260606.md`。
 
-## Configuration
+## 配置
 
-`config/default.yaml` keeps provider choices outside the code:
+`config/default.yaml` 将服务提供方的选择与代码分离：
 
-- `llm.provider: mock` is deterministic and used by default.
-- `llm.provider: openai` calls the OpenAI Responses API with
-  `OPENAI_API_KEY`.
-- `extractor.backend: cxr_rule` enables the current rule-based CXR graph
-  extractor; non-CXR work can still use `placeholder`.
-- `generator.local_models` defines local artifacts and fresh medHarness
-  adapters.
+- `llm.provider: mock`：默认使用，结果确定且可复现。
+- `llm.provider: openai`：使用 `OPENAI_API_KEY` 调用 OpenAI Responses API。
+- `extractor.backend: cxr_rule`：启用当前基于规则的胸部 X 光图结构提取器；非胸部 X 光任务仍可使用 `placeholder`。
+- `generator.local_models`：定义本地产物和即时 medHarness 适配器。
 
-Use `config/example.yaml` as the copyable template when creating local
-experiment-specific configs.
+创建本地实验配置时，可复制 `config/example.yaml` 作为模板。
 
-Do not commit API keys, GitHub tokens, model credentials, or private paths that
-should not be shared. `docs/pat.txt` is intentionally ignored.
+不要提交 API 密钥、GitHub 令牌、模型凭据或不应共享的私有路径。`docs/pat.txt` 已被有意忽略。
 
-## API Smoke
+## API 冒烟测试
 
 ```bash
 PYTHONPATH=src uvicorn medharness2.api:app --host 0.0.0.0 --port 8000
@@ -237,7 +220,7 @@ curl -X POST http://127.0.0.1:8000/workflow/single-case \
   }'
 ```
 
-## Validation
+## 验证
 
 ```bash
 make test
