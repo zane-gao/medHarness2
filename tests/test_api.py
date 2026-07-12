@@ -334,6 +334,108 @@ def test_api_sample_full_dry_run_filters_model_source(tmp_path: Path):
     assert "maira_2" not in keys
 
 
+def test_api_catalog_tools_returns_provider_without_secret_values():
+    client = TestClient(app)
+    response = client.get("/catalog/tools")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["providers"]["llm"]["secret_values_exposed"] is False
+    assert any(tool["id"] == "tool8_generate" for tool in body["tools"])
+    assert body["models"]
+
+
+def test_api_workflow_education_eval_report(tmp_path: Path):
+    workflow1 = tmp_path / "workflow1.json"
+    output = tmp_path / "education.json"
+    _write_json(
+        workflow1,
+        {
+            "human_evaluation": {
+                "likert": {
+                    "Completeness and Accuracy": {"score": 2, "explanation": "Missing detail."},
+                    "Conciseness and Clarity": {"score": 4, "explanation": "Clear."},
+                    "Terminological Accuracy": {"score": 4, "explanation": "Good."},
+                    "Structure and Style": {"score": 4, "explanation": "Good."},
+                    "Overall Writing Quality": {"score": 4, "explanation": "Good."},
+                },
+                "finding_graph": {"findings": [{"id": "f1", "observation": "opacity", "text": "opacity"}]},
+                "structure": {"score": 0.55},
+            },
+            "pairwise_comparisons": [],
+            "generated_reports": [],
+            "rankings": [],
+        },
+    )
+    client = TestClient(app)
+    response = client.post(
+        "/workflow/education",
+        json={"eval_report_path": str(workflow1), "output_path": str(output)},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summary"]["mode"] == "eval_report"
+    assert body["summary"]["suggestions"] >= 1
+    assert output.exists()
+
+
+def test_api_outputs_write_run_registry_entries(tmp_path: Path):
+    run_dir = tmp_path / "run"
+    _write_json(run_dir / "run_summary.json", {"summary": {"case_count": 1, "reader_count": 1}})
+    client = TestClient(app)
+
+    experiment_dir = tmp_path / "experiments"
+    response = client.post("/experiments/run", json={"run_dir": str(run_dir), "output_dir": str(experiment_dir)})
+    assert response.status_code == 200
+    experiment_registry = json.loads((experiment_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert experiment_registry["entries"][-1]["stage"] == "experiments.run"
+    assert experiment_registry["entries"][-1]["metrics"]["experiment_count"] == 6
+    assert experiment_registry["entries"][-1]["metrics"]["education_generation_status"] == "skipped_missing_workflow2"
+    assert experiment_registry["entries"][-1]["metrics"]["education_suggestion_count"] == 0
+    run_registry = json.loads((run_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert run_registry["entries"][-1]["stage"] == "experiments.run"
+
+    figure_dir = tmp_path / "figures"
+    response = client.post("/figures/build", json={"experiment_dir": str(experiment_dir), "output_dir": str(figure_dir)})
+    assert response.status_code == 200
+    figure_registry = json.loads((figure_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert figure_registry["entries"][-1]["stage"] == "figures.build"
+    run_registry = json.loads((run_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert run_registry["entries"][-1]["stage"] == "figures.build"
+
+    dashboard = tmp_path / "control_panel.html"
+    response = client.post("/dashboard/build", json={"run_dir": str(run_dir), "output_path": str(dashboard)})
+    assert response.status_code == 200
+    run_registry = json.loads((run_dir / "run_registry.json").read_text(encoding="utf-8"))
+    dashboard_entry = run_registry["entries"][-1]
+    assert dashboard_entry["stage"] == "dashboard.build"
+    assert dashboard_entry["metrics"]["registry_entry_count"] == len(run_registry["entries"])
+    dashboard_html = dashboard.read_text(encoding="utf-8")
+    assert "Run Registry" in dashboard_html
+    assert "dashboard.build" in dashboard_html
+
+    workflow1 = tmp_path / "workflow1.json"
+    education_output = tmp_path / "education.json"
+    _write_json(
+        workflow1,
+        {
+            "human_evaluation": {
+                "likert": {
+                    "Completeness and Accuracy": {"score": 4, "explanation": "Adequate."},
+                },
+                "finding_graph": {"findings": [{"id": "f1", "observation": "opacity", "text": "opacity"}]},
+                "structure": {"score": 1.0},
+            }
+        },
+    )
+    response = client.post(
+        "/workflow/education",
+        json={"eval_report_path": str(workflow1), "output_path": str(education_output)},
+    )
+    assert response.status_code == 200
+    education_registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert education_registry["entries"][-1]["stage"] == "workflow.education"
+
+
 def _write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

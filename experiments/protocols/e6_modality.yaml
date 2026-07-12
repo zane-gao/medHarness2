@@ -1,0 +1,34 @@
+schema_version: "1.0"
+id: modality_recognition
+notion_section: Validation of Modality Recognition VLM
+research_question: Does DICOM-first modality and body-part routing remain reliable under missing or conflicting metadata?
+implementation:
+  stage: experiments.run
+  method: gold-label comparison of suffix, DICOM, series rules and optional VLM fallback
+  primary_tools: [Tool 7, validation.sample_run]
+model_policy:
+  general_model: optional_fallback_candidate
+  medical_specialist_model: optional
+  local_model: preferred_for_private_images
+  api_model: raw_images_blocked
+inputs: [deidentified modality gold labels, DICOM metadata variants]
+outputs: [confusion_matrix, unknown_rate, routing_error_impact]
+cohort:
+  unit: imaging_study
+  strata: [trusted_metadata, missing_metadata, conflicting_series]
+primary_endpoints: [modality_accuracy, body_part_macro_f1, routing_error_rate]
+secondary_endpoints: [unknown_rate, fallback_incremental_value]
+statistics: [stratified_bootstrap_95ci, paired_ablation]
+validation_gates:
+  - id: modality_gold_labels
+    description: Modality and body-part gold labels are complete.
+  - id: frozen_test_split
+    description: Imaging study test manifest and hash are frozen.
+  - id: missing_metadata_ablation
+    description: Missing/conflicting metadata ablation is complete.
+  - id: primary_endpoint_analysis
+    description: Pre-registered routing analysis is complete.
+limitations:
+  - Existing manifest modality counts are provenance, not recognition accuracy.
+next_steps:
+  - Build explicit cases without trusted manifest modality.

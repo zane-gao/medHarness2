@@ -1,0 +1,284 @@
+{
+  "$defs": {
+    "AlignmentAuditIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "issue_type": {
+          "enum": [
+            "missed_match",
+            "incorrect_match",
+            "incorrect_error_type",
+            "unsupported_error",
+            "missing_error",
+            "other"
+          ],
+          "title": "Issue Type",
+          "type": "string"
+        },
+        "candidate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Id"
+        },
+        "reference_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Id"
+        },
+        "error_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Index"
+        },
+        "suggested_error_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggested Error Type"
+        },
+        "explanation": {
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "issue_type",
+        "explanation",
+        "confidence"
+      ],
+      "title": "AlignmentAuditIssue",
+      "type": "object"
+    },
+    "AlignmentErrorJudgement": {
+      "additionalProperties": false,
+      "properties": {
+        "error_index": {
+          "minimum": 0,
+          "title": "Error Index",
+          "type": "integer"
+        },
+        "disposition": {
+          "enum": [
+            "valid",
+            "unsupported",
+            "incorrect_error_type",
+            "abstain"
+          ],
+          "title": "Disposition",
+          "type": "string"
+        },
+        "suggested_error_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggested Error Type"
+        },
+        "explanation": {
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "error_index",
+        "disposition",
+        "explanation",
+        "confidence"
+      ],
+      "title": "AlignmentErrorJudgement",
+      "type": "object"
+    },
+    "ModelProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "implementation_type": {
+          "minLength": 1,
+          "title": "Implementation Type",
+          "type": "string"
+        },
+        "provider": {
+          "default": "",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "default": "",
+          "title": "Model",
+          "type": "string"
+        },
+        "version": {
+          "default": "",
+          "title": "Version",
+          "type": "string"
+        },
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        },
+        "prompt_version": {
+          "default": "",
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "fallback_used": {
+          "default": false,
+          "title": "Fallback Used",
+          "type": "boolean"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "implementation_type"
+      ],
+      "title": "ModelProvenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_type": {
+      "const": "alignment_audit",
+      "default": "alignment_audit",
+      "title": "Artifact Type",
+      "type": "string"
+    },
+    "alignment_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Alignment Sha256",
+      "type": "string"
+    },
+    "auditor_provenance": {
+      "$ref": "#/$defs/ModelProvenance"
+    },
+    "verdict": {
+      "enum": [
+        "pass",
+        "issues_found",
+        "abstain"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "summary": {
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/AlignmentAuditIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "error_judgements": {
+      "items": {
+        "$ref": "#/$defs/AlignmentErrorJudgement"
+      },
+      "title": "Error Judgements",
+      "type": "array"
+    },
+    "adjudicated_error_candidates": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Adjudicated Error Candidates",
+      "type": "array"
+    },
+    "adjudication_summary": {
+      "additionalProperties": true,
+      "title": "Adjudication Summary",
+      "type": "object"
+    },
+    "primary_preserved": {
+      "const": true,
+      "default": true,
+      "title": "Primary Preserved",
+      "type": "boolean"
+    },
+    "requires_adjudication": {
+      "default": false,
+      "title": "Requires Adjudication",
+      "type": "boolean"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    }
+  },
+  "required": [
+    "alignment_sha256",
+    "auditor_provenance",
+    "verdict",
+    "confidence",
+    "summary"
+  ],
+  "title": "AlignmentAuditArtifact",
+  "type": "object"
+}

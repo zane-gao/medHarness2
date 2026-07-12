@@ -1,0 +1,84 @@
+# Explicit single-provider, three-model contingency profile.
+# DMX remains preferred. Use this only when DMX quota and Yunwu availability
+# block the validated mixed route. Terra runs the main chain, Sol independently
+# reviews hazards, and Luna adjudicates only disagreements. No automatic
+# provider/model failover is permitted.
+
+llm:
+  provider: mock
+  model: gpt-5.6-terra
+  max_retries: 3
+  timeout_sec: 60
+  retry_initial_sec: 0.5
+  temperature: 0.0
+  chat_max_tokens: 1024
+
+privacy:
+  enforce_external: false
+  block_external_images: false
+  allowed_external_classifications:
+    - raw_clinical_text
+    - deidentified_structured
+    - synthetic_test
+    - public_nonclinical
+
+model_roles:
+  general_judge: &terra
+    provider: chat_completions
+    model: gpt-5.6-terra
+    api_key_env: CODEX_PROXY_GPT_API_KEY
+    base_url: https://codex.0u0o.com/v1
+    schema_max_attempts: 2
+    transport_max_retries: 1
+    timeout_sec: 120
+    temperature: 0.0
+    max_tokens: 2048
+  finding_extractor:
+    <<: *terra
+    max_tokens: 4096
+  alignment_auditor:
+    <<: *terra
+  hazard_primary:
+    <<: *terra
+  structure_auditor:
+    <<: *terra
+  education:
+    <<: *terra
+    max_tokens: 4096
+
+  hazard_reviewer:
+    <<: *terra
+    model: gpt-5.6-sol
+  hazard_adjudicator:
+    <<: *terra
+    model: gpt-5.6-luna
+
+extractor:
+  backend: auto
+  template_path: config/templates/default_finding_template.json
+
+generator:
+  cloud_fallback_enabled: false
+  reference_assisted_generation: false
+  include_legacy_ready_models: true
+  legacy_config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
+  default_models: []
+
+ranking:
+  top_n: 3
+  weights:
+    likert_mean: 0.4
+    structure_score: 0.3
+    finding_coverage: 0.3
+
+alignment:
+  tolerance_mm: 5.0
+
+modality_map:
+  DX: cxr
+  CR: cxr
+  XR: cxr
+  CT: ct
+  MR: mri
+  MRI: mri
+  pathology: pathology

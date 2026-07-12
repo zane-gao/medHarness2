@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -30,8 +31,12 @@ def write_json(path: str | Path, payload: Any) -> None:
 
 
 def parse_json_object(raw: str, *, context: str) -> dict[str, Any]:
+    text = raw.strip()
+    fenced = re.fullmatch(r"```(?:json)?\s*\n?(.*?)\n?```", text, flags=re.I | re.S)
+    if fenced:
+        text = fenced.group(1).strip()
     try:
-        data = json.loads(raw)
+        data = json.loads(text)
     except json.JSONDecodeError as exc:
         raise ValueError(f"{context} did not return valid JSON: {exc}") from exc
     if not isinstance(data, dict):

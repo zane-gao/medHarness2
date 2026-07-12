@@ -1,0 +1,136 @@
+{
+  "schema_version": "1.0",
+  "artifact_type": "synthetic_llm_tool_smoke",
+  "date": "2026-07-10",
+  "clinical_evidence": false,
+  "contains_patient_data": false,
+  "dmx": {
+    "preferred_provider": true,
+    "model_catalog_reachable": true,
+    "verified_calls": {
+      "general_judge": {
+        "model": "gpt-5.6-terra",
+        "status": "passed",
+        "fallback_used": false
+      },
+      "finding_extractor": {
+        "model": "gpt-5.6-terra",
+        "status": "passed",
+        "fallback_used": false,
+        "attempt_count": 1
+      },
+      "hazard_reviewer_transport": {
+        "model": "claude-opus-4-8",
+        "status": "passed",
+        "omit_temperature": true
+      }
+    },
+    "full_chain_status": "blocked_external_provider_instability",
+    "blocking_error": "intermittent HTTP 403 on gpt-5.6-terra during T1/T2 despite isolated HTTP 200 probes",
+    "transport_findings": {
+      "finding_extractor_max_tokens_4096": "HTTP 403",
+      "finding_extractor_max_tokens_2048": "HTTP 200",
+      "profile_max_tokens_fixed_to": 2048,
+      "profile_retry_initial_sec_fixed_to": 5.0,
+      "claude_opus_4_8_isolated_call": "HTTP 200"
+    }
+  },
+  "yunwu_explicit_backup": {
+    "preferred_provider": false,
+    "full_chain_status": "passed",
+    "tools": {
+      "t1": {
+        "model": "gpt-5.6-terra",
+        "metric_count": 5,
+        "fallback_used": false
+      },
+      "t2": {
+        "model": "gpt-5.6-terra",
+        "single_and_pairwise_passed": true,
+        "fallback_used": false
+      },
+      "t5": {
+        "model": "gpt-5.6-terra",
+        "audit_verdict": "issues_found",
+        "fallback_used": false
+      },
+      "t4": {
+        "primary_model": "gpt-5.6-terra",
+        "reviewer_model": "claude-opus-4-8",
+        "disagreement_count": 2,
+        "fallback_used": false
+      },
+      "t6": {
+        "model": "gpt-5.6-terra",
+        "metric_version": "tool6-structure-v2",
+        "audit_verdict": "no_material_issue",
+        "fallback_used": false
+      }
+    }
+  },
+  "codex_proxy_explicit_backup": {
+    "preferred_provider": false,
+    "model_catalog_reachable": true,
+    "gpt_models_include": [
+      "gpt-5.6-terra"
+    ],
+    "claude_models_include": [
+      "claude-opus-4-8"
+    ],
+    "gpt_path_status": "T1, T2, T5, and T4 primary reached successfully without fallback",
+    "claude_path_status": "blocked_http_503",
+    "full_chain_status": "blocked_claude_channel_unavailable"
+  },
+  "codex_dmx_explicit_contingency": {
+    "preferred_provider": false,
+    "profile": "config/codex_dmx_strong.yaml",
+    "full_chain_status": "passed",
+    "contains_patient_data": false,
+    "tools": {
+      "t1": {
+        "endpoint_host": "codex.0u0o.com",
+        "model": "gpt-5.6-terra",
+        "metric_count": 5,
+        "fallback_used": false
+      },
+      "t2": {
+        "endpoint_host": "codex.0u0o.com",
+        "model": "gpt-5.6-terra",
+        "single_and_pairwise_passed": true,
+        "finding_counts": [3, 3, 3],
+        "fallback_used": false
+      },
+      "t5": {
+        "endpoint_host": "codex.0u0o.com",
+        "model": "gpt-5.6-terra",
+        "alignment_error_count": 4,
+        "audit_verdict": "issues_found",
+        "hash_verified": true,
+        "primary_preserved": true,
+        "fallback_used": false
+      },
+      "t4": {
+        "primary_endpoint_host": "codex.0u0o.com",
+        "primary_model": "gpt-5.6-terra",
+        "reviewer_endpoint_host": "www.dmxapi.cn",
+        "reviewer_model": "claude-opus-4-8",
+        "hazard_count": 4,
+        "hazard_levels": [3, 2, 4, 3],
+        "disagreement_count": 1,
+        "requires_adjudication": true,
+        "hash_verified": true,
+        "primary_preserved": true,
+        "fallback_used": false
+      },
+      "t6": {
+        "endpoint_host": "codex.0u0o.com",
+        "model": "gpt-5.6-terra",
+        "metric_version": "tool6-structure-v2",
+        "audit_verdict": "no_material_issue",
+        "hash_verified": true,
+        "primary_preserved": true,
+        "fallback_used": false
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "path": {
+      "minLength": 1,
+      "title": "Path",
+      "type": "string"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "minLength": 1,
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "media_type": {
+      "default": "application/json",
+      "title": "Media Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "path",
+    "sha256",
+    "schema_version"
+  ],
+  "title": "ArtifactReference",
+  "type": "object"
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
@@ -9,8 +10,9 @@ from typing import Any
 
 import yaml
 
-from medharness2.config import AppConfig
-from medharness2.schema import GeneratedReport
+from medharness2.config import AppConfig, resolve_existing_path
+from medharness2.contracts import infer_evidence_tier
+from medharness2.schema import FORMAL_FRESH_SOURCES, GeneratedReport
 
 
 _LEGACY_FORMAL_ROUTE_EXCLUDE = {
@@ -19,6 +21,15 @@ _LEGACY_FORMAL_ROUTE_EXCLUDE = {
     "lingshu_srrg_findings",
     "histgen",
     "pathgenic",
+}
+
+_GENERATION_PARAMETER_FIELDS = {
+    "do_sample",
+    "generation_seed",
+    "temperature",
+    "top_p",
+    "top_k",
+    "repetition_penalty",
 }
 
 
@@ -38,13 +49,25 @@ class GeneratorEntry:
     source_generation_jsonl: str = ""
     medharness_model_key: str = ""
     python_bin: str = "python"
+    python_paths: list[str] = field(default_factory=list)
     script_path: str = "/data/isbi/gzp/medHarness/scripts/run_report_generation.py"
     config_path: str = "/data/isbi/gzp/medHarness/configs/reportgen_models.yaml"
     output_jsonl: str = ""
     device: str = "cuda:0"
     dtype: str = "bf16"
     max_new_tokens: int = 160
+    generation_parameters: dict[str, Any] = field(default_factory=dict)
     timeout_sec: int = 1800
+    evidence_tier: str = ""
+    model_version: str = ""
+    model_sha256: str = ""
+    prompt_version: str = ""
+    preprocessing_version: str = ""
+    formal_validation_id: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.evidence_tier:
+            self.evidence_tier = infer_evidence_tier(self.source)
 
     def readiness_metadata(self) -> dict[str, Any]:
         return {
@@ -54,9 +77,28 @@ class GeneratorEntry:
             "fresh_inference": self.fresh_inference,
             "ready": self.ready,
             "source": self.source,
+            "evidence_tier": self.evidence_tier,
             "route_role": self.route_role,
             "notes": self.notes,
+            "formal_readiness_violations": self.formal_readiness_violations(),
         }
+
+    def formal_readiness_violations(self) -> list[str]:
+        violations: list[str] = []
+        if self.evidence_tier != "formal_fresh":
+            violations.append("non_formal_evidence_tier")
+        if self.source not in FORMAL_FRESH_SOURCES:
+            violations.append("unsupported_formal_source")
+        if not self.ready:
+            violations.append("generator_not_ready")
+        if not self.fresh_inference:
+            violations.append("fresh_inference_unverified")
+        if not _valid_sha256(self.model_sha256):
+            violations.append("missing_model_sha256")
+        for field_name in ("model_version", "prompt_version", "preprocessing_version", "formal_validation_id"):
+            if not str(getattr(self, field_name) or "").strip():
+                violations.append(f"missing_{field_name}")
+        return violations
 
     @property
     def route_role(self) -> str:
@@ -131,10 +173,23 @@ class ReportGeneratorRegistry:
         body_part: str | None = None,
     ) -> GeneratedReport:
         if entry.source == "artifact_reuse":
-            return self._generate_artifact(entry, image_path=image_path, modality=modality)
-        if entry.source == "medharness_cli":
-            return self._generate_medharness_cli(entry, image_path=image_path, modality=modality, reference_report=reference_report, body_part=body_part)
-        return self.generate_stub(entry, image_path=image_path, modality=modality, reference_report=reference_report)
+            result = self._generate_artifact(entry, image_path=image_path, modality=modality)
+        elif entry.source == "medharness_cli":
+            result = self._generate_medharness_cli(
+                entry,
+                image_path=image_path,
+                modality=modality,
+                reference_report=reference_report,
+                body_part=body_part,
+            )
+        else:
+            result = self.generate_stub(entry, image_path=image_path, modality=modality, reference_report=reference_report)
+        self._apply_entry_metadata(entry, result)
+        if reference_report:
+            _mark_reference_assisted(result)
+        else:
+            result.metadata = {**result.metadata, "reference_report_used": False}
+        return result
 
     def generate_stub(self, entry: GeneratorEntry, image_path: str, modality: str, reference_report: str | None = None) -> GeneratedReport:
         if not entry.ready:
@@ -161,7 +216,7 @@ class ReportGeneratorRegistry:
         )
 
     def _generate_artifact(self, entry: GeneratorEntry, *, image_path: str, modality: str) -> GeneratedReport:
-        source = Path(entry.source_generation_jsonl)
+        source = resolve_existing_path(entry.source_generation_jsonl) if entry.source_generation_jsonl else Path("")
         if not source.exists():
             return GeneratedReport(
                 model=entry.key,
@@ -199,7 +254,7 @@ class ReportGeneratorRegistry:
         reference_report: str | None,
         body_part: str | None,
     ) -> GeneratedReport:
-        script = Path(entry.script_path)
+        script = resolve_existing_path(entry.script_path)
         if not script.exists():
             return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["legacy_script_missing", str(script)])
         with tempfile.TemporaryDirectory(prefix="medharness2_legacy_") as tmpdir:
@@ -217,7 +272,7 @@ class ReportGeneratorRegistry:
             )
             input_jsonl.write_text(json.dumps(row, ensure_ascii=False) + "\n", encoding="utf-8")
             cmd = [
-                entry.python_bin,
+                _runtime_python_bin(entry.python_bin),
                 str(script),
                 "--config",
                 str(runtime_config),
@@ -237,7 +292,7 @@ class ReportGeneratorRegistry:
                 str(entry.max_new_tokens),
             ]
             try:
-                subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=entry.timeout_sec)
+                _run_legacy_subprocess(cmd, entry)
             except subprocess.CalledProcessError as exc:
                 return GeneratedReport(
                     model=entry.key,
@@ -258,12 +313,30 @@ class ReportGeneratorRegistry:
                 )
             return self._read_legacy_output(entry, output_jsonl, modality=modality, cmd=cmd)
 
-    def generate_batch(self, entry: GeneratorEntry, cases: list[dict[str, Any]]) -> dict[str, GeneratedReport]:
-        if entry.source != "medharness_cli" or not cases:
+    def generate_batch(
+        self,
+        entry: GeneratorEntry,
+        cases: list[dict[str, Any]],
+        *,
+        include_failures: bool = False,
+    ) -> dict[str, GeneratedReport]:
+        if not cases:
             return {}
-        script = Path(entry.script_path)
+        if entry.source != "medharness_cli":
+            return self._batch_failure_reports(
+                entry,
+                cases,
+                warning="batch_generation_not_supported",
+                detail=f"unsupported_source:{entry.source}",
+            ) if include_failures else {}
+        script = resolve_existing_path(entry.script_path)
         if not script.exists():
-            return {}
+            return self._batch_failure_reports(
+                entry,
+                cases,
+                warning="legacy_script_missing",
+                detail=str(script),
+            ) if include_failures else {}
         with tempfile.TemporaryDirectory(prefix="medharness2_legacy_batch_") as tmpdir:
             tmp = Path(tmpdir)
             input_jsonl = tmp / "input.jsonl"
@@ -285,7 +358,7 @@ class ReportGeneratorRegistry:
                 encoding="utf-8",
             )
             cmd = [
-                entry.python_bin,
+                _runtime_python_bin(entry.python_bin),
                 str(script),
                 "--config",
                 str(runtime_config),
@@ -305,25 +378,123 @@ class ReportGeneratorRegistry:
                 str(entry.max_new_tokens),
             ]
             try:
-                subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=entry.timeout_sec)
-            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-                return {}
-            return self._read_legacy_output_map(entry, output_jsonl, cmd=cmd)
+                _run_legacy_subprocess(cmd, entry)
+            except subprocess.CalledProcessError as exc:
+                detail = (exc.stderr or exc.stdout or "")[-1000:]
+                return self._batch_failure_reports(
+                    entry,
+                    cases,
+                    warning="legacy_batch_generation_failed",
+                    detail=detail,
+                    cmd=cmd,
+                ) if include_failures else {}
+            except subprocess.TimeoutExpired:
+                return self._batch_failure_reports(
+                    entry,
+                    cases,
+                    warning="legacy_batch_generation_timeout",
+                    detail=f"timeout_sec:{entry.timeout_sec}",
+                    cmd=cmd,
+                ) if include_failures else {}
+            reports = self._read_legacy_output_map(entry, output_jsonl, cmd=cmd)
+            reference_by_case = {str(case["case_id"]): bool(case.get("reference_report")) for case in cases}
+            if include_failures:
+                missing_cases = [
+                    case
+                    for case in cases
+                    if str(case["case_id"]) not in reports
+                ]
+                reports.update(
+                    self._batch_failure_reports(
+                        entry,
+                        missing_cases,
+                        warning="legacy_batch_output_missing",
+                        detail="No output row was returned for this case.",
+                        cmd=cmd,
+                    )
+                )
+            for case_id, report in reports.items():
+                if reference_by_case.get(case_id):
+                    _mark_reference_assisted(report)
+                else:
+                    report.metadata = {**report.metadata, "reference_report_used": False}
+                self._apply_entry_metadata(entry, report)
+            return reports
+
+    @classmethod
+    def _batch_failure_reports(
+        cls,
+        entry: GeneratorEntry,
+        cases: list[dict[str, Any]],
+        *,
+        warning: str,
+        detail: str,
+        cmd: list[str] | None = None,
+    ) -> dict[str, GeneratedReport]:
+        reports: dict[str, GeneratedReport] = {}
+        for case in cases:
+            case_id = str(case["case_id"])
+            report = GeneratedReport(
+                model=entry.key,
+                source=entry.source,
+                report="",
+                modality=str(case.get("modality") or ""),
+                evidence_tier=entry.evidence_tier,
+                warnings=[warning],
+                metadata={
+                    "batch_error": detail,
+                    "reference_report_used": False,
+                    **({"cmd": _redacted_cmd(cmd)} if cmd else {}),
+                },
+            )
+            cls._apply_entry_metadata(entry, report)
+            reports[case_id] = report
+        return reports
+
+    @staticmethod
+    def _apply_entry_metadata(
+        entry: GeneratorEntry,
+        result: GeneratedReport,
+    ) -> None:
+        result.evidence_tier = entry.evidence_tier
+        result.metadata = {
+            **result.metadata,
+            "evidence_tier": entry.evidence_tier,
+            "fresh_inference": entry.fresh_inference,
+            "model_version": entry.model_version,
+            "model_sha256": entry.model_sha256,
+            "prompt_version": entry.prompt_version,
+            "preprocessing_version": entry.preprocessing_version,
+            "formal_validation_id": entry.formal_validation_id,
+            "runtime_python_paths": [
+                _resolved_path_text(path) for path in entry.python_paths
+            ],
+            "generation_parameters": entry.generation_parameters,
+        }
 
     @staticmethod
     def _write_legacy_config_overlay(entry: GeneratorEntry, output_path: Path) -> Path:
-        source = Path(entry.config_path)
-        if not source.exists() or entry.python_bin == "python":
+        source = resolve_existing_path(entry.config_path)
+        if not source.exists():
             return source
         try:
             payload = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
         except Exception:
             return source
+        payload = _rewrite_existing_legacy_paths(payload)
         model_key = entry.medharness_model_key or entry.key
         models = payload.get("models")
         if not isinstance(models, dict) or not isinstance(models.get(model_key), dict):
             return source
-        models[model_key]["python_bin"] = entry.python_bin
+        if entry.python_bin != "python":
+            models[model_key]["python_bin"] = _runtime_python_bin(
+                entry.python_bin
+            )
+        for key, value in entry.generation_parameters.items():
+            if value is None:
+                models[model_key].pop(key, None)
+            else:
+                models[model_key][key] = value
         output_path.write_text(yaml.safe_dump(payload, allow_unicode=True, sort_keys=False), encoding="utf-8")
         return output_path
 
@@ -343,7 +514,8 @@ class ReportGeneratorRegistry:
                     report=str(report),
                     modality=str(row.get("modality") or modality),
                     warnings=list(row.get("warnings") or []),
-                    metadata={"cmd": _redacted_cmd(cmd), "adapter_status": row.get("adapter_status")},
+                    metadata=_legacy_output_metadata(row, cmd),
+                    evidence_tier=entry.evidence_tier,
                 )
         return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["legacy_output_empty"])
 
@@ -367,7 +539,8 @@ class ReportGeneratorRegistry:
                     report=str(report),
                     modality=str(row.get("modality") or ""),
                     warnings=list(row.get("warnings") or []),
-                    metadata={"cmd": _redacted_cmd(cmd), "adapter_status": row.get("adapter_status")},
+                    metadata=_legacy_output_metadata(row, cmd),
+                    evidence_tier=entry.evidence_tier,
                 )
         return reports
 
@@ -388,23 +561,33 @@ class ReportGeneratorRegistry:
                     report_training=str(row.get("report_training") or ""),
                     fresh_inference=bool(row.get("fresh_inference", str(row.get("source") or "") == "medharness_cli")),
                     notes=str(row.get("notes") or ""),
-                    source_generation_jsonl=str(row.get("source_generation_jsonl") or ""),
+                    source_generation_jsonl=_resolved_path_text(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(row.get("medharness_model_key") or row.get("model_key") or ""),
                     python_bin=str(row.get("python_bin") or "python"),
-                    script_path=str(row.get("script_path") or "/data/isbi/gzp/medHarness/scripts/run_report_generation.py"),
-                    config_path=str(row.get("config_path") or "/data/isbi/gzp/medHarness/configs/reportgen_models.yaml"),
+                    python_paths=[str(path) for path in row.get("python_paths") or []],
+                    script_path=_resolved_path_text(row.get("script_path") or "/data/isbi/gzp/medHarness/scripts/run_report_generation.py"),
+                    config_path=_resolved_path_text(row.get("config_path") or "/data/isbi/gzp/medHarness/configs/reportgen_models.yaml"),
                     output_jsonl=str(row.get("output_jsonl") or ""),
                     device=str(row.get("device") or "cuda:0"),
                     dtype=str(row.get("dtype") or "bf16"),
                     max_new_tokens=int(row.get("max_new_tokens") or 160),
+                    generation_parameters=dict(
+                        row.get("generation_parameters") or {}
+                    ),
                     timeout_sec=int(row.get("timeout_sec") or 1800),
+                    evidence_tier=str(row.get("evidence_tier") or ""),
+                    model_version=str(row.get("model_version") or ""),
+                    model_sha256=str(row.get("model_sha256") or ""),
+                    prompt_version=str(row.get("prompt_version") or ""),
+                    preprocessing_version=str(row.get("preprocessing_version") or ""),
+                    formal_validation_id=str(row.get("formal_validation_id") or ""),
                 )
             )
         return [entry for entry in entries if entry.key]
 
     @staticmethod
     def _load_legacy_entries(config_path: str | Path) -> list[GeneratorEntry]:
-        path = Path(config_path)
+        path = resolve_existing_path(config_path)
         if not path.exists():
             return []
         try:
@@ -435,18 +618,109 @@ class ReportGeneratorRegistry:
                     report_training=str(row.get("report_training") or ""),
                     fresh_inference=source != "artifact_reuse",
                     notes=str(row.get("notes") or ""),
-                    source_generation_jsonl=str(row.get("source_generation_jsonl") or ""),
+                    source_generation_jsonl=_resolved_path_text(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(key),
                     python_bin=str(row.get("python_bin") or "python"),
-                    script_path="/data/isbi/gzp/medHarness/scripts/run_report_generation.py",
+                    python_paths=[str(item) for item in row.get("python_paths") or []],
+                    script_path=_resolved_path_text("/data/isbi/gzp/medHarness/scripts/run_report_generation.py"),
                     config_path=str(path),
+                    generation_parameters={
+                        key: row.get(key)
+                        for key in _GENERATION_PARAMETER_FIELDS
+                        if key in row
+                    },
+                    evidence_tier=str(row.get("evidence_tier") or ""),
+                    model_version=str(row.get("model_version") or ""),
+                    model_sha256=str(row.get("model_sha256") or ""),
+                    prompt_version=str(row.get("prompt_version") or ""),
+                    preprocessing_version=str(row.get("preprocessing_version") or ""),
+                    formal_validation_id=str(row.get("formal_validation_id") or ""),
                 )
             )
         return entries
 
 
+def _resolved_path_text(path: Any) -> str:
+    if not path:
+        return ""
+    return str(resolve_existing_path(str(path)))
+
+
+def _runtime_python_bin(value: str) -> str:
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        return value
+    return str(resolve_existing_path(candidate))
+
+
+def _run_legacy_subprocess(
+    cmd: list[str],
+    entry: GeneratorEntry,
+) -> subprocess.CompletedProcess[str]:
+    kwargs: dict[str, Any] = {
+        "check": True,
+        "capture_output": True,
+        "text": True,
+        "timeout": entry.timeout_sec,
+    }
+    if entry.python_paths:
+        env = os.environ.copy()
+        resolved_paths = [
+            str(resolve_existing_path(path).resolve())
+            for path in entry.python_paths
+        ]
+        existing = env.get("PYTHONPATH")
+        if existing:
+            resolved_paths.append(existing)
+        env["PYTHONPATH"] = os.pathsep.join(resolved_paths)
+        kwargs["env"] = env
+    return subprocess.run(cmd, **kwargs)
+
+
+def _rewrite_existing_legacy_paths(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _rewrite_existing_legacy_paths(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_rewrite_existing_legacy_paths(item) for item in value]
+    if not isinstance(value, str):
+        return value
+    candidate = Path(value).expanduser()
+    if not candidate.is_absolute():
+        return value
+    resolved = resolve_existing_path(candidate)
+    return str(resolved) if resolved != candidate else value
+
+
 def _redacted_cmd(cmd: list[str]) -> list[str]:
     return [part if "token" not in part.lower() and "key" not in part.lower() else "<redacted>" for part in cmd]
+
+
+def _legacy_output_metadata(
+    row: dict[str, Any],
+    cmd: list[str],
+) -> dict[str, Any]:
+    metadata: dict[str, Any] = {
+        "cmd": _redacted_cmd(cmd),
+        "adapter_status": row.get("adapter_status"),
+    }
+    for source_field, target_field in (
+        ("runtime", "adapter_runtime"),
+        ("input_assets", "adapter_input_assets"),
+        ("generated_sections", "adapter_generated_sections"),
+    ):
+        value = row.get(source_field)
+        if isinstance(value, dict):
+            metadata[target_field] = value
+    if row.get("raw_output") is not None:
+        metadata["raw_model_output"] = str(row.get("raw_output"))
+    if row.get("case_id") is not None:
+        metadata["adapter_case_id"] = str(row.get("case_id"))
+    if row.get("body_part") is not None:
+        metadata["adapter_body_part"] = str(row.get("body_part"))
+    return metadata
 
 
 def _legacy_input_row(
@@ -547,3 +821,14 @@ def _default_category(source: str) -> str:
 
 def _default_report_trained(source: str) -> bool:
     return source in {"artifact_reuse", "medharness_cli"}
+
+
+def _mark_reference_assisted(report: GeneratedReport) -> None:
+    report.evidence_tier = "debug_fallback"
+    report.metadata = {**report.metadata, "reference_report_used": True, "evidence_tier": "debug_fallback"}
+    if "reference_assisted_generation" not in report.warnings:
+        report.warnings.append("reference_assisted_generation")
+
+
+def _valid_sha256(value: str) -> bool:
+    return len(value) == 64 and all(character in "0123456789abcdef" for character in value)

@@ -17,7 +17,11 @@ def recognize_modality(image_path: str, config: AppConfig | None = None, llm_cli
     if suffix in {".png", ".jpg", ".jpeg"}:
         return "xray"
     if llm_client is not None:
-        text = llm_client.call("Identify imaging modality. Return one word such as CT, MR, DX, pathology.", image_path=image_path)
+        text = llm_client.call(
+            "Identify imaging modality. Return one word such as CT, MR, DX, pathology.",
+            image_path=image_path,
+            payload_classification="raw_medical_image",
+        )
         token = text.strip().split()[0].upper() if text.strip() else ""
         return cfg.modality_map.get(token, token.lower() or "unknown")
     return "unknown"

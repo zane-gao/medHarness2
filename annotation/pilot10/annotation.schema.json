@@ -1,0 +1,364 @@
+{
+  "$defs": {
+    "CandidateReportForAnnotation": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "minLength": 1,
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "blinded_model_id": {
+          "minLength": 1,
+          "title": "Blinded Model Id",
+          "type": "string"
+        },
+        "report_text": {
+          "title": "Report Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "blinded_model_id",
+        "report_text"
+      ],
+      "title": "CandidateReportForAnnotation",
+      "type": "object"
+    },
+    "FindingAnnotation": {
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": {
+          "minLength": 1,
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "observation_text": {
+          "minLength": 1,
+          "title": "Observation Text",
+          "type": "string"
+        },
+        "location_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location Text"
+        },
+        "laterality": {
+          "default": "unknown",
+          "enum": [
+            "left",
+            "right",
+            "bilateral",
+            "midline",
+            "unknown"
+          ],
+          "title": "Laterality",
+          "type": "string"
+        },
+        "certainty": {
+          "default": "present",
+          "enum": [
+            "present",
+            "absent",
+            "uncertain"
+          ],
+          "title": "Certainty",
+          "type": "string"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "measurements": {
+          "items": {
+            "$ref": "#/$defs/Measurement"
+          },
+          "title": "Measurements",
+          "type": "array"
+        },
+        "source": {
+          "enum": [
+            "reference",
+            "candidate"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "candidate_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Id"
+        },
+        "notes": {
+          "default": "",
+          "title": "Notes",
+          "type": "string"
+        }
+      },
+      "required": [
+        "finding_id",
+        "observation_text",
+        "source"
+      ],
+      "title": "FindingAnnotation",
+      "type": "object"
+    },
+    "HazardAnnotation": {
+      "additionalProperties": false,
+      "properties": {
+        "error_id": {
+          "minLength": 1,
+          "title": "Error Id",
+          "type": "string"
+        },
+        "candidate_id": {
+          "minLength": 1,
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "error_type": {
+          "enum": [
+            "omission_finding",
+            "false_finding",
+            "incorrect_location",
+            "incorrect_severity",
+            "mismatched_finding",
+            "contradiction",
+            "other"
+          ],
+          "title": "Error Type",
+          "type": "string"
+        },
+        "hazard_level": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Hazard Level",
+          "type": "integer"
+        },
+        "clinically_significant": {
+          "title": "Clinically Significant",
+          "type": "boolean"
+        },
+        "evidence_finding_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Finding Ids",
+          "type": "array"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "error_id",
+        "candidate_id",
+        "error_type",
+        "hazard_level",
+        "clinically_significant",
+        "rationale"
+      ],
+      "title": "HazardAnnotation",
+      "type": "object"
+    },
+    "Measurement": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "minimum": 0,
+          "title": "Value",
+          "type": "number"
+        },
+        "unit": {
+          "enum": [
+            "mm",
+            "cm"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "normalized_mm": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Mm"
+        }
+      },
+      "required": [
+        "value",
+        "unit"
+      ],
+      "title": "Measurement",
+      "type": "object"
+    },
+    "ReaderAnnotation": {
+      "additionalProperties": false,
+      "properties": {
+        "reader_slot": {
+          "enum": [
+            "reader_a",
+            "reader_b",
+            "adjudication"
+          ],
+          "title": "Reader Slot",
+          "type": "string"
+        },
+        "status": {
+          "default": "not_started",
+          "enum": [
+            "not_started",
+            "in_progress",
+            "complete"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/FindingAnnotation"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "hazards": {
+          "items": {
+            "$ref": "#/$defs/HazardAnnotation"
+          },
+          "title": "Hazards",
+          "type": "array"
+        },
+        "overall_notes": {
+          "default": "",
+          "title": "Overall Notes",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        }
+      },
+      "required": [
+        "reader_slot"
+      ],
+      "title": "ReaderAnnotation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_type": {
+      "const": "clinical_annotation_case",
+      "default": "clinical_annotation_case",
+      "title": "Artifact Type",
+      "type": "string"
+    },
+    "pilot_case_id": {
+      "minLength": 1,
+      "title": "Pilot Case Id",
+      "type": "string"
+    },
+    "source_case_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Case Sha256",
+      "type": "string"
+    },
+    "modality": {
+      "minLength": 1,
+      "title": "Modality",
+      "type": "string"
+    },
+    "body_part": {
+      "minLength": 1,
+      "title": "Body Part",
+      "type": "string"
+    },
+    "reference_report": {
+      "title": "Reference Report",
+      "type": "string"
+    },
+    "candidate_reports": {
+      "items": {
+        "$ref": "#/$defs/CandidateReportForAnnotation"
+      },
+      "title": "Candidate Reports",
+      "type": "array"
+    },
+    "annotations": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ReaderAnnotation"
+      },
+      "propertyNames": {
+        "enum": [
+          "reader_a",
+          "reader_b",
+          "adjudication"
+        ]
+      },
+      "title": "Annotations",
+      "type": "object"
+    },
+    "instructions_version": {
+      "default": "1.0",
+      "title": "Instructions Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "pilot_case_id",
+    "source_case_sha256",
+    "modality",
+    "body_part",
+    "reference_report",
+    "annotations"
+  ],
+  "title": "AnnotationCase",
+  "type": "object"
+}

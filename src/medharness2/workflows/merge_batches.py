@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from medharness2.config import PROJECT_ROOT
+from medharness2.contracts import CaseEvaluationArtifact, migrate_case_evaluation_v1
 from medharness2.data.sample_data import load_manifest
 from medharness2.tools.tool12_statistics import calculate_statistics
 from medharness2.utils.io import read_json, write_json
@@ -70,7 +71,7 @@ def merge_batch_results(
             workflow1_path = _resolve_workflow1_path(batch_path.parent, str(item.get("workflow1_output") or ""))
             if workflow1_path and workflow1_path.exists():
                 target = case_dir / f"{case_id}.json"
-                shutil.copyfile(workflow1_path, target)
+                _write_merged_case_artifact(workflow1_path, target, case_id=case_id)
                 item["workflow1_output"] = str(target)
                 metadata["copied_workflow1_outputs"] += 1
                 _count_workflow1(target, model_counts, source_counts, warning_counts, quality_counts)
@@ -123,6 +124,15 @@ def _resolve_workflow1_path(batch_dir: Path, value: str) -> Path | None:
         if candidate.exists():
             return candidate
     return path
+
+
+def _write_merged_case_artifact(source: Path, target: Path, *, case_id: str) -> None:
+    payload = read_json(source)
+    if payload.get("schema_version") == "2.0" and payload.get("artifact_type") == "case_evaluation":
+        artifact = CaseEvaluationArtifact.model_validate(payload)
+        write_json(target, artifact.model_dump(mode="json"))
+        return
+    write_json(target, migrate_case_evaluation_v1(payload, case_id=case_id))
 
 
 def _count_workflow1(

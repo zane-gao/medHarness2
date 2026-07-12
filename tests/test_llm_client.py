@@ -29,11 +29,134 @@ def test_parse_json_object_rejects_invalid_json():
         parse_json_object("not json", context="test")
 
 
+def test_parse_json_object_accepts_a_full_markdown_json_fence():
+    result = parse_json_object("```json\n{\"ok\": true}\n```", context="test")
+
+    assert result == {"ok": True}
+
+
 def test_openai_provider_requires_api_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     client = LLMClient(AppConfig(llm=LLMConfig(provider="openai", max_retries=1)))
     with pytest.raises(LLMClientError):
-        client.call("hello")
+        client.call("hello", payload_classification="synthetic_test")
+
+
+def test_call_can_override_provider_endpoint_and_runtime_options(monkeypatch):
+    monkeypatch.setenv("DMX_API_KEY", "test-only-secret")
+    captured = {}
+
+    class _Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": '{"ok": true}'}}]}
+
+    def fake_post(url, headers, json, timeout):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["payload"] = json
+        captured["timeout"] = timeout
+        return _Response()
+
+    monkeypatch.setattr("requests.post", fake_post)
+    client = LLMClient(AppConfig(llm=LLMConfig(provider="mock", model="default-model")))
+
+    result = client.call(
+        "Return JSON.",
+        provider="chat_completions",
+        base_url="https://www.DMXAPI.cn/v1",
+        api_key_env="DMX_API_KEY",
+        model="gpt-5.5",
+        timeout_sec=123,
+        max_retries=1,
+        max_tokens=321,
+        response_format="json",
+        payload_classification="synthetic_test",
+    )
+
+    assert json.loads(result) == {"ok": True}
+    assert captured["url"] == "https://www.DMXAPI.cn/v1/chat/completions"
+    assert captured["payload"]["model"] == "gpt-5.5"
+    assert captured["payload"]["max_tokens"] == 321
+    assert captured["timeout"] == 123
+    assert "test-only-secret" not in json.dumps(captured["payload"])
+
+
+def test_chat_completions_can_omit_temperature_for_models_that_reject_it(monkeypatch):
+    monkeypatch.setenv("DMX_API_KEY", "test-only-secret")
+    captured = {}
+
+    class _Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": '{"ok": true}'}}]}
+
+    def fake_post(url, headers, json, timeout):
+        captured["payload"] = json
+        return _Response()
+
+    monkeypatch.setattr("requests.post", fake_post)
+    client = LLMClient(AppConfig(llm=LLMConfig(provider="mock")))
+
+    client.call(
+        "Return JSON.",
+        provider="chat_completions",
+        api_key_env="DMX_API_KEY",
+        base_url="https://www.DMXAPI.cn/v1",
+        model="claude-opus-4-8",
+        omit_temperature=True,
+        response_format="json",
+        payload_classification="synthetic_test",
+    )
+
+    assert "temperature" not in captured["payload"]
+
+
+def test_chat_completions_preserves_structured_provider_error_details(monkeypatch):
+    monkeypatch.setenv("DMX_API_KEY", "test-only-secret")
+
+    class _Response:
+        status_code = 403
+
+        def json(self):
+            return {
+                "error": {
+                    "code": "insufficient_user_quota",
+                    "type": "quota_error",
+                    "message": "Insufficient balance for token reservation.",
+                }
+            }
+
+        def raise_for_status(self):
+            raise AssertionError("structured HTTP errors should be handled before raise_for_status")
+
+    monkeypatch.setattr("requests.post", lambda *args, **kwargs: _Response())
+    client = LLMClient(AppConfig(llm=LLMConfig(provider="mock")))
+
+    with pytest.raises(LLMClientError) as exc_info:
+        client.call(
+            "Return JSON.",
+            provider="chat_completions",
+            api_key_env="DMX_API_KEY",
+            base_url="https://www.DMXAPI.cn/v1",
+            model="gpt-5.6-terra",
+            max_retries=1,
+            response_format="json",
+            payload_classification="synthetic_test",
+        )
+
+    message = str(exc_info.value)
+    assert "HTTP 403" in message
+    assert "insufficient_user_quota" in message
+    assert "quota_error" in message
+    assert "Insufficient balance" in message
+    assert "test-only-secret" not in message
 
 
 def test_openai_multimodal_input_uses_data_urls(tmp_path):

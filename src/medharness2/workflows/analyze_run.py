@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from medharness2.config import PROJECT_ROOT
+from medharness2.contracts import infer_evidence_tier
 from medharness2.utils.io import read_json, write_json
 
 
@@ -18,10 +19,11 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
     workflow3 = read_json(root / "workflow3.json")
 
     case_rows: list[dict[str, Any]] = []
-    model_rows: dict[tuple[str, str], dict[str, Any]] = {}
+    model_rows: dict[tuple[str, str, str], dict[str, Any]] = {}
     modality_rows: dict[tuple[str, str], dict[str, Any]] = {}
     quality_failures: list[dict[str, Any]] = []
     source_counts: Counter[str] = Counter()
+    evidence_tier_counts: Counter[str] = Counter()
     model_counts: Counter[str] = Counter()
     warning_counts: Counter[str] = Counter()
     generated_report_count = 0
@@ -36,6 +38,7 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
         modality = str(case.get("modality") or "unknown")
         body_part = str(case.get("body_part") or "unknown")
         workflow1 = _read_workflow1(root, str(case.get("workflow1_output") or ""))
+        legacy_reference_assisted = str(workflow1.get("schema_version") or "") != "2.0"
         reports = list(workflow1.get("generated_reports") or [])
         rankings = list(workflow1.get("rankings") or [])
         pairwise = list(workflow1.get("pairwise_comparisons") or [])
@@ -45,6 +48,7 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
 
         models: list[str] = []
         sources: list[str] = []
+        evidence_tiers: list[str] = []
         case_warnings: Counter[str] = Counter()
         case_quality_passed = 0
         case_quality_failed = 0
@@ -64,6 +68,7 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
                 "quality_failed": 0,
                 "models": Counter(),
                 "sources": Counter(),
+                "evidence_tiers": Counter(),
             },
         )
         modality_row["case_count"] += 1
@@ -75,6 +80,14 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
         for report in reports:
             model = str(report.get("model") or "unknown")
             source = str(report.get("source") or "unknown")
+            evidence_tier = str(
+                report.get("evidence_tier")
+                or (
+                    "debug_fallback"
+                    if legacy_reference_assisted and source == "medharness_cli"
+                    else infer_evidence_tier(source, report.get("metadata") or {})
+                )
+            )
             warnings = [str(warning) for warning in report.get("warnings") or []]
             quality_gate = (report.get("metadata") or {}).get("quality_gate") or {}
             quality_status = "unknown"
@@ -97,6 +110,7 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
                             "body_part": body_part,
                             "model": model,
                             "source": source,
+                            "evidence_tier": evidence_tier,
                             "warnings": ";".join(warnings),
                             "conflicts": json.dumps(quality_gate.get("conflicts") or {}, ensure_ascii=False, sort_keys=True),
                             "source_batch_result": str(case.get("source_batch_result") or ""),
@@ -104,19 +118,23 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
                     )
             models.append(model)
             sources.append(source)
+            evidence_tiers.append(evidence_tier)
             model_counts[model] += 1
             source_counts[source] += 1
+            evidence_tier_counts[evidence_tier] += 1
             modality_row["models"][model] += 1
             modality_row["sources"][source] += 1
+            modality_row["evidence_tiers"][evidence_tier] += 1
             for warning in warnings:
                 warning_counts[warning] += 1
                 case_warnings[warning] += 1
-            summary_key = (model, source)
+            summary_key = (model, source, evidence_tier)
             summary = model_rows.setdefault(
                 summary_key,
                 {
                     "model": model,
                     "source": source,
+                    "evidence_tier": evidence_tier,
                     "report_count": 0,
                     "quality_passed": 0,
                     "quality_failed": 0,
@@ -147,6 +165,7 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
                 "pairwise_count": len(pairwise),
                 "models": ";".join(dict.fromkeys(models)),
                 "sources": ";".join(dict.fromkeys(sources)),
+                "evidence_tiers": ";".join(dict.fromkeys(evidence_tiers)),
                 "selected_top_n_models": ";".join(dict.fromkeys(selected_models)),
                 "quality_passed": case_quality_passed,
                 "quality_failed": case_quality_failed,
@@ -159,6 +178,7 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
         {
             "model": row["model"],
             "source": row["source"],
+            "evidence_tier": row["evidence_tier"],
             "report_count": row["report_count"],
             "quality_passed": row["quality_passed"],
             "quality_failed": row["quality_failed"],
@@ -180,6 +200,7 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
             "quality_failed": row["quality_failed"],
             "models": _format_counter(row["models"]),
             "sources": _format_counter(row["sources"]),
+            "evidence_tiers": _format_counter(row["evidence_tiers"]),
         }
         for row in sorted(modality_rows.values(), key=lambda item: (str(item["modality"]), str(item["body_part"])))
     ]
@@ -197,6 +218,7 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
         "quality_gate_failed_count": quality_failed,
         "generated_report_model_counts": dict(sorted(model_counts.items())),
         "generated_report_source_counts": dict(sorted(source_counts.items())),
+        "generated_report_evidence_tier_counts": dict(sorted(evidence_tier_counts.items())),
         "generated_report_warning_counts": dict(sorted(warning_counts.items())),
         "artifacts": {
             "case_routes_csv": str(out / "case_routes.csv"),
@@ -276,10 +298,21 @@ def _render_markdown(result: dict[str, Any], model_rows: list[dict[str, Any]], m
     ]
     for source, count in result["generated_report_source_counts"].items():
         lines.append(f"- `{source}`: {count}")
-    lines.extend(["", "## Model Source Summary", "", "| model | source | reports | quality failed | selected top-n |", "| --- | --- | ---: | ---: | ---: |"])
+    lines.extend(["", "## Evidence Tier Counts", ""])
+    for tier, count in result["generated_report_evidence_tier_counts"].items():
+        lines.append(f"- `{tier}`: {count}")
+    lines.extend(
+        [
+            "",
+            "## Model Source Summary",
+            "",
+            "| model | source | evidence tier | reports | quality failed | selected top-n |",
+            "| --- | --- | --- | ---: | ---: | ---: |",
+        ]
+    )
     for row in model_rows:
         lines.append(
-            f"| `{row['model']}` | `{row['source']}` | {row['report_count']} | "
+            f"| `{row['model']}` | `{row['source']}` | `{row['evidence_tier']}` | {row['report_count']} | "
             f"{row['quality_failed']} | {row['selected_top_n_count']} |"
         )
     lines.extend(["", "## Modality / Body Part Summary", "", "| modality | body_part | cases | reports | quality failed | sources |", "| --- | --- | ---: | ---: | ---: | --- |"])

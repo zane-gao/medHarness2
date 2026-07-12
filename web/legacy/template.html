@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>medHarness2 · 多 AI 放射科报告评估系统 · Demo</title>
+<style>
+  :root{
+    --bg:#eef2f8; --panel:#ffffff; --ink:#0f172a; --muted:#64748b; --faint:#94a3b8;
+    --line:#e2e8f0; --line-strong:#cbd5e1;
+    --brand:#0ea5a4; --brand-d:#0f766e; --indigo:#6366f1; --indigo-d:#4f46e5;
+    --emerald:#10b981; --amber:#f59e0b; --slate:#64748b; --rose:#ef4444; --sky:#3b82f6;
+    --hero1:#0b1324; --hero2:#0f2a3d; --hero3:#103b3a;
+    --shadow:0 1px 2px rgba(15,23,42,.04),0 8px 24px -12px rgba(15,23,42,.18);
+    --shadow-lg:0 24px 60px -28px rgba(15,23,42,.45);
+    --radius:16px; --maxw:1180px;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth;scroll-padding-top:74px}
+  body{margin:0;font-family:var(--sans);color:var(--ink);background:var(--bg);
+    -webkit-font-smoothing:antialiased;line-height:1.6;font-size:15px}
+  a{color:inherit;text-decoration:none}
+  h1,h2,h3,h4{margin:0;line-height:1.2;letter-spacing:-.01em}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+  .mono{font-family:var(--mono)}
+
+  /* ---------- top nav ---------- */
+  header.nav{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.82);
+    backdrop-filter:saturate(160%) blur(12px);border-bottom:1px solid var(--line)}
+  .nav-in{max-width:var(--maxw);margin:0 auto;padding:0 22px;height:60px;
+    display:flex;align-items:center;gap:18px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.02em}
+  .brand .dot{width:26px;height:26px;border-radius:8px;flex:0 0 auto;
+    background:linear-gradient(135deg,var(--brand),var(--indigo));
+    display:grid;place-items:center;color:#fff;font-size:14px;font-weight:900}
+  .brand small{font-weight:600;color:var(--muted);font-size:11px;letter-spacing:.02em}
+  .nav-links{margin-left:auto;display:flex;gap:4px}
+  .nav-links a{padding:7px 12px;border-radius:9px;font-size:13.5px;font-weight:600;color:var(--muted);transition:.15s}
+  .nav-links a:hover{color:var(--ink);background:#f1f5f9}
+  .nav-links a.active{color:var(--brand-d);background:#e6fffb}
+  .nav-cta{font-size:12.5px;font-weight:700;color:#fff!important;
+    background:var(--ink);padding:8px 13px!important;border-radius:9px!important}
+  @media(max-width:860px){.nav-links{display:none}}
+
+  /* ---------- hero ---------- */
+  .hero{position:relative;overflow:hidden;color:#e7eef6;
+    background:radial-gradient(1100px 460px at 12% -10%,rgba(14,165,164,.22),transparent 60%),
+               radial-gradient(900px 420px at 92% 0%,rgba(99,102,241,.22),transparent 55%),
+               linear-gradient(160deg,var(--hero1),var(--hero2) 60%,var(--hero3))}
+  .hero::after{content:"";position:absolute;inset:0;opacity:.5;pointer-events:none;
+    background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);
+    background-size:34px 34px;mask-image:linear-gradient(180deg,#000,transparent 78%)}
+  .hero-in{position:relative;z-index:1;max-width:var(--maxw);margin:0 auto;padding:58px 22px 30px}
+  .pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+  .pill{font-size:12px;font-weight:700;padding:5px 11px;border-radius:999px;
+    border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#cfe8e6;
+    display:inline-flex;align-items:center;gap:6px}
+  .pill b{color:#fff}
+  .pill .led{width:7px;height:7px;border-radius:50%;background:var(--emerald);
+    box-shadow:0 0 0 3px rgba(16,185,129,.25)}
+  .hero h1{font-size:clamp(28px,4.6vw,46px);font-weight:850;color:#fff;letter-spacing:-.025em}
+  .hero h1 .grad{background:linear-gradient(90deg,#5eead4,#a5b4fc);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero p.sub{margin:14px 0 0;max-width:760px;font-size:16px;color:#b9c7d6}
+  .hero .flow{margin-top:22px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;color:#9fb3c6}
+  .hero .flow span{padding:6px 11px;border-radius:9px;background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.1);font-weight:600;color:#dce7f1;white-space:nowrap}
+  .hero .flow i{color:#5eead4;font-style:normal;font-weight:800}
+
+  /* hero KPI strip */
+  .kstrip{position:relative;z-index:1;max-width:var(--maxw);margin:0 auto;padding:0 22px 10px;
+    transform:translateY(34px)}
+  .kstrip-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+  .kcard{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px 16px;box-shadow:var(--shadow)}
+  .kcard .v{font-size:27px;font-weight:850;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+  .kcard .l{font-size:11.5px;color:var(--muted);font-weight:600;margin-top:2px}
+  .kcard .v small{font-size:14px;color:var(--faint);font-weight:700}
+  @media(max-width:960px){.kstrip-grid{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:520px){.kstrip-grid{grid-template-columns:repeat(2,1fr)}}
+
+  /* ---------- sections ---------- */
+  section{padding:74px 0 8px}
+  section:first-of-type{padding-top:78px}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:800;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--brand-d)}
+  .eyebrow::before{content:"";width:22px;height:2px;background:var(--brand);border-radius:2px}
+  .sec-head{margin:10px 0 26px}
+  .sec-head h2{font-size:clamp(22px,3vw,31px);font-weight:850}
+  .sec-head p{margin:10px 0 0;color:var(--muted);max-width:780px;font-size:15.5px}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .grid{display:grid;gap:16px}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  @media(max-width:900px){.g2,.g3,.g4{grid-template-columns:1fr}}
+
+  .tag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;
+    padding:3px 9px;border-radius:999px;white-space:nowrap}
+  .t-ok{background:#dcfce7;color:#15803d}
+  .t-mvp{background:#e0f2fe;color:#0369a1}
+  .t-warn{background:#fef3c7;color:#b45309}
+  .t-plan{background:#ede9fe;color:#6d28d9}
+  .t-fail{background:#fee2e2;color:#b91c1c}
+  .t-neutral{background:#f1f5f9;color:#475569}
+
+  /* overview cards */
+  .lede{font-size:16px;color:#334155}
+  .lede b{color:var(--ink)}
+  .feat{padding:18px 18px}
+  .feat .ic{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:18px;
+    background:#e6fffb;color:var(--brand-d);margin-bottom:10px}
+  .feat h4{font-size:15px}
+  .feat p{margin:6px 0 0;color:var(--muted);font-size:13.5px}
+
+  /* architecture stack */
+  .stack{display:flex;flex-direction:column;gap:10px}
+  .layer{border-radius:14px;padding:14px 16px;border:1px solid var(--line);position:relative;overflow:hidden}
+  .layer .lh{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .layer .lh .ln{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+  .layer .lh h4{font-size:15.5px}
+  .layer.l-wf{background:linear-gradient(180deg,#eef2ff,#fff)}
+  .layer.l-mod{background:linear-gradient(180deg,#e6fffb,#fff)}
+  .layer.l-tool{background:linear-gradient(180deg,#f8fafc,#fff)}
+  .layer.l-infra{background:linear-gradient(180deg,#fff7ed,#fff)}
+  .chips{display:flex;flex-wrap:wrap;gap:7px}
+  .chip{font-size:12.5px;font-weight:600;padding:6px 11px;border-radius:9px;background:#fff;
+    border:1px solid var(--line-strong);color:#334155}
+  .chip b{color:var(--ink)}
+  .chip.k{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .arrow-down{height:14px;display:grid;place-items:center;color:var(--faint)}
+
+  /* pipeline */
+  .pipe{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px}
+  .pstep{flex:1 1 0;min-width:120px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 13px;position:relative}
+  .pstep .pn{font-size:11px;font-weight:800;color:var(--brand-d)}
+  .pstep h5{font-size:13.5px;margin:3px 0 2px}
+  .pstep p{margin:0;font-size:12px;color:var(--muted)}
+  .pstep::after{content:"→";position:absolute;right:-12px;top:50%;transform:translateY(-50%);
+    color:var(--faint);font-weight:800;z-index:2}
+  .pstep:last-child::after{display:none}
+  @media(max-width:760px){.pstep::after{content:"↓";right:50%;top:auto;bottom:-15px;transform:translateX(50%)}}
+
+  /* tool grid */
+  .tool{padding:15px 16px;display:flex;flex-direction:column;gap:0;transition:.15s}
+  .tool:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg);border-color:var(--line-strong)}
+  .tool .top{display:flex;align-items:center;gap:10px;margin-bottom:7px}
+  .tool .num{width:30px;height:30px;border-radius:9px;flex:0 0 auto;display:grid;place-items:center;
+    font-weight:850;font-size:13px;color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand-d));font-variant-numeric:tabular-nums}
+  .tool h4{font-size:14px;flex:1}
+  .tool p{margin:0;color:var(--muted);font-size:12.8px;flex:1}
+  .tool .b{margin-top:9px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .tool .b .src{font-size:11px;color:var(--faint);font-family:var(--mono)}
+
+  /* workflow tabs */
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .tab{font-size:13.5px;font-weight:700;padding:9px 15px;border-radius:10px;border:1px solid var(--line);
+    background:#fff;color:var(--muted);cursor:pointer;transition:.15s}
+  .tab:hover{color:var(--ink)}
+  .tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .wf-panel{display:none;animation:fade .3s ease}
+  .wf-panel.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .wf-meta{display:flex;flex-wrap:wrap;gap:18px;margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)}
+  .wf-meta div{font-size:13px}.wf-meta div span{color:var(--muted)}.wf-meta div b{display:block;margin-top:2px}
+
+  /* tables */
+  .tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px;background:#fff}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{text-align:left;padding:10px 13px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+    background:#f8fafc;position:sticky;top:0;font-weight:800}
+  tbody tr:hover{background:#f8fbfd}
+  td .mono{font-size:12px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .scroll-cap{max-height:430px}
+  .scroll-cap thead th{top:0}
+
+  /* bar charts */
+  .bars{display:flex;flex-direction:column;gap:11px}
+  .bar-row{display:grid;grid-template-columns:170px 1fr 52px;align-items:center;gap:12px}
+  .bar-row .nm{font-size:12.5px;font-weight:600;color:#334155;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar-row .nm small{color:var(--faint);font-weight:500}
+  .track{height:22px;background:#f1f5f9;border-radius:7px;overflow:hidden;position:relative}
+  .fill{height:100%;border-radius:7px;width:0;transition:width 1s cubic-bezier(.22,1,.36,1)}
+  .bar-row .vv{font-size:12.5px;font-weight:800;text-align:right;font-variant-numeric:tabular-nums}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:12px;color:var(--muted)}
+  .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  .c-cli{background:var(--emerald)} .c-art{background:var(--amber)} .c-vlm{background:var(--slate)}
+
+  /* split / donut-ish */
+  .split{display:flex;height:34px;border-radius:10px;overflow:hidden;border:1px solid var(--line)}
+  .split .s{display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:13px;min-width:42px}
+
+  .statline{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .stat{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+  .stat .l{font-size:11.5px;color:var(--muted);font-weight:600}
+  .stat .v{font-size:20px;font-weight:850;margin-top:3px;font-variant-numeric:tabular-nums}
+  .stat .x{font-size:11px;color:var(--faint);font-family:var(--mono);margin-top:2px}
+  @media(max-width:700px){.statline{grid-template-columns:repeat(2,1fr)}}
+
+  /* sample case */
+  .scase{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  @media(max-width:860px){.scase{grid-template-columns:1fr}}
+  .scase .col{padding:18px 20px}
+  .scase .col+.col{border-left:1px solid var(--line)}
+  @media(max-width:860px){.scase .col+.col{border-left:0;border-top:1px solid var(--line)}}
+  .kv{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:13px}
+  .kv:last-child{border-bottom:0}
+  .kv .k{color:var(--muted)}.kv .v{font-weight:700;text-align:right}
+  .likert{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+  .lk{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;font-size:12.5px}
+  .dots{display:flex;gap:4px}
+  .dots span{width:13px;height:13px;border-radius:4px;background:#e2e8f0}
+  .dots span.on{background:var(--indigo)}
+  .repbox{margin-top:10px;background:#0f172a;border-radius:12px;padding:13px 15px;color:#cbd5e1;
+    font-family:var(--mono);font-size:11.8px;line-height:1.65;max-height:200px;overflow:auto;white-space:pre-wrap}
+  .repbox b{color:#5eead4}
+  .mini-rank{display:flex;flex-direction:column;gap:7px;margin-top:8px}
+  .mini-rank .r{display:grid;grid-template-columns:24px 1fr auto;gap:9px;align-items:center;font-size:12.5px;
+    padding:8px 10px;border:1px solid var(--line);border-radius:9px}
+  .mini-rank .r.top{border-color:var(--brand);background:#f0fdfa}
+  .mini-rank .r .rk{font-weight:850;color:var(--brand-d);text-align:center}
+
+  /* roadmap */
+  .road{display:flex;flex-direction:column;gap:10px}
+  .road .it{display:flex;gap:13px;padding:13px 15px}
+  .road .it .n{width:26px;height:26px;border-radius:8px;flex:0 0 auto;display:grid;place-items:center;
+    font-weight:850;font-size:12px;background:#ede9fe;color:#6d28d9}
+  .road .it h5{font-size:14px;margin:0 0 2px}
+  .road .it p{margin:0;font-size:13px;color:var(--muted)}
+
+  .note{font-size:12.5px;color:var(--faint);margin-top:10px}
+  .codepill{font-family:var(--mono);font-size:12px;background:#f1f5f9;border:1px solid var(--line);
+    padding:2px 7px;border-radius:6px;color:#334155}
+
+  /* entries (cli/api) */
+  .entries{display:flex;flex-direction:column;gap:6px}
+  .entry{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12.5px;
+    padding:8px 11px;border:1px solid var(--line);border-radius:9px;background:#fbfdfe}
+  .entry .m{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;font-family:var(--sans)}
+  .entry .m.cli{background:#1e293b;color:#fff}.entry .m.post{background:#0369a1;color:#fff}
+  .entry .t{color:#334155}
+
+  footer{margin-top:64px;border-top:1px solid var(--line);background:#fff}
+  .foot-in{max-width:var(--maxw);margin:0 auto;padding:26px 22px;display:flex;flex-wrap:wrap;
+    gap:14px;justify-content:space-between;align-items:center;color:var(--muted);font-size:13px}
+
+  .toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+  .toolbar input,.toolbar select{font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line-strong);
+    border-radius:9px;background:#fff;color:var(--ink)}
+  .toolbar input{flex:1;min-width:180px}
+  .toolbar .cnt{font-size:12.5px;color:var(--muted);margin-left:auto}
+  .reveal{opacity:0;transform:translateY(14px);transition:opacity .6s ease,transform .6s ease}
+  .reveal.in{opacity:1;transform:none}
+  .src-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:0}
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<header class="nav">
+  <div class="nav-in">
+    <div class="brand"><span class="dot">M</span>
+      <div>medHarness<span style="color:var(--brand)">2</span><br><small>Radiology Report Evaluation Harness</small></div>
+    </div>
+    <nav class="nav-links">
+      <a href="#overview">概况</a>
+      <a href="#blueprint">设计蓝图</a>
+      <a href="#status">实现情况</a>
+      <a href="#run">系统运行</a>
+      <a class="nav-cta" href="#run">52 例运行证据</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<div class="hero">
+  <div class="hero-in">
+    <div class="pills">
+      <span class="pill"><span class="led"></span> <b>MVP 工程闭环</b>&nbsp;已跑通</span>
+      <span class="pill">✓ validation <b>passed</b></span>
+      <span class="pill">✓ pytest <b id="p-pytest">101 passed</b></span>
+      <span class="pill">本地模型优先 · 云端 fallback</span>
+    </div>
+    <h1>多 AI 模型<span class="grad">放射科报告评估</span>系统</h1>
+    <p class="sub">以人工自由文本报告 + 影像为输入，自动生成多模型 AI 候选报告、做单报告与成对评估、
+      Top-N 排名、human-vs-AI 对比，并汇总到批量医生评估与科室级统计。核心是可复现的 Python library，
+      CLI / API 为薄入口。</p>
+    <div class="flow">
+      <span>人工报告 + 影像</span><i>→</i>
+      <span>模态识别</span><i>→</i>
+      <span>多模型生成</span><i>→</i>
+      <span>单/成对评估</span><i>→</i>
+      <span>Top-N 排名</span><i>→</i>
+      <span>批量 / 科室统计</span><i>→</i>
+      <span>统一 JSON</span>
+    </div>
+  </div>
+  <div class="kstrip"><div class="kstrip-grid" id="hero-kpis"></div></div>
+</div>
+<div style="height:46px"></div>
+
+<main class="wrap">
+
+  <!-- ============ OVERVIEW ============ -->
+  <section id="overview">
+    <span class="eyebrow">Overview · 概况</span>
+    <div class="sec-head">
+      <h2>系统定位与一句话概况</h2>
+      <p>面向放射科报告的「定量 + 定性」评估基线系统：用固定传统工具做基线，用多个 AI 模型生成的报告做主要参照，
+        把单个医生、整批医生、整个科室都能放在同一套指标体系里比较。</p>
+    </div>
+
+    <div class="grid g3">
+      <div class="card feat reveal"><div class="ic">🧩</div><h4>可复现核心库</h4>
+        <p>12 个工具 · 2 个模块 · 3 个工作流，全部为标准 Python 包；CLI / API 仅作薄入口，便于平台化。</p></div>
+      <div class="card feat reveal"><div class="ic">🏥</div><h4>本地模型优先</h4>
+        <p>自动发现旧 medHarness 已就位的 report-trained 模型；不兼容时按显式来源标记走云端 / 本地 VLM fallback。</p></div>
+      <div class="card feat reveal"><div class="ic">📊</div><h4>可审计输出</h4>
+        <p>每例都落统一 JSON，并产出 CSV / Markdown 分析表；52 例样本运行通过 validation 闸门。</p></div>
+    </div>
+
+    <div class="card reveal" style="margin-top:16px;padding:20px 22px">
+      <p class="lede" style="margin:0">当前里程碑：在真实样本 <span class="codepill" id="ov-sample"></span> 上完成
+        <b id="ov-cases">52</b> 例端到端运行，<b id="ov-readers">6</b> 名放射科医生、
+        <b id="ov-models">8</b> 个生成模型、<b id="ov-gen">81</b> 份 AI 候选报告，
+        全部 <b id="ov-ocr">52/52</b> 为真实 OCR、<b>0 mock</b>，最终
+        <span class="tag t-ok">validation passed</span> 。</p>
+    </div>
+  </section>
+
+  <!-- ============ BLUEPRINT ============ -->
+  <section id="blueprint">
+    <span class="eyebrow">Blueprint · 设计蓝图</span>
+    <div class="sec-head">
+      <h2>分层架构：工作流 / 模块 / 工具 / 基础设施</h2>
+      <p>原始设计稿由洪学长提出（<span class="mono">designs/raw-designs</span>），本项目在其基础上做边界收敛、
+        工程实现、本机模型接入与运行验证。下面是四层结构与 MVP 主流程。</p>
+    </div>
+
+    <!-- architecture stack -->
+    <div class="stack">
+      <div class="layer l-wf reveal">
+        <div class="lh"><span class="ln">Layer 4</span><h4>工作流 Workflows · 端到端编排</h4></div>
+        <div class="chips">
+          <span class="chip k">WF1 单病例</span>
+          <span class="chip k">WF2 批量医生 vs 模型</span>
+          <span class="chip k">WF3 科室医生组 vs 模型组</span>
+          <span class="chip" style="border-style:dashed;border-color:#a78bfa;color:#6d28d9">WF4 教育建议 · 待实现</span>
+          <span class="chip">merge-batches 子批合并</span>
+          <span class="chip">analyze-run 运行分析</span>
+        </div>
+      </div>
+      <div class="arrow-down">▼</div>
+      <div class="layer l-mod reveal">
+        <div class="lh"><span class="ln">Layer 3</span><h4>模块 Modules · 评估编排</h4></div>
+        <div class="chips">
+          <span class="chip"><b>Module 1</b> 单报告评估 · 编排 Tool 1/2/3</span>
+          <span class="chip"><b>Module 2</b> 成对报告评估 · 编排 Tool 2/5/4/6</span>
+        </div>
+      </div>
+      <div class="arrow-down">▼</div>
+      <div class="layer l-tool reveal">
+        <div class="lh"><span class="ln">Layer 2</span><h4>工具 Tools · 12 个原子能力</h4></div>
+        <div class="chips" id="tool-chips"></div>
+      </div>
+      <div class="arrow-down">▼</div>
+      <div class="layer l-infra reveal">
+        <div class="lh"><span class="ln">Layer 1</span><h4>基础设施 Infrastructure</h4></div>
+        <div class="chips">
+          <span class="chip">config YAML</span><span class="chip">JSON I/O</span>
+          <span class="chip">LLMClient · mock / OpenAI / 本地 VLM</span>
+          <span class="chip">PDF OCR</span><span class="chip">本地模型 registry</span>
+          <span class="chip">样本 manifest</span><span class="chip">DICOM 预处理</span>
+          <span class="chip">validation / preflight</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- pipeline -->
+    <div class="card reveal" style="margin-top:18px;padding:18px 20px">
+      <h4 style="font-size:15px;margin-bottom:4px">Workflow 1 主流程（单病例 MVP 闭环）</h4>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">设计稿核心：<span class="mono">human report + image → generate → evaluate → rank Top-N → pairwise → JSON</span></p>
+      <div class="pipe">
+        <div class="pstep"><div class="pn">01</div><h5>读取人工报告</h5><p>自由文本 + 影像/体数据路径</p></div>
+        <div class="pstep"><div class="pn">02</div><h5>模态识别</h5><p>manifest › DICOM › VLM fallback</p></div>
+        <div class="pstep"><div class="pn">03</div><h5>多模型生成</h5><p>Tool 8 · 本地优先 + fallback</p></div>
+        <div class="pstep"><div class="pn">04</div><h5>单报告评估</h5><p>Module 1 · Likert/图谱/结构</p></div>
+        <div class="pstep"><div class="pn">05</div><h5>Top-N 排名</h5><p>Tool 9 · 归一化加权</p></div>
+        <div class="pstep"><div class="pn">06</div><h5>成对比较</h5><p>Module 2 · human vs Top-N</p></div>
+        <div class="pstep"><div class="pn">07</div><h5>写出 JSON</h5><p>统一嵌套结果</p></div>
+      </div>
+    </div>
+
+    <!-- workflows tabs -->
+    <div style="margin-top:18px">
+      <div class="tabs" id="wf-tabs"></div>
+      <div class="card" style="padding:20px 22px">
+        <div id="wf-panels"></div>
+      </div>
+    </div>
+
+    <!-- tool catalog -->
+    <h3 style="margin:30px 0 14px;font-size:18px">工具目录 · Tool 1–12</h3>
+    <div class="grid g3" id="tool-grid"></div>
+  </section>
+
+  <!-- ============ STATUS ============ -->
+  <section id="status">
+    <span class="eyebrow">Status · 实现情况</span>
+    <div class="sec-head">
+      <h2>设计 → 实现 审计映射</h2>
+      <p>依据 <span class="mono">docs/design_implementation_audit_20260606.md</span>：核心闭环全部落地，
+        并在 52 例上形成可验证输出。同时明确标注当前仍为 MVP / 工程闭环、而非最终医学评价器的边界。</p>
+    </div>
+
+    <div class="card reveal" style="margin-bottom:18px;padding:16px 18px;border-left:4px solid var(--indigo);background:linear-gradient(90deg,#eef2ff,#fff)">
+      <div style="font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--indigo-d);text-transform:uppercase;margin-bottom:6px">● 近期更新 2026-06 · 两项待跟进</div>
+      <div class="grid g2" style="gap:12px">
+        <div style="font-size:13.5px;color:#334155"><b>① 新增设计 Workflow 4「教育建议」</b>：已产出实现规格（<span class="mono" style="font-size:11.5px">workflow4-implementation-spec.md</span>），把评估分数转成可执行写作建议；<span class="tag t-plan">尚未实现</span></div>
+        <div style="font-size:13.5px;color:#334155"><b>② 更多可用模型待接入</b>：readiness 文档已就位 <b id="cb-ready">52</b> 个可推理模型，当前仅接入 <b id="cb-int">7</b> 个 report-trained，约 <b id="cb-pend">45</b> 个<span class="tag t-warn">待接入</span></div>
+      </div>
+    </div>
+
+    <div class="grid g4" style="margin-bottom:18px">
+      <div class="card feat reveal" style="text-align:center"><div class="v" style="font-size:30px;font-weight:850;color:var(--emerald)">12 / 12</div><div class="l" style="color:var(--muted);font-size:12.5px">工具 Tools 已实现</div></div>
+      <div class="card feat reveal" style="text-align:center"><div class="v" style="font-size:30px;font-weight:850;color:var(--emerald)">2 / 2</div><div class="l" style="color:var(--muted);font-size:12.5px">模块 Modules 已实现</div></div>
+      <div class="card feat reveal" style="text-align:center"><div class="v" style="font-size:30px;font-weight:850"><span style="color:var(--emerald)">3</span> <span style="color:var(--indigo);font-size:22px">+1</span></div><div class="l" style="color:var(--muted);font-size:12.5px">工作流：3 实现 · 1 设计(WF4)</div></div>
+      <div class="card feat reveal" style="text-align:center"><div class="v" style="font-size:30px;font-weight:850;color:var(--indigo)">10 · 9</div><div class="l" style="color:var(--muted);font-size:12.5px">CLI 命令 · API 端点</div></div>
+    </div>
+
+    <div class="grid g2">
+      <div class="card reveal" style="padding:18px 20px">
+        <h4 style="font-size:15px;margin-bottom:12px">Tool / Module / Workflow 状态</h4>
+        <div class="tbl-wrap" style="box-shadow:none">
+          <table id="impl-tbl"><thead><tr><th>组件</th><th>实现</th><th>状态</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div class="card reveal" style="padding:18px 20px">
+        <h4 style="font-size:15px;margin-bottom:12px">CLI / API 入口</h4>
+        <div style="font-size:12px;font-weight:800;color:var(--muted);margin-bottom:6px">CLI · <span class="mono">medharness2 …</span></div>
+        <div class="entries" id="cli-entries" style="margin-bottom:14px"></div>
+        <div style="font-size:12px;font-weight:800;color:var(--muted);margin-bottom:6px">API · FastAPI</div>
+        <div class="entries" id="api-entries"></div>
+      </div>
+    </div>
+
+    <h3 style="margin:30px 0 6px;font-size:18px">当前边界 & 后续增强（roadmap）</h3>
+    <p style="color:var(--muted);font-size:14px;margin:0 0 16px">这些不是闭环阻塞，但影响正式医学研究质量；是从「工程闭环」走向「医学评价器 + 平台」的方向。</p>
+    <div class="grid g2"><div class="road" id="road-a"></div><div class="road" id="road-b"></div></div>
+  </section>
+
+  <!-- ============ RUN EVIDENCE ============ -->
+  <section id="run">
+    <span class="eyebrow">Run Evidence · 系统运行</span>
+    <div class="sec-head">
+      <h2>52 例真实样本运行概况</h2>
+      <p>样本目录 <span class="codepill" id="run-sampleroot"></span>，统一输出
+        <span class="codepill" id="run-dir"></span>。下面均为该次运行的真实统计。</p>
+    </div>
+
+    <!-- run KPIs -->
+    <div class="statline reveal" style="margin-bottom:18px">
+      <div class="stat"><div class="l">病例数 / 失败</div><div class="v"><span id="r-cases">52</span> <small style="font-size:13px;color:var(--faint)">/ <span id="r-failed">0</span></small></div><div class="x">case_count / failed</div></div>
+      <div class="stat"><div class="l">放射科医生 (reader)</div><div class="v" id="r-readers">6</div><div class="x">reader_count</div></div>
+      <div class="stat"><div class="l">AI 候选报告</div><div class="v" id="r-gen">81</div><div class="x">generated_reports</div></div>
+      <div class="stat"><div class="l">真实 OCR 覆盖</div><div class="v"><span id="r-ocr">52</span>/<span id="r-ocrtot">52</span></div><div class="x">real / total · mock 0</div></div>
+    </div>
+
+    <div class="grid g2">
+      <!-- model/source chart -->
+      <div class="card reveal" style="padding:18px 20px">
+        <h4 style="font-size:15px">生成模型 × 来源</h4>
+        <p style="color:var(--muted);font-size:12.5px;margin:4px 0 16px">每个模型产出的候选报告数，按来源着色。说明系统并非「只用 API」。</p>
+        <div class="bars" id="model-bars"></div>
+        <div class="legend">
+          <span><i class="c-cli"></i>medharness_cli（本地 fresh）</span>
+          <span><i class="c-art"></i>artifact_reuse（历史产物）</span>
+          <span><i class="c-vlm"></i>local_vlm_fallback（本地 VLM）</span>
+        </div>
+      </div>
+
+      <!-- modality + bodypart -->
+      <div class="card reveal" style="padding:18px 20px">
+        <h4 style="font-size:15px">模态 / 部位分布</h4>
+        <p style="color:var(--muted);font-size:12.5px;margin:4px 0 16px">52 例的检查模态与解剖部位构成。</p>
+        <div style="font-size:11.5px;font-weight:800;color:var(--muted);margin-bottom:9px">按模态 modality</div>
+        <div class="bars" id="modality-bars" style="margin-bottom:18px"></div>
+        <div style="font-size:11.5px;font-weight:800;color:var(--muted);margin-bottom:9px">按部位 body part</div>
+        <div class="bars" id="bodypart-bars"></div>
+      </div>
+    </div>
+
+    <!-- model integration coverage -->
+    <div class="card reveal" style="margin-top:16px;padding:18px 20px;border-left:4px solid var(--indigo)">
+      <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:10px;margin-bottom:4px">
+        <h4 style="font-size:15px">模型接入概况 · 就位可用 vs 已接入</h4>
+        <span class="tag t-warn" id="mr-tag">readiness 待接入</span>
+      </div>
+      <p style="color:var(--muted);font-size:12.5px;margin:0 0 16px">
+        来源 <span class="mono" id="mr-doc">report_generation_model_readiness.md</span>（更新 <span id="mr-upd">—</span>）：
+        本次 52 例运行接入 <b>8</b> 个模型（7 个 report-trained + 1 个 VLM fallback）；
+        文档已就位 <b id="mr-total">—</b> 个可推理模型，仅少量进入系统，多数<b>待接入</b>。</p>
+      <div class="grid g4" style="gap:12px;margin-bottom:16px">
+        <div class="stat"><div class="l">就位可用 ready</div><div class="v" id="mr-ready" style="color:var(--indigo)">—</div><div class="x">可正常推理生成</div></div>
+        <div class="stat"><div class="l">fresh 推理</div><div class="v" id="mr-fresh">—</div><div class="x">非 artifact 复用</div></div>
+        <div class="stat"><div class="l">已接入 medHarness2</div><div class="v" id="mr-int" style="color:var(--emerald)">—</div><div class="x">report-trained</div></div>
+        <div class="stat"><div class="l">待接入 pending</div><div class="v" id="mr-pend" style="color:var(--amber)">—</div><div class="x">ready 但未接入</div></div>
+      </div>
+      <div class="split" id="mr-split" style="margin-bottom:8px"></div>
+      <div style="display:flex;gap:18px;font-size:12px;color:var(--muted);margin-bottom:16px">
+        <span><i class="src-dot" style="background:var(--emerald)"></i>已接入 <b id="mr-int2">—</b></span>
+        <span><i class="src-dot" style="background:var(--amber)"></i>待接入 <b id="mr-pend2">—</b></span>
+      </div>
+      <div class="grid g2">
+        <div>
+          <div style="font-size:11.5px;font-weight:800;color:var(--muted);margin-bottom:9px">就位模型按模态</div>
+          <div class="bars" id="mr-modality"></div>
+        </div>
+        <div>
+          <div style="font-size:11.5px;font-weight:800;color:var(--muted);margin-bottom:9px">待接入示例（部分）</div>
+          <div class="chips" id="mr-pending-chips"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- route table -->
+    <div class="card reveal" style="margin-top:16px;padding:18px 20px">
+      <h4 style="font-size:15px;margin-bottom:4px">本机模型路由表 · modality / body-part → 模型 / 来源 / 质量</h4>
+      <p style="color:var(--muted);font-size:12.5px;margin:0 0 14px">不同模态走不同本机路线：胸片/腹部 CT/脑 MRI 用 fresh report-trained，胸部 CT 用历史 artifact，其余用本地 VLM fallback。</p>
+      <div class="tbl-wrap"><table id="route-tbl">
+        <thead><tr><th>模态</th><th>部位</th><th class="num">病例</th><th class="num">候选</th><th>模型</th><th>来源</th><th class="num">质量通过</th><th class="num">失败</th></tr></thead>
+        <tbody></tbody></table></div>
+    </div>
+
+    <!-- quality gate + readers -->
+    <div class="grid g2" style="margin-top:16px">
+      <div class="card reveal" style="padding:18px 20px">
+        <h4 style="font-size:15px;margin-bottom:4px">质量门控 Quality Gate</h4>
+        <p style="color:var(--muted);font-size:12.5px;margin:0 0 14px">失败候选不进入 Top-N 与 human-vs-AI 成对比较，但保留在 JSON / CSV 供审计。</p>
+        <div class="split" id="qg-split"></div>
+        <div style="display:flex;gap:18px;margin-top:10px;font-size:12.5px;color:var(--muted)">
+          <span><b style="color:var(--emerald)" id="qg-pass">72</b> passed</span>
+          <span><b style="color:var(--rose)" id="qg-fail">9</b> failed</span>
+        </div>
+        <div style="font-size:11.5px;font-weight:800;color:var(--muted);margin:16px 0 8px">失败明细（按模型聚合）</div>
+        <div id="qg-detail" class="bars"></div>
+      </div>
+
+      <div class="card reveal" style="padding:18px 20px">
+        <h4 style="font-size:15px;margin-bottom:4px">读者百分位 · Workflow 3</h4>
+        <p style="color:var(--muted);font-size:12.5px;margin:0 0 14px">每名医生 overall score 在本组内的百分位（颜色越深越高）。</p>
+        <div class="bars" id="reader-bars"></div>
+        <div class="wf-meta" style="margin-top:16px;border-top:1px dashed var(--line);padding-top:14px">
+          <div><span>读者 overall_score</span><b id="rs-reader">—</b></div>
+          <div><span>模型组 likert_mean</span><b id="rs-model">—</b></div>
+          <div><span>finding_coverage</span><b id="rs-cov">—</b></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- sample case drilldown -->
+    <h3 style="margin:30px 0 6px;font-size:18px">单病例钻取 · <span class="mono" id="sc-id" style="font-size:15px"></span></h3>
+    <p style="color:var(--muted);font-size:14px;margin:0 0 14px">一份真实病例的完整评估链路：输入 → 人工报告 Likert → AI 候选 → 排名 → 成对比较。</p>
+    <div class="card reveal" style="overflow:hidden">
+      <div class="scase">
+        <div class="col">
+          <div style="font-size:12px;font-weight:800;color:var(--muted);margin-bottom:8px">输入 & 人工报告评估</div>
+          <div id="sc-input"></div>
+          <div style="font-size:11.5px;font-weight:800;color:var(--muted);margin:16px 0 4px">人工报告 Likert（5 维 · 1–5）</div>
+          <div class="likert" id="sc-likert"></div>
+        </div>
+        <div class="col">
+          <div style="font-size:12px;font-weight:800;color:var(--muted);margin-bottom:8px">AI 候选报告排名（Top-N）</div>
+          <div class="mini-rank" id="sc-rank"></div>
+          <div style="font-size:11.5px;font-weight:800;color:var(--muted);margin:16px 0 4px">Top-1 候选报告片段</div>
+          <div class="repbox" id="sc-report"></div>
+          <div id="sc-pairwise" style="margin-top:12px"></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">数据来源：<span class="mono" id="prov"></span> · 本页所有运行数字均由该次真实输出生成，非示意。</p>
+
+    <!-- full case table -->
+    <h3 style="margin:30px 0 12px;font-size:18px">全部病例路由 · case_routes（<span id="ct-total">52</span> 例）</h3>
+    <div class="toolbar">
+      <input id="ct-search" placeholder="搜索病例号 / 医生 / 模型…" />
+      <select id="ct-modality"><option value="">全部模态</option></select>
+      <select id="ct-quality"><option value="">全部质量</option><option value="fail">仅含失败</option><option value="pass">全部通过</option></select>
+      <span class="cnt" id="ct-cnt"></span>
+    </div>
+    <div class="tbl-wrap scroll-cap"><table id="case-tbl">
+      <thead><tr><th>病例号</th><th>医生</th><th>模态</th><th>部位</th><th class="num">候选</th><th>模型</th><th>来源</th><th>质量</th></tr></thead>
+      <tbody></tbody></table></div>
+  </section>
+</main>
+
+<footer>
+  <div class="foot-in">
+    <div><b>medHarness2</b> · MVP radiology report evaluation harness — demo overview</div>
+    <div>设计来源 designs/ · 实现审计 docs/design_implementation_audit_20260606.md</div>
+  </div>
+</footer>
+
+<!-- injected by build_demo.py -->
+<script id="run-data" type="application/json">__RUN_DATA__</script>
+
+<script>
+/* ============================================================
+   STATIC BLUEPRINT (design spec — not run data)
+   ============================================================ */
+const TOOLS = [
+  {n:1, name:"Likert 量表评估", desc:"LLM/VLM 模拟放射科医生，按 5 个维度给 1–5 分及解释。", st:"ok", stl:"完成", src:"tool1_likert.py"},
+  {n:2, name:"实体-关系病灶提取", desc:"从自由文本抽取 finding 图谱；CXR 规则 + 通用 placeholder。", st:"mvp", stl:"MVP", src:"tool2_extract.py"},
+  {n:3, name:"层级结构检查", desc:"deterministic section parser，输出 section presence 与加权分。", st:"ok", stl:"完成", src:"tool3_structure.py"},
+  {n:4, name:"错误危害评估", desc:"为每个错误候选补 hazard level 与解释（当前规则估计）。", st:"mvp", stl:"MVP", src:"tool4_hazard.py"},
+  {n:5, name:"跨报告图谱对齐", desc:"matched / a_only / b_only / mismatched + ReXVal 错误类别。", st:"ok", stl:"完成", src:"tool5_align.py"},
+  {n:6, name:"结构差异", desc:"对比两份报告的章节/结构分数差异。", st:"ok", stl:"完成", src:"tool6_structure_diff.py"},
+  {n:7, name:"模态识别", desc:"manifest 优先，其次 DICOM header，最后 VLM fallback。", st:"ok", stl:"完成", src:"tool7_modality.py"},
+  {n:8, name:"2D/3D 报告生成", desc:"本地 registry 模型优先；不兼容时 fallback 并显式标注 source。", st:"ok", stl:"完成", src:"tool8_generate.py"},
+  {n:9, name:"Top-N 排名", desc:"数值指标归一化 → 加权均值 → 按分排序选 Top-N。", st:"ok", stl:"完成", src:"tool9_rank.py"},
+  {n:10, name:"按模型加权", desc:"跨模型聚合为每个指标的单一代表值。", st:"ok", stl:"完成", src:"tool10_modelwise.py"},
+  {n:11, name:"按危害加权", desc:"用 hazard weight 缩放指标，不做维度缩减。", st:"ok", stl:"完成", src:"tool11_hazardwise.py"},
+  {n:12, name:"统计计算", desc:"mean / std / CI 等，便于后续作图与论文统计。", st:"ok", stl:"完成", src:"tool12_statistics.py"},
+];
+const WORKFLOWS = [
+  {key:"WF1", title:"Workflow 1 · 单病例", file:"single_case.py", status:"done",
+   desc:"评估一份人工自由文本报告：识别模态 → 多模型生成候选 → 对人工与候选跑 Module 1 → Top-N → human vs Top-N 跑 Module 2 → 写嵌套 JSON。",
+   meta:[["输入","人工报告 + 影像/体数据"],["编排","Tool 7/8 + Module 1/2 + Tool 9"],["输出","human_evaluation · generated_reports · rankings · pairwise"]]},
+  {key:"WF2", title:"Workflow 2 · 批量医生 vs 模型", file:"batch_readers.py", status:"done",
+   desc:"对一批带医生 ID 的报告逐例跑 Workflow 1，再按医生聚合：把每名医生整体表现与全部 AI 模型、以及本科室整体水平做对比（同一批次内）。",
+   meta:[["输入","readers.xlsx（报告/影像/医生 ID）"],["编排","逐病例 WF1 + reader 聚合 + Tool 10/11"],["输出","每医生 × 每模型 × 每指标"]]},
+  {key:"WF3", title:"Workflow 3 · 科室医生组 vs 模型组", file:"department.py", status:"done",
+   desc:"把所有 AI 模型视为「另一科室的一组医生」，与本院医生组在相同病例上比较：得分差异、得分分布、优于模型的报告数，并给出医生百分位与统计量。",
+   meta:[["输入","Workflow 2 批量结果"],["编排","reader percentile + model group + Tool 12"],["输出","percentile · 分布 · CI 统计"]]},
+  {key:"WF4", title:"Workflow 4 · 教育建议", file:"designs/…/workflow4-implementation-spec.md", status:"planned",
+   desc:"新增设计（2026-06-17，尚未实现）：评估后反馈回路，把数值分数转化为面向放射科医生的可执行写作改进建议。两种互斥模式 --eval-report（按 finding）/ --eval-radiologist（按医生批量画像）；单次带 CoT 的 LLM 调用 + 强制结构化输出；只读 WF1/WF2 结果，不改分、不缓存、不接收图像。",
+   meta:[["输入","WF1 结果 或 WF2 结果（互斥）"],["核心","最弱指标选择 + 单次 CoT LLM 调用"],["输出","suggestions JSON（含 reasoning）"],["状态","设计完成 · 待实现"]]},
+];
+const IMPL = [
+  ["Tool 1–12","src/medharness2/tools/*","ok","完成"],
+  ["Module 1 单报告评估","modules/single_report.py","ok","完成"],
+  ["Module 2 成对报告评估","modules/pairwise_report.py","ok","完成"],
+  ["Workflow 1 单病例","workflows/single_case.py","ok","完成"],
+  ["Workflow 2 批量医生","workflows/batch_readers.py","ok","完成"],
+  ["Workflow 3 科室统计","workflows/department.py","ok","完成"],
+  ["Workflow 4 教育建议","designs/workflow4-implementation-spec.md","plan","设计完成·待实现"],
+  ["子批次合并","workflows/merge_batches.py","ok","完成"],
+  ["运行分析 CSV/MD","workflows/analyze_run.py","ok","完成"],
+  ["样本数据管线","data/sample_data.py","ok","完成"],
+  ["DICOM 预处理","preprocessing/dicom.py","ok","完成"],
+  ["PDF OCR","ocr.py","ok","完成"],
+  ["本地模型 registry","generators/registry.py","ok","完成"],
+  ["LLM/VLM client","llm_client.py","ok","完成"],
+  ["validation / preflight","validation/*","ok","完成"],
+  ["Tool 2 finding extractor","cxr_rule + placeholder","mvp","MVP 边界"],
+  ["Tool 4 hazard evaluator","deterministic 规则","mvp","MVP 边界"],
+];
+const CLI = ["models list","workflow single-case","workflow sample-data","workflow sample-full",
+  "workflow batch-readers","workflow department","workflow merge-batches","workflow analyze-run",
+  "workflow validate-run","workflow preflight"];
+const API = ["/workflow/single-case","/workflow/sample-data","/workflow/sample-full","/workflow/batch-readers",
+  "/workflow/department","/workflow/merge-batches","/workflow/analyze-run","/workflow/validate-run","/workflow/preflight"];
+const ROADMAP = [
+  ["实现 Workflow 4 · 教育建议","已有设计规格（2026-06-17）尚未实现：把评估分数转成可执行写作建议（--eval-report / --eval-radiologist），单次 CoT LLM 调用 + 结构化输出。"],
+  ["接入更多 report-trained 模型","readiness 文档已就位 52 个可推理模型（45 fresh），当前仅接入 7 个 report-trained + 1 个 VLM fallback，约 45 个待接入。"],
+  ["结构化 finding extractor","从 MVP rule/placeholder 升级为更稳定的医学结构化后端（对接 ZXF 结构化工作）。"],
+  ["Hazard 评估","接入更可靠的 evaluator 或本地 LLM，并保留 deterministic fallback。"],
+  ["补本地模型覆盖空白","CR abdomen 与 CT head 当前用 Qwen3-VL 4B 作 fallback/debug；CT chest 仍是历史 artifact，建议补 fresh 推理路线。"],
+  ["BrainGemma3D 后处理","MRI spacing/orientation、series 选择、impression section 后处理增强。"],
+  ["平台化","run id、状态查询、结果索引、任务队列，把薄 CLI/API 发展为运行界面。"],
+];
+const SRC_COLOR = {medharness_cli:"var(--emerald)", artifact_reuse:"var(--amber)", local_vlm_fallback:"var(--slate)"};
+const STAG = {ok:["t-ok","完成"], mvp:["t-mvp","MVP"], warn:["t-warn","边界"], plan:["t-plan","规划"], fail:["t-fail","失败"]};
+
+/* ============================================================
+   LOAD RUN DATA (injected) with graceful fallback
+   ============================================================ */
+let DATA = {};
+try { DATA = JSON.parse(document.getElementById('run-data').textContent); }
+catch(e){ DATA = window.FALLBACK_DATA || {}; }
+const D = DATA;
+const num = n => (n==null?"—":Number(n).toLocaleString());
+const esc = s => String(s==null?"":s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const $ = s => document.querySelector(s);
+const el = (t,c,h)=>{const e=document.createElement(t);if(c)e.className=c;if(h!=null)e.innerHTML=h;return e;};
+const fixed = (v,d=3)=> v==null?"—":Number(v).toFixed(d);
+
+/* ---------- HERO + OVERVIEW KPIs ---------- */
+function renderKPIs(){
+  const o = D.overview||{};
+  const items = [
+    ["病例 cases", o.cases, ""],
+    ["放射科医生", o.readers, ""],
+    ["AI 候选报告", o.generatedReports, ""],
+    ["生成模型", o.models, ""],
+    ["工具/模块/流", (o.tools||12)+"·"+(o.modules||2)+"·"+(o.workflows||3), ""],
+    ["validation", o.validationPassed?"PASS":"—", "ok"],
+  ];
+  $('#hero-kpis').innerHTML = items.map(([l,v,k])=>
+    `<div class="kcard"><div class="v" ${k==='ok'?'style="color:var(--emerald)"':''}>${v==null?'—':v}</div><div class="l">${l}</div></div>`).join('');
+  if(o.pytest) $('#p-pytest').textContent=o.pytest;
+  $('#ov-sample').textContent = o.sampleRoot||"sample_data";
+  $('#ov-cases').textContent = num(o.cases);
+  $('#ov-readers').textContent = num(o.readers);
+  $('#ov-models').textContent = num(o.models);
+  $('#ov-gen').textContent = num(o.generatedReports);
+  $('#ov-ocr').textContent = (o.realOcr||0)+"/"+(o.cases||0);
+}
+
+/* ---------- BLUEPRINT ---------- */
+function renderBlueprint(){
+  $('#tool-chips').innerHTML = TOOLS.map(t=>`<span class="chip"><b>T${t.n}</b> ${esc(t.name)}</span>`).join('');
+  $('#tool-grid').innerHTML = TOOLS.map(t=>{
+    const [cl,lbl]=STAG[t.st];
+    return `<div class="card tool reveal">
+      <div class="top"><div class="num">${t.n}</div><h4>${esc(t.name)}</h4></div>
+      <p>${esc(t.desc)}</p>
+      <div class="b"><span class="tag ${cl}">${lbl}</span><span class="src">${esc(t.src)}</span></div></div>`;
+  }).join('');
+  // workflow tabs
+  $('#wf-tabs').innerHTML = WORKFLOWS.map((w,i)=>`<button class="tab ${i===0?'active':''}" data-wf="${i}">${esc(w.title)}${w.status==='planned'?' <span class="tag t-plan" style="margin-left:4px">待实现</span>':''}</button>`).join('');
+  $('#wf-panels').innerHTML = WORKFLOWS.map((w,i)=>`
+    <div class="wf-panel ${i===0?'active':''}" data-wf="${i}">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="tag t-neutral mono">${esc(w.key)}</span>
+        <h4 style="font-size:16px">${esc(w.title)}</h4>
+        ${w.status==='planned'
+          ?'<span class="tag t-plan">设计完成 · 待实现</span>'
+          :'<span class="tag t-ok">已实现</span>'}
+        <span class="src mono" style="color:var(--faint);font-size:12px">${w.status==='planned'?esc(w.file):'workflows/'+esc(w.file)}</span>
+      </div>
+      <p style="color:#334155;margin:12px 0 0;font-size:14px">${esc(w.desc)}</p>
+      <div class="wf-meta">${w.meta.map(([k,v])=>`<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+    </div>`).join('');
+  $('#wf-tabs').addEventListener('click',e=>{
+    const b=e.target.closest('.tab'); if(!b)return;
+    const i=b.dataset.wf;
+    document.querySelectorAll('#wf-tabs .tab').forEach(x=>x.classList.toggle('active',x===b));
+    document.querySelectorAll('#wf-panels .wf-panel').forEach(p=>p.classList.toggle('active',p.dataset.wf===i));
+  });
+}
+
+/* ---------- STATUS ---------- */
+function renderStatus(){
+  $('#impl-tbl tbody').innerHTML = IMPL.map(([c,src,st,lbl])=>{
+    const cl=STAG[st][0];
+    return `<tr><td><b>${esc(c)}</b></td><td><span class="mono" style="color:var(--muted);font-size:11.5px">${esc(src)}</span></td><td><span class="tag ${cl}">${esc(lbl)}</span></td></tr>`;
+  }).join('');
+  $('#cli-entries').innerHTML = CLI.map(c=>`<div class="entry"><span class="m cli">CLI</span><span class="t">medharness2 ${esc(c)}</span></div>`).join('');
+  $('#api-entries').innerHTML = API.map(a=>`<div class="entry"><span class="m post">POST</span><span class="t">${esc(a)}</span></div>`).join('');
+  const half=Math.ceil(ROADMAP.length/2);
+  const card=(arr,off)=>arr.map((r,i)=>`<div class="card it"><div class="n">${off+i+1}</div><div><h5>${esc(r[0])}</h5><p>${esc(r[1])}</p></div></div>`).join('');
+  $('#road-a').innerHTML=card(ROADMAP.slice(0,half),0);
+  $('#road-b').innerHTML=card(ROADMAP.slice(half),half);
+  // 近期更新 callout numbers
+  const mr=D.modelReadiness||{};
+  if(mr.totalReady!=null) $('#cb-ready').textContent=mr.totalReady;
+  if(mr.integratedCount!=null) $('#cb-int').textContent=mr.integratedCount;
+  if(mr.pendingCount!=null) $('#cb-pend').textContent=mr.pendingCount;
+}
+
+/* ---------- MODEL READINESS ---------- */
+function renderModelReadiness(){
+  const mr=D.modelReadiness; if(!mr){return;}
+  $('#mr-doc').textContent=mr.doc||"report_generation_model_readiness.md";
+  $('#mr-upd').textContent=mr.updated||"—";
+  $('#mr-total').textContent=mr.totalReady;
+  $('#mr-ready').textContent=mr.totalReady;
+  $('#mr-fresh').textContent=mr.fresh;
+  $('#mr-int').textContent=mr.integratedCount;
+  $('#mr-pend').textContent=mr.pendingCount;
+  $('#mr-int2').textContent=mr.integratedCount;
+  $('#mr-pend2').textContent=mr.pendingCount;
+  const i=mr.integratedCount||0, p=mr.pendingCount||0;
+  $('#mr-split').innerHTML=
+    `<div class="s" style="flex:${i};background:var(--emerald)">${i}</div>`+
+    `<div class="s" style="flex:${p};background:var(--amber)">${p} 待接入</div>`;
+  bars($('#mr-modality'), Object.entries(mr.byModality||{}).map((e,idx)=>{
+    const pal=["var(--indigo)","var(--brand)","var(--sky)","var(--amber)","var(--emerald)","var(--slate)"];
+    return {label:esc(e[0]), v:e[1], color:pal[idx%pal.length]};
+  }));
+  $('#mr-pending-chips').innerHTML=(mr.pendingExamples||[]).map(n=>`<span class="chip mono" style="font-size:11px">${esc(n)}</span>`).join('')
+    + (mr.pendingCount>(mr.pendingExamples||[]).length?`<span class="chip" style="background:#fff7ed;border-color:#fed7aa;color:#b45309">+${mr.pendingCount-(mr.pendingExamples||[]).length} 更多…</span>`:'');
+}
+
+/* ---------- RUN: bars helper ---------- */
+function bars(container, rows, max, opt={}){
+  const m = max || Math.max(1,...rows.map(r=>r.v));
+  container.innerHTML = rows.map(r=>{
+    const w = Math.max(2, r.v/m*100);
+    const color = r.color||"var(--brand)";
+    return `<div class="bar-row">
+      <div class="nm">${r.label}${r.sub?` <small>${r.sub}</small>`:''}</div>
+      <div class="track"><div class="fill" data-w="${w}" style="background:${color}"></div></div>
+      <div class="vv">${r.vv!=null?r.vv:num(r.v)}</div></div>`;
+  }).join('');
+}
+
+function renderRun(){
+  const o=D.overview||{};
+  $('#run-sampleroot').textContent=o.sampleRoot||"—";
+  $('#run-dir').textContent=o.runDir||"—";
+  $('#prov').textContent=(o.runDir||"")+"/analysis";
+  $('#r-cases').textContent=num(o.cases); $('#r-failed').textContent=num(o.failedCases);
+  $('#r-readers').textContent=num(o.readers); $('#r-gen').textContent=num(o.generatedReports);
+  $('#r-ocr').textContent=num(o.realOcr); $('#r-ocrtot').textContent=num(o.cases);
+
+  // model bars
+  bars($('#model-bars'), (D.models||[]).map(m=>({
+    label:`<span class="src-dot" style="background:${SRC_COLOR[m.source]||'#999'}"></span>${esc(m.model)}`,
+    sub:m.source, v:m.reports, color:SRC_COLOR[m.source]||"var(--brand)"
+  })));
+
+  // modality + bodypart
+  const mc=D.modalityCounts||{}, bc=D.bodyPartCounts||{};
+  const palette=["var(--indigo)","var(--brand)","var(--sky)","var(--amber)","var(--emerald)","var(--rose)"];
+  bars($('#modality-bars'), Object.entries(mc).sort((a,b)=>b[1]-a[1]).map((e,i)=>({label:esc(e[0].toUpperCase()),v:e[1],color:palette[i%palette.length]})));
+  bars($('#bodypart-bars'), Object.entries(bc).sort((a,b)=>b[1]-a[1]).map((e,i)=>({label:esc(e[0]),v:e[1],color:palette[(i+2)%palette.length]})));
+
+  // route table
+  $('#route-tbl tbody').innerHTML=(D.routes||[]).map(r=>`<tr>
+    <td><b class="mono">${esc(r.modality)}</b></td><td>${esc(r.body_part)}</td>
+    <td class="num">${r.cases}</td><td class="num">${r.reports}</td>
+    <td><span class="mono" style="font-size:11.5px">${esc(r.models)}</span></td>
+    <td><span class="mono" style="font-size:11.5px"><span class="src-dot" style="background:${SRC_COLOR[r.primarySource]||'#999'}"></span>${esc(r.sources)}</span></td>
+    <td class="num" style="color:var(--emerald);font-weight:800">${r.quality_passed}</td>
+    <td class="num" style="color:${r.quality_failed>0?'var(--rose)':'var(--faint)'};font-weight:800">${r.quality_failed}</td></tr>`).join('');
+
+  // quality gate
+  const qp=o.qualityPassed||0, qf=o.qualityFailed||0, tot=qp+qf||1;
+  $('#qg-pass').textContent=qp; $('#qg-fail').textContent=qf;
+  $('#qg-split').innerHTML=
+    `<div class="s" style="flex:${qp};background:var(--emerald)">${qp}</div>`+
+    `<div class="s" style="flex:${qf};background:var(--rose)">${qf}</div>`;
+  bars($('#qg-detail'), (D.qualityFailDetail||[]).map(d=>({
+    label:`<span class="src-dot" style="background:${SRC_COLOR[d.source]||'#999'}"></span>${esc(d.model)}`,
+    sub:d.reason, v:d.count, color:"var(--rose)"})), null);
+
+  // readers
+  const rmax=100;
+  bars($('#reader-bars'), (D.readers||[]).map(r=>{
+    const t=r.percentile/100;
+    const color=`hsl(${170-t*40} ${50+t*25}% ${62-t*22}%)`;
+    return {label:esc(r.reader), sub:`${r.case_count} 例 · score ${fixed(r.overall_score,3)}`,
+      v:r.percentile, vv:r.percentile.toFixed(0)+"%", color};
+  }), rmax);
+  const st=D.stats||{};
+  if(st.reader) $('#rs-reader').textContent=`μ ${fixed(st.reader.mean,3)} · CI[${fixed(st.reader.ci_lower,3)}, ${fixed(st.reader.ci_upper,3)}]`;
+  if(st.model_likert) $('#rs-model').textContent=`μ ${fixed(st.model_likert.mean,2)} · σ ${fixed(st.model_likert.std,2)}`;
+  if(st.coverage) $('#rs-cov').textContent=`μ ${fixed(st.coverage.mean,3)} · CI[${fixed(st.coverage.ci_lower,3)}, ${fixed(st.coverage.ci_upper,3)}]`;
+
+  renderSampleCase();
+  renderCaseTable();
+  renderModelReadiness();
+}
+
+/* ---------- SAMPLE CASE ---------- */
+function renderSampleCase(){
+  const c=D.sampleCase; if(!c){ $('#sc-id').textContent="（无样本）"; return; }
+  $('#sc-id').textContent=c.case_id;
+  $('#sc-input').innerHTML=[
+    ["病例号",c.case_id],["放射科医生",c.reader],["模态 / 部位",`${c.modality} / ${c.body_part}`],
+    ["AI 候选数",c.generated_count],["进入 Top-N",c.top_n_count],
+  ].map(([k,v])=>`<div class="kv"><span class="k">${esc(k)}</span><span class="v">${esc(v)}</span></div>`).join('');
+
+  $('#sc-likert').innerHTML=(c.human_likert||[]).map(l=>{
+    const s=Math.round(l.score);
+    const dots=Array.from({length:5},(_,i)=>`<span class="${i<s?'on':''}"></span>`).join('');
+    return `<div class="lk"><span>${esc(l.name)}</span><span class="dots" title="${l.score}/5">${dots}</span></div>`;
+  }).join('');
+
+  $('#sc-rank').innerHTML=(c.rankings||[]).map(r=>`
+    <div class="r ${r.selected?'top':''}">
+      <div class="rk">#${r.rank}</div>
+      <div><b class="mono" style="font-size:12px">${esc(r.model)}</b>
+        <div style="color:var(--faint);font-size:11px">${esc(r.source||'')}${r.selected?' · selected':''}</div></div>
+      <div style="font-weight:850;font-variant-numeric:tabular-nums">${fixed(r.score,3)}</div></div>`).join('');
+
+  $('#sc-report').innerHTML = `<b># ${esc(c.top_model||'')} · ${esc(c.top_source||'')}</b>\n`+esc(c.top_report||"（无报告片段）");
+
+  if(c.pairwise){
+    const p=c.pairwise;
+    $('#sc-pairwise').innerHTML=`
+      <div style="font-size:11.5px;font-weight:800;color:var(--muted);margin-bottom:6px">成对比较 human vs Top-1</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px">
+        <span class="tag t-neutral">matched ${p.matched}</span>
+        <span class="tag t-neutral">a_only ${p.a_only}</span>
+        <span class="tag t-neutral">b_only ${p.b_only}</span>
+        <span class="tag t-neutral">mismatched ${p.mismatched}</span>
+        ${p.hazards!=null?`<span class="tag t-warn">hazards ${p.hazards}</span>`:''}
+      </div>`;
+  }
+}
+
+/* ---------- CASE TABLE ---------- */
+function renderCaseTable(){
+  const rows=D.cases||[];
+  $('#ct-total').textContent=rows.length;
+  const modSel=$('#ct-modality');
+  [...new Set(rows.map(r=>r.modality))].sort().forEach(m=>{
+    const o=document.createElement('option');o.value=m;o.textContent=m.toUpperCase();modSel.appendChild(o);});
+  const tb=$('#case-tbl tbody');
+  function draw(){
+    const q=($('#ct-search').value||"").toLowerCase().trim();
+    const fm=modSel.value, fq=$('#ct-quality').value;
+    const out=rows.filter(r=>{
+      if(fm && r.modality!==fm) return false;
+      if(fq==='fail' && !(r.quality_failed>0)) return false;
+      if(fq==='pass' && r.quality_failed>0) return false;
+      if(q && !(`${r.case_id} ${r.reader} ${r.models}`.toLowerCase().includes(q))) return false;
+      return true;
+    });
+    $('#ct-cnt').textContent=`显示 ${out.length} / ${rows.length} 例`;
+    tb.innerHTML=out.map(r=>`<tr>
+      <td><b class="mono" style="font-size:12px">${esc(r.case_id)}</b></td>
+      <td>${esc(r.reader)}</td>
+      <td><span class="mono">${esc(r.modality)}</span></td>
+      <td>${esc(r.body_part)}</td>
+      <td class="num">${r.generated_report_count}</td>
+      <td><span class="mono" style="font-size:11px">${esc(r.models)}</span></td>
+      <td><span class="src-dot" style="background:${SRC_COLOR[r.primarySource]||'#999'}"></span><span class="mono" style="font-size:11px">${esc(r.sources)}</span></td>
+      <td>${r.quality_failed>0
+        ?`<span class="tag t-fail">${r.quality_failed} fail</span>`
+        :`<span class="tag t-ok">pass</span>`}</td></tr>`).join('')
+      || `<tr><td colspan="8" style="text-align:center;color:var(--faint);padding:24px">无匹配病例</td></tr>`;
+  }
+  $('#ct-search').addEventListener('input',draw);
+  modSel.addEventListener('change',draw);
+  $('#ct-quality').addEventListener('change',draw);
+  draw();
+}
+
+/* ---------- scroll spy + reveal + bar anim ---------- */
+function wireObservers(){
+  const fillAll=()=>document.querySelectorAll('.fill').forEach(f=>{f.style.width=(f.dataset.w||0)+'%';});
+  const revealAll=()=>document.querySelectorAll('.reveal').forEach(x=>x.classList.add('in'));
+  // Fallback for environments without IntersectionObserver: show everything.
+  if(!('IntersectionObserver' in window)){ revealAll(); fillAll(); return; }
+  // reveal
+  const ro=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');ro.unobserve(e.target);}})},{threshold:.12});
+  document.querySelectorAll('.reveal').forEach(x=>ro.observe(x));
+  // bar fill animation
+  const bo=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){
+    e.target.querySelectorAll('.fill').forEach(f=>{f.style.width=(f.dataset.w||0)+'%';});
+    bo.unobserve(e.target);}})},{threshold:.2});
+  document.querySelectorAll('.bars,.statline').forEach(x=>bo.observe(x));
+  // nav scrollspy
+  const links=[...document.querySelectorAll('.nav-links a[href^="#"]')];
+  const so=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){
+    const id=e.target.id; links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id));
+  }})},{rootMargin:"-45% 0px -50% 0px"});
+  document.querySelectorAll('section[id]').forEach(s=>so.observe(s));
+}
+
+/* ---------- boot ---------- */
+try {
+  renderKPIs(); renderBlueprint(); renderStatus(); renderRun(); wireObservers();
+} catch(err){
+  console.error('render error', err);
+  // never leave the page blank if a render step throws
+  document.querySelectorAll('.reveal').forEach(x=>x.classList.add('in'));
+  document.querySelectorAll('.fill').forEach(f=>{f.style.width=(f.dataset.w||0)+'%';});
+}
+</script>
+</body>
+</html>

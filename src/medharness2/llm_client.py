@@ -8,11 +8,15 @@ import urllib.error
 import urllib.request
 import base64
 import mimetypes
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
 
-from medharness2.config import AppConfig, LLMConfig, load_config
+import requests
+
+from medharness2.config import AppConfig, LLMConfig, load_config, resolve_existing_path
+from medharness2.privacy import ExternalPayloadPolicy
 
 
 class LLMClientError(RuntimeError):
@@ -22,19 +26,33 @@ class LLMClientError(RuntimeError):
 class LLMClient:
     def __init__(self, config: AppConfig | None = None):
         self.config = config or load_config()
+        self.privacy_policy = ExternalPayloadPolicy(self.config.privacy)
         self._local_hf_cache: dict[tuple[str, str, str], tuple[Any, Any]] = {}
 
     def call(self, prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
-        provider = self.config.llm.provider.lower()
+        provider = str(kwargs.pop("provider", None) or self.config.llm.provider).lower()
+        classification = str(kwargs.pop("payload_classification", "") or "")
+        if self.config.privacy.enforce_external and provider in {
+            "openai",
+            "openai_responses",
+            "chat_completions",
+            "openai_chat",
+            "codex_proxy",
+            "codex",
+        }:
+            self.privacy_policy.validate_external(prompt, image_path=image_path, classification=classification)
         if provider == "mock":
             return self._mock_response(prompt, image_path=image_path, **kwargs)
         if provider in {"openai", "openai_responses"}:
             return self._call_openai_responses(prompt, image_path=image_path, **kwargs)
+        # chat_completions：OpenAI 兼容 /chat/completions（codex 代理走这条）。
+        if provider in {"chat_completions", "openai_chat", "codex_proxy", "codex"}:
+            return self._call_chat_completions(prompt, image_path=image_path, **kwargs)
         if provider in {"local_vlm_cli", "medharness_cli_vlm"}:
             return self._call_local_vlm_cli(prompt, image_path=image_path, **kwargs)
         if provider in {"local_hf_vlm", "hf_vlm_local"}:
             return self._call_local_hf_vlm(prompt, image_path=image_path, **kwargs)
-        raise LLMClientError(f"Unsupported LLM provider: {self.config.llm.provider}")
+        raise LLMClientError(f"Unsupported LLM provider: {provider}")
 
     def _mock_response(self, prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
         response_json = kwargs.get("response_json")
@@ -47,18 +65,20 @@ class LLMClient:
 
     def _call_openai_responses(self, prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
         llm = self.config.llm
-        api_key = os.environ.get(llm.api_key_env)
+        api_key_env = kwargs.get("api_key_env") or llm.api_key_env
+        api_key = os.environ.get(api_key_env)
         if not api_key:
-            raise LLMClientError(f"Missing API key environment variable: {llm.api_key_env}")
+            raise LLMClientError(f"Missing API key environment variable: {api_key_env}")
         payload: dict[str, Any] = {
             "model": kwargs.get("model") or llm.model,
             "input": self._build_input(prompt, image_path),
-            "temperature": kwargs.get("temperature", llm.temperature),
         }
+        if not kwargs.get("omit_temperature"):
+            payload["temperature"] = kwargs.get("temperature", llm.temperature)
         if kwargs.get("response_format") == "json":
             payload["text"] = {"format": {"type": "json_object"}}
         data = json.dumps(payload).encode("utf-8")
-        endpoint = llm.base_url.rstrip("/") + "/responses"
+        endpoint = str(kwargs.get("base_url") or llm.base_url).rstrip("/") + "/responses"
         request = urllib.request.Request(
             endpoint,
             data=data,
@@ -69,21 +89,102 @@ class LLMClient:
             method="POST",
         )
         last_error: Exception | None = None
-        for attempt in range(max(1, llm.max_retries)):
+        max_retries = max(1, int(kwargs.get("max_retries") or llm.max_retries))
+        timeout_sec = int(kwargs.get("timeout_sec") or llm.timeout_sec)
+        for attempt in range(max_retries):
             try:
-                with urllib.request.urlopen(request, timeout=llm.timeout_sec) as response:
+                with urllib.request.urlopen(request, timeout=timeout_sec) as response:
                     body = json.loads(response.read().decode("utf-8"))
                 return self._extract_text(body)
             except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
                 last_error = exc
-                if attempt + 1 >= max(1, llm.max_retries):
+                if attempt + 1 >= max_retries:
                     break
                 time.sleep(llm.retry_initial_sec * (2**attempt))
         raise LLMClientError(f"OpenAI Responses API call failed: {last_error}")
 
+    def _call_chat_completions(self, prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
+        """OpenAI 兼容 /chat/completions。支持 per-call 覆盖 api_key_env / model，
+        用于多模型评委（GPT key 与 Claude key 路由到同一代理的不同模型）。"""
+        llm = self.config.llm
+        # per-call 覆盖优先，其次取配置默认；这样评委循环能对同一 client 传不同 key/model。
+        api_key_env = kwargs.get("api_key_env") or llm.api_key_env
+        api_key = os.environ.get(api_key_env)
+        if not api_key:
+            raise LLMClientError(f"Missing API key environment variable: {api_key_env}")
+        messages = [{"role": "user", "content": self._build_chat_content(prompt, image_path)}]
+        payload: dict[str, Any] = {
+            "model": kwargs.get("model") or llm.model,
+            "messages": messages,
+        }
+        if not kwargs.get("omit_temperature"):
+            payload["temperature"] = kwargs.get("temperature", llm.temperature)
+        max_tokens = kwargs.get("max_tokens") or llm.chat_max_tokens
+        if max_tokens:
+            payload["max_tokens"] = int(max_tokens)
+        if kwargs.get("response_format") == "json":
+            payload["response_format"] = {"type": "json_object"}
+        endpoint = str(kwargs.get("base_url") or llm.base_url).rstrip("/") + "/chat/completions"
+        last_error: Exception | None = None
+        max_retries = max(1, int(kwargs.get("max_retries") or llm.max_retries))
+        timeout_sec = int(kwargs.get("timeout_sec") or llm.timeout_sec)
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    endpoint,
+                    headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                    json=payload,
+                    timeout=timeout_sec,
+                )
+                provider_error = _structured_provider_error(response)
+                if provider_error:
+                    raise LLMClientError(
+                        f"Chat Completions HTTP {getattr(response, 'status_code', 'unknown')}: "
+                        f"{provider_error}"
+                    )
+                response.raise_for_status()
+                body = response.json()
+                return self._extract_chat_text(body)
+            except (requests.RequestException, ValueError, LLMClientError) as exc:
+                last_error = exc
+                if attempt + 1 >= max_retries:
+                    break
+                time.sleep(llm.retry_initial_sec * (2**attempt))
+        raise LLMClientError(f"Chat Completions API call failed: {last_error}")
+
+    @staticmethod
+    def _build_chat_content(prompt: str, image_path: str | None) -> Any:
+        """chat/completions 的 content：有可读图像时用多模态 image_url，否则纯文本。"""
+        if image_path:
+            path = Path(image_path)
+            if path.exists() and path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+                return [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": _file_data_url(path)}},
+                ]
+            return f"{prompt}\n\nAssociated image or volume path: {image_path}"
+        return prompt
+
+    @staticmethod
+    def _extract_chat_text(response: dict[str, Any]) -> str:
+        if response.get("error"):
+            raise LLMClientError(str(response["error"].get("message") or response["error"]))
+        choices = response.get("choices") or []
+        for choice in choices:
+            message = choice.get("message") or {}
+            content = message.get("content")
+            if isinstance(content, str) and content.strip():
+                return content
+            if isinstance(content, list):  # 兼容分块 content
+                parts = [c.get("text", "") for c in content if isinstance(c, dict)]
+                joined = "".join(parts).strip()
+                if joined:
+                    return joined
+        raise LLMClientError("Chat Completions response contained no content")
+
     def _call_local_vlm_cli(self, prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
         llm = self.config.llm
-        script = Path(llm.local_cli_script)
+        script = resolve_existing_path(llm.local_cli_script)
         if not script.exists():
             raise LLMClientError(f"Local VLM CLI script not found: {script}")
         with tempfile.TemporaryDirectory(prefix="medharness2_local_vlm_") as tmpdir:
@@ -105,7 +206,7 @@ class LLMClient:
                 llm.local_cli_python_bin,
                 str(script),
                 "--config",
-                llm.local_cli_config_path,
+                str(resolve_existing_path(llm.local_cli_config_path)),
                 "--model-key",
                 kwargs.get("model") or llm.model,
                 "--input-jsonl",
@@ -323,6 +424,43 @@ def _file_data_url(path: Path) -> str:
     mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     data = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{mime};base64,{data}"
+
+
+def _structured_provider_error(response: Any) -> str:
+    try:
+        status_code = int(getattr(response, "status_code", 200))
+    except (TypeError, ValueError):
+        status_code = 200
+    if status_code < 400:
+        return ""
+    try:
+        payload = response.json()
+    except Exception:
+        return "request rejected without a JSON error body"
+    if not isinstance(payload, dict):
+        return "request rejected with a non-object JSON error body"
+    error = payload.get("error")
+    error = error if isinstance(error, dict) else {}
+    details = []
+    for label, value in (
+        ("code", error.get("code") or payload.get("code")),
+        ("type", error.get("type") or payload.get("type")),
+        ("message", error.get("message") or payload.get("message")),
+    ):
+        if value not in (None, ""):
+            details.append(f"{label}={_safe_provider_error_text(value)}")
+    return "; ".join(details) or "request rejected without structured error fields"
+
+
+def _safe_provider_error_text(value: Any) -> str:
+    text = re.sub(r"\s+", " ", str(value)).strip()
+    text = re.sub(r"(?i)bearer\s+[A-Za-z0-9._-]+", "Bearer <redacted>", text)
+    text = re.sub(
+        r"(?i)\b(?:sk|key|token)[-_][A-Za-z0-9._-]{8,}",
+        "<redacted>",
+        text,
+    )
+    return text[:500]
 
 
 def _strip_prompt(decoded: str, prompt: str) -> str:

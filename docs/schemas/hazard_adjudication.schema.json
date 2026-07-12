@@ -1,0 +1,217 @@
+{
+  "$defs": {
+    "HazardAdjudicationDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "error_index": {
+          "minimum": 0,
+          "title": "Error Index",
+          "type": "integer"
+        },
+        "error_type": {
+          "minLength": 1,
+          "title": "Error Type",
+          "type": "string"
+        },
+        "hazard_level": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Hazard Level",
+          "type": "integer"
+        },
+        "recommended_action": {
+          "minLength": 1,
+          "title": "Recommended Action",
+          "type": "string"
+        },
+        "explanation": {
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "abstain": {
+          "default": false,
+          "title": "Abstain",
+          "type": "boolean"
+        },
+        "primary_hazard_level": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Primary Hazard Level",
+          "type": "integer"
+        },
+        "reviewer_hazard_level": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Reviewer Hazard Level",
+          "type": "integer"
+        },
+        "primary_recommended_action": {
+          "minLength": 1,
+          "title": "Primary Recommended Action",
+          "type": "string"
+        },
+        "reviewer_recommended_action": {
+          "minLength": 1,
+          "title": "Reviewer Recommended Action",
+          "type": "string"
+        }
+      },
+      "required": [
+        "error_index",
+        "error_type",
+        "hazard_level",
+        "recommended_action",
+        "explanation",
+        "confidence",
+        "primary_hazard_level",
+        "reviewer_hazard_level",
+        "primary_recommended_action",
+        "reviewer_recommended_action"
+      ],
+      "title": "HazardAdjudicationDecision",
+      "type": "object"
+    },
+    "ModelProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "implementation_type": {
+          "minLength": 1,
+          "title": "Implementation Type",
+          "type": "string"
+        },
+        "provider": {
+          "default": "",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "default": "",
+          "title": "Model",
+          "type": "string"
+        },
+        "version": {
+          "default": "",
+          "title": "Version",
+          "type": "string"
+        },
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        },
+        "prompt_version": {
+          "default": "",
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "fallback_used": {
+          "default": false,
+          "title": "Fallback Used",
+          "type": "boolean"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "implementation_type"
+      ],
+      "title": "ModelProvenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_type": {
+      "const": "hazard_adjudication",
+      "default": "hazard_adjudication",
+      "title": "Artifact Type",
+      "type": "string"
+    },
+    "primary_result_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Primary Result Sha256",
+      "type": "string"
+    },
+    "hazard_review_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Hazard Review Sha256",
+      "type": "string"
+    },
+    "adjudicator_provenance": {
+      "$ref": "#/$defs/ModelProvenance"
+    },
+    "decisions": {
+      "items": {
+        "$ref": "#/$defs/HazardAdjudicationDecision"
+      },
+      "title": "Decisions",
+      "type": "array"
+    },
+    "disagreement_count": {
+      "minimum": 0,
+      "title": "Disagreement Count",
+      "type": "integer"
+    },
+    "resolved_count": {
+      "minimum": 0,
+      "title": "Resolved Count",
+      "type": "integer"
+    },
+    "abstained_count": {
+      "minimum": 0,
+      "title": "Abstained Count",
+      "type": "integer"
+    },
+    "primary_preserved": {
+      "const": true,
+      "default": true,
+      "title": "Primary Preserved",
+      "type": "boolean"
+    },
+    "reviewer_preserved": {
+      "const": true,
+      "default": true,
+      "title": "Reviewer Preserved",
+      "type": "boolean"
+    },
+    "clinical_validation_required": {
+      "const": true,
+      "default": true,
+      "title": "Clinical Validation Required",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "primary_result_sha256",
+    "hazard_review_sha256",
+    "adjudicator_provenance",
+    "disagreement_count",
+    "resolved_count",
+    "abstained_count"
+  ],
+  "title": "HazardAdjudicationArtifact",
+  "type": "object"
+}

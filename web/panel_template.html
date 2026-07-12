@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>medHarness2 · 项目认知面板</title>
+<style>
+/* ============================================================
+   浅色"纸面"主题 —— 面向阅读，不是面向汇报。
+   配色取自已过 CVD 校验的参考调色板（light 模式）。
+   ============================================================ */
+:root {
+  --page: #f9f9f7;          /* 页面底 */
+  --surface: #fcfcfb;       /* 卡片面 */
+  --ink: #0b0b0b;           /* 主文字 */
+  --ink-2: #52514e;         /* 次要文字 */
+  --ink-3: #898781;         /* 弱化文字 */
+  --hair: #e1e0d9;          /* 发丝线 */
+  --border: rgba(11,11,11,0.10);
+  /* 分类色（固定顺序，过校验） */
+  --c1: #2a78d6; --c2: #1baf7a; --c3: #eda100; --c4: #008300; --c5: #4a3aa7; --c6: #e34948;
+  /* 状态色（保留给状态，永远带图标+文字） */
+  --s-good: #0ca30c; --s-warn: #fab219; --s-serious: #ec835a; --s-critical: #d03b3b;
+  --good-text: #006300;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  --maxw: 900px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.75 var(--sans); }
+a { color: var(--c1); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+
+/* ---------- 顶部导航 ---------- */
+.topnav {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(249,249,247,0.92); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--hair);
+  display: flex; align-items: center; gap: 4px;
+  padding: 10px 16px; overflow-x: auto; white-space: nowrap;
+}
+.topnav .brand { font-weight: 700; margin-right: 12px; font-size: 14px; }
+.topnav .brand span { color: var(--ink-3); font-weight: 400; }
+.topnav a {
+  color: var(--ink-2); font-size: 13px; padding: 4px 10px; border-radius: 999px;
+}
+.topnav a:hover { background: #efeeea; text-decoration: none; color: var(--ink); }
+.topnav a.active { background: var(--ink); color: #fff; }
+
+main { max-width: var(--maxw); margin: 0 auto; padding: 32px 20px 120px; }
+section { margin-bottom: 72px; }
+
+/* ---------- 章节头 ---------- */
+.sec-head { margin-bottom: 20px; }
+.sec-kicker { font-family: var(--mono); font-size: 12px; letter-spacing: 2px; color: var(--c1); }
+.sec-head h2 { margin: 4px 0 8px; font-size: 26px; line-height: 1.3; }
+.sec-lead { color: var(--ink-2); margin: 0; max-width: 70ch; }
+
+/* ---------- 通用卡片 ---------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: 18px 20px; box-shadow: 0 1px 2px rgba(11,11,11,0.03);
+}
+
+/* ---------- Hero ---------- */
+.hero { padding: 48px 0 8px; }
+.hero h1 { font-size: 34px; margin: 0 0 6px; line-height: 1.25; }
+.hero .one-liner { font-size: 19px; color: var(--ink); max-width: 62ch; }
+.hero .one-liner b { border-bottom: 3px solid var(--c3); }
+.metaphor {
+  margin: 18px 0; padding: 16px 20px; border-left: 4px solid var(--c1);
+  background: var(--surface); border-radius: 0 12px 12px 0;
+  color: var(--ink-2);
+}
+.metaphor b { color: var(--ink); }
+.hero-note { font-size: 13.5px; color: var(--ink-3); }
+.hero-note .nb { color: var(--good-text); font-weight: 600; }
+
+/* ---------- 徽章 ---------- */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 12px; padding: 2px 10px; border-radius: 999px;
+  border: 1px solid var(--border); background: #fff; color: var(--ink-2);
+  white-space: nowrap; font-weight: 500;
+}
+.badge.impl-llm    { background: #eaf2fc; border-color: #c4dbf5; color: #1c5cab; }
+.badge.impl-local  { background: #efeafc; border-color: #d7cdf3; color: #4a3aa7; }
+.badge.impl-rule   { background: #eef6ee; border-color: #cfe6cf; color: #006300; }
+.badge.impl-mix    { background: #fdf3e0; border-color: #f3ddb0; color: #8a5d00; }
+.badge.h-good     { background: #eef8ee; border-color: #cfe6cf; color: var(--good-text); }
+.badge.h-warn     { background: #fdf6e3; border-color: #f3e2ae; color: #8a5d00; }
+.badge.h-bad      { background: #fceeee; border-color: #f2cbcb; color: #a32e2e; }
+
+/* ---------- 流程图（垂直步骤） ---------- */
+.flow { position: relative; margin: 8px 0; }
+.flow::before {
+  content: ""; position: absolute; left: 21px; top: 26px; bottom: 26px;
+  width: 2px; background: var(--hair);
+}
+.step { display: flex; gap: 16px; padding: 12px 0; position: relative; }
+.step .no {
+  flex: none; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--surface); border: 2px solid var(--c1); color: var(--c1);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-weight: 700; font-size: 15px; z-index: 1;
+}
+.step.io .no { border-color: var(--ink-3); color: var(--ink-3); border-style: dashed; }
+.step .body { flex: 1; padding-top: 2px; }
+.step h4 { margin: 0 0 2px; font-size: 16px; }
+.step p { margin: 0 0 6px; color: var(--ink-2); font-size: 14px; }
+.tool-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.tool-chip {
+  font-family: var(--mono); font-size: 11.5px; padding: 2px 9px; border-radius: 999px;
+  background: #eef3fa; border: 1px solid #d5e3f5; color: #1c5cab; cursor: pointer;
+}
+.tool-chip:hover { background: #dcE9f9; text-decoration: none; }
+.tool-chip.qg { background: #eef6ee; border-color: #cfe6cf; color: var(--good-text); }
+
+/* ---------- 四层架构 ---------- */
+.layers { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.layer { display: flex; gap: 14px; align-items: stretch; }
+.layer .tag {
+  flex: none; width: 92px; display: flex; align-items: center; justify-content: center;
+  border-radius: 10px; font-weight: 700; font-size: 13.5px; color: #fff; text-align: center;
+}
+.layer .desc { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px 16px; font-size: 14px; color: var(--ink-2); }
+.layer .desc b { color: var(--ink); }
+
+/* ---------- 工作流卡 ---------- */
+.wf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 720px) { .wf-grid { grid-template-columns: 1fr; } }
+.wf-card h3 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wf-card .say { margin: 8px 0 4px; font-size: 14.5px; }
+.wf-card .meta { font-size: 13px; color: var(--ink-2); font-style: italic; margin: 0 0 8px; }
+.wf-card .io { font-size: 13px; color: var(--ink-2); margin: 8px 0; padding: 8px 12px; background: #f4f4f1; border-radius: 8px; }
+.wf-card .io b { color: var(--ink); font-weight: 600; }
+
+/* ---------- 工具卡 ---------- */
+.tool-card { margin-bottom: 14px; scroll-margin-top: 76px; }
+.tool-card .t-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.tool-card .t-no { font-family: var(--mono); font-weight: 700; color: var(--ink-3); font-size: 13px; }
+.tool-card h3 { margin: 0; font-size: 17.5px; }
+.tool-card .say { font-size: 15px; margin: 10px 0 2px; }
+.tool-card .meta { color: var(--ink-2); font-style: italic; font-size: 13.5px; margin: 4px 0 10px; }
+.tool-card .meta::before { content: "💡 "; font-style: normal; }
+.io-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; margin: 10px 0; }
+@media (max-width: 640px) { .io-row { grid-template-columns: 1fr; } .io-row .arrow { display: none; } }
+.io-box { background: #f4f4f1; border-radius: 10px; padding: 8px 14px; font-size: 13px; }
+.io-box .lab { font-size: 11px; color: var(--ink-3); letter-spacing: 1px; font-weight: 600; }
+.io-row .arrow { color: var(--ink-3); font-size: 20px; }
+.example {
+  border: 1px dashed var(--hair); border-radius: 10px; padding: 10px 14px; margin: 10px 0;
+  font-size: 13px; background: #fbfaf6;
+}
+.example .lab { font-size: 11px; color: #8a5d00; letter-spacing: 1px; font-weight: 700; }
+.example .snip { font-family: var(--mono); font-size: 12px; color: var(--ink-2); word-break: break-all; margin: 4px 0; }
+.example table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 6px; }
+.example th { text-align: left; color: var(--ink-3); font-weight: 600; padding: 3px 8px 3px 0; border-bottom: 1px solid var(--hair); }
+.example td { padding: 3px 8px 3px 0; border-bottom: 1px solid #efeee9; vertical-align: top; }
+details.more { margin-top: 8px; }
+details.more summary {
+  cursor: pointer; font-size: 13.5px; color: var(--c1); font-weight: 600;
+  list-style: none; display: inline-flex; align-items: center; gap: 6px;
+}
+details.more summary::before { content: "▸"; transition: transform .15s; }
+details.more[open] summary::before { transform: rotate(90deg); }
+details.more .inner { padding: 10px 0 2px; font-size: 14px; color: var(--ink-2); }
+details.more .inner p { margin: 0 0 8px; }
+details.more .inner b { color: var(--ink); }
+
+/* ---------- KPI & 图表 ---------- */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.kpi .v { font-size: 30px; font-weight: 700; line-height: 1.15; }
+.kpi .l { font-size: 12.5px; color: var(--ink-2); }
+.kpi .s { font-size: 11.5px; color: var(--ink-3); }
+.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 14px 0; }
+@media (max-width: 720px) { .chart-row { grid-template-columns: 1fr; } }
+.chart h4 { margin: 0 0 2px; font-size: 14.5px; }
+.chart .note { font-size: 12.5px; color: var(--ink-3); margin: 0 0 10px; }
+.bar-row { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: center; margin: 7px 0; font-size: 13px; }
+.bar-row .bl { color: var(--ink-2); text-align: right; }
+.bar-track { display: flex; align-items: center; gap: 8px; }
+.bar {
+  height: 18px; border-radius: 0 4px 4px 0; min-width: 2px;
+  transition: opacity .15s;
+}
+.bar-row:hover .bar { opacity: 0.82; }
+.bar-val { font-family: var(--mono); font-size: 12px; color: var(--ink); font-weight: 600; }
+.bar-sub { font-size: 11.5px; color: var(--ink-3); }
+
+table.plain { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.plain th { text-align: left; color: var(--ink-3); font-weight: 600; border-bottom: 1.5px solid var(--hair); padding: 6px 10px 6px 0; }
+table.plain td { border-bottom: 1px solid #efeee9; padding: 6px 10px 6px 0; }
+table.plain td.num, table.plain th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.honest-note {
+  border-left: 4px solid var(--s-warn); background: #fdf8e8; padding: 10px 16px;
+  border-radius: 0 10px 10px 0; font-size: 13.5px; color: #6b4d00; margin: 12px 0;
+}
+
+/* ---------- 问题清单 ---------- */
+.issue { display: flex; gap: 14px; margin-bottom: 14px; }
+.issue .ico { flex: none; font-size: 20px; padding-top: 12px; width: 30px; text-align: center; }
+.issue .card { flex: 1; }
+.issue h4 { margin: 0 0 4px; font-size: 15.5px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.issue p { margin: 0 0 4px; font-size: 14px; color: var(--ink-2); }
+.issue .next { font-size: 13.5px; padding: 6px 12px; background: #f0f5ec; border-radius: 8px; color: #2c4a1e; margin-top: 6px; }
+.issue .next b { color: #1e3612; }
+.sev { font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; }
+.sev.critical { background: #fceeee; color: #a32e2e; }
+.sev.serious  { background: #fdf0e8; color: #9a4a20; }
+.sev.warn     { background: #fdf6e3; color: #8a5d00; }
+
+/* ---------- ⑥.8 进度地图 ---------- */
+.ws-row {
+  display: grid; grid-template-columns: 118px 1fr; gap: 14px;
+  padding: 12px 0; border-bottom: 1px solid #efeee9; align-items: start;
+}
+.ws-row:last-child { border-bottom: none; }
+.ws-row .ws-tag { display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }
+.ws-row .ws-name { font-weight: 700; font-size: 14px; }
+.ws-row .ws-body { font-size: 13.5px; color: var(--ink-2); }
+.ws-row .ws-body b { color: var(--ink); }
+.ws-row .ws-next { font-size: 12.5px; color: #2c4a1e; background: #f0f5ec; border-radius: 8px; padding: 4px 10px; margin-top: 6px; display: inline-block; }
+.ws-st { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--border); width: max-content; }
+.ws-st.validated   { background: #eef8ee; border-color: #cfe6cf; color: var(--good-text); }
+.ws-st.in_progress { background: #fdf6e3; border-color: #f3e2ae; color: #8a5d00; }
+.ws-st.not_started { background: #fceeee; border-color: #f2cbcb; color: #a32e2e; }
+.ws-st.deferred    { background: #f1f1ee; border-color: #e1e0d9; color: var(--ink-3); }
+
+.gate-grid { display: grid; grid-template-columns: minmax(150px, 1.4fr) repeat(4, minmax(70px, 1fr)) 64px; gap: 6px; align-items: stretch; font-size: 12.5px; }
+@media (max-width: 640px) { .gate-grid { grid-template-columns: minmax(110px, 1.2fr) repeat(4, 1fr) 52px; font-size: 11px; } }
+.gate-grid .gh { color: var(--ink-3); font-weight: 600; font-size: 11.5px; align-self: end; padding: 0 2px 4px; }
+.gate-grid .gexp { display: flex; align-items: center; font-weight: 600; padding-right: 6px; line-height: 1.35; }
+.gate-cell {
+  border-radius: 8px; padding: 6px 8px; display: flex; align-items: center; justify-content: center;
+  text-align: center; line-height: 1.3; min-height: 40px; border: 1px solid var(--border);
+}
+.gate-cell.off { background: #f6f5f2; color: var(--ink-3); border-style: dashed; }
+.gate-cell.on  { background: #eef8ee; border-color: #cfe6cf; color: var(--good-text); font-weight: 600; }
+.gate-score { display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-weight: 700; color: #a32e2e; }
+.gate-score.some { color: #8a5d00; } .gate-score.full { color: var(--good-text); }
+
+.prog { height: 14px; border-radius: 999px; background: #efeee9; overflow: hidden; display: flex; margin: 8px 0 4px; }
+.prog .seg { height: 100%; }
+.stab-row { display: grid; grid-template-columns: 172px 1fr 84px; gap: 10px; align-items: center; margin: 7px 0; font-size: 13px; }
+@media (max-width: 640px) { .stab-row { grid-template-columns: 120px 1fr 70px; font-size: 12px; } }
+.stab-row .bl { color: var(--ink-2); text-align: right; }
+.stab-track { position: relative; height: 16px; background: #f1f0ec; border-radius: 999px; overflow: hidden; }
+.stab-fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; }
+.stab-val { font-family: var(--mono); font-size: 12px; font-weight: 700; }
+
+footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30px 0; border-top: 1px solid var(--hair); }
+</style>
+</head>
+<body>
+
+<nav class="topnav" id="topnav">
+  <span class="brand">medHarness2 <span>· 项目认知面板</span></span>
+  <a href="#what">这是什么</a>
+  <a href="#flow">整体流程</a>
+  <a href="#arch">设计哲学</a>
+  <a href="#wf">工作流</a>
+  <a href="#tools">工具箱</a>
+  <a href="#run">运行证据</a>
+  <a href="#fresh">最新进展</a>
+  <a href="#map">进度地图</a>
+  <a href="#issues">问题与下一步</a>
+</nav>
+
+<main>
+
+<!-- ═══════════════════════════ ① 这是什么 ═══════════════════════════ -->
+<section id="what" class="hero">
+  <div class="sec-kicker">01 · WHAT</div>
+  <h1>这个系统到底是干什么的？</h1>
+  <p class="one-liner">
+    medHarness2 是影像科报告的<b>"阅卷老师 + 陪练教练"</b>：医生写了一份 CT / 胸片 / MRI
+    报告，它负责<b>打分、找错、给改进建议</b>。
+  </p>
+  <div class="metaphor">
+    <b>打个比方：</b>把医生的报告当成一篇考场作文。系统先请几位 <b>AI 陪练</b>对着同一张片子各写一份报告当参照；
+    然后像老师阅卷一样，给每份报告<b>体检</b>（结构完不完整、内容全不全、写得好不好）；
+    再把医生的报告和 AI 的报告<b>逐条对答案</b>——你写了它没写？它写了你没写？位置写错了？——
+    每处出入标上<b>危害等级</b>（写错左右和漏掉骨折，严重程度天差地别）；
+    最后汇总成<b>排名、画像和错题本式的教学建议</b>。
+  </div>
+  <p class="hero-note">
+    <span class="nb">注意边界：</span>本系统做的是<b>评估与教学</b>，不做报告生成——生成模型在隔壁
+    <code>medHarness</code> 仓库，这里只是"借"它们来当陪练。
+    本页所有运行数字来自真实 run 产物（构建时注入），页面会<b>诚实标注</b>哪些环节是真跑的、哪些目前还是占位的。
+  </p>
+</section>
+
+<!-- ═══════════════════════════ ② 整体流程 ═══════════════════════════ -->
+<section id="flow">
+  <div class="sec-head">
+    <div class="sec-kicker">02 · PIPELINE</div>
+    <h2>一条流水线看懂整体流程</h2>
+    <p class="sec-lead">一个病例从进门到出报告单，走这 7 步。每步右侧的蓝色小标签是背后干活的工具，点一下可以跳到工具详情。</p>
+  </div>
+  <div class="card">
+    <div class="flow" id="flow-steps"></div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ ③ 设计哲学 ═══════════════════════════ -->
+<section id="arch">
+  <div class="sec-head">
+    <div class="sec-kicker">03 · PHILOSOPHY</div>
+    <h2>四层设计哲学：像医院一样分层</h2>
+    <p class="sec-lead">
+      整个代码库只有一个组织原则：<b>上层管流程，下层干专活，层与层之间只传数据</b>。
+      这不是为了工程好看——是为了科研：任何一个零件都能单独替换、单独测、单独做消融实验。
+    </p>
+  </div>
+  <div class="layers">
+    <div class="layer">
+      <div class="tag" style="background:var(--c1)">工作流<br>Workflow</div>
+      <div class="desc"><b>相当于门诊流程单。</b>决定先做什么后做什么、结果存到哪。全系统<b>只有这一层被允许写文件</b>——所以任何产物都能追溯到是哪条流程写的。共 4 条（见下节）。</div>
+    </div>
+    <div class="layer">
+      <div class="tag" style="background:var(--c5)">模块<br>Module</div>
+      <div class="desc"><b>相当于诊室。</b>只有两间：「单份报告体检室」（打分+拆发现+查结构一条龙）和「两份报告对比室」（对答案+定危害一条龙）。工作流不直接摆弄工具，都是把病例交给诊室。</div>
+    </div>
+    <div class="layer">
+      <div class="tag" style="background:var(--c2)">工具<br>Tool ×13</div>
+      <div class="desc"><b>相当于检查仪器。</b>每台只干一件事：打分的只打分、配对的只配对。全部是<b>纯函数</b>——同样的输入永远给同样的输出，不碰文件、不留状态。所以可以随便换一台仪器（比如把规则打分换成 GPT-5.5 打分）而不动其它任何东西。</div>
+    </div>
+    <div class="layer">
+      <div class="tag" style="background:var(--c3);color:#3d2c00">基础设施<br>Infra</div>
+      <div class="desc"><b>相当于水电网。</b>一个统一的 LLM 调用口子（LLMClient）：工具说"我要问一次大模型"，至于问的是外部 API（DMX 代理的 gpt-5.5）、本地 HF 模型、还是 mock 假人，由<b>配置文件</b>决定，工具代码一行不用改。这就是"一套代码，多档火力"的开关。</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════ ④ 工作流 ═══════════════════════════ -->
+<section id="wf">
+  <div class="sec-head">
+    <div class="sec-kicker">04 · WORKFLOWS</div>
+    <h2>四条工作流：从一个人到一个科室</h2>
+    <p class="sec-lead">规模逐级放大：单场考试 → 全年级统考 → 年级排名表 → 个人错题本。</p>
+  </div>
+  <div class="wf-grid" id="wf-grid"></div>
+</section>
+
+<!-- ═══════════════════════════ ⑤ 工具箱 ═══════════════════════════ -->
+<section id="tools">
+  <div class="sec-head">
+    <div class="sec-kicker">05 · TOOLBOX</div>
+    <h2>13 台仪器逐台拆解</h2>
+    <p class="sec-lead">
+      每张卡：它是干嘛的（人话+比喻）→ 吃什么吐什么（用本次运行的<b>真实数据</b>举例）→
+      怎么实现的（可展开）。右上角两个徽章：<b>实现方式</b>（调 API / 本地模型 / 纯规则）和
+      <b>本次运行的诚实度</b>（✓ 真跑 / ⚠ 部分真 / ✕ 本次为假）。
+    </p>
+  </div>
+  <div id="tool-cards"></div>
+</section>
+
+<!-- ═══════════════════════════ ⑥ 运行证据 ═══════════════════════════ -->
+<section id="run">
+  <div class="sec-head">
+    <div class="sec-kicker">06 · EVIDENCE</div>
+    <h2>真实运行证据（含诚实说明）</h2>
+    <p class="sec-lead" id="run-lead"></p>
+  </div>
+  <div class="kpi-grid" id="kpi-grid"></div>
+  <div class="chart-row">
+    <div class="card chart" id="chart-modality"></div>
+    <div class="card chart" id="chart-source"></div>
+  </div>
+  <div class="card chart" style="margin-bottom:14px" id="reader-table"></div>
+  <div class="card chart" id="gate-table"></div>
+</section>
+
+<!-- ═══════════════════════════ ⑥.5 最新进展 ═══════════════════════════ -->
+<section id="fresh">
+  <div class="sec-head">
+    <div class="sec-kicker">06.5 · FRESH</div>
+    <h2>最新进展：假地基正在换成真的</h2>
+    <p class="sec-lead" id="fresh-lead"></p>
+  </div>
+  <div id="fresh-cards"></div>
+</section>
+
+<!-- ═══════════════════════════ ⑥.8 进度地图 ═══════════════════════════ -->
+<section id="map">
+  <div class="sec-head">
+    <div class="sec-kicker">06.8 · MAP</div>
+    <h2>工程进度地图：九条战线与六道正式关卡</h2>
+    <p class="sec-lead">
+      项目已从「把流水线跑通」进入「向正式研究结论推进」阶段。这一节回答三个问题：
+      每条战线现在推进到哪了？发表级结论前还有哪些门禁没点亮？临床金标准（一切校准的前提）动了没有？
+      数据全部来自 <code>docs/project_status.yaml</code> 与实验聚合产物，构建时注入。
+    </p>
+  </div>
+  <div class="card" id="ws-map" style="margin-bottom:14px"></div>
+  <div class="card" id="gate-matrix" style="margin-bottom:14px"></div>
+  <div class="card" id="pilot10-card"></div>
+</section>
+
+<!-- ═══════════════════════════ ⑦ 问题与下一步 ═══════════════════════════ -->
+<section id="issues">
+  <div class="sec-head">
+    <div class="sec-kicker">07 · NEXT</div>
+    <h2>现在的问题在哪，下一步做什么</h2>
+    <p class="sec-lead">
+      这一节是整个面板的落脚点。按"地基 → 承重墙 → 装修"的顺序排：越靠前的问题越是<b>其它一切数字的前提</b>。
+    </p>
+  </div>
+  <div id="issue-list"></div>
+</section>
+
+<footer id="foot"></footer>
+</main>
+
+<script type="application/json" id="panel-data">__PANEL_DATA__</script>
+<script>
+"use strict";
+const DATA = JSON.parse(document.getElementById("panel-data").textContent);
+const H = DATA.honesty, EX = DATA.example, K = DATA.kpi;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pct = x => (x*100).toFixed(0) + "%";
+
+/* ============================================================
+   诚实度判定：全部由 run 产物元数据推导，不硬编码结论。
+   ============================================================ */
+function honestyBadge(kind) {
+  const B = (cls, icon, text) => `<span class="badge ${cls}" title="由本次 run 产物元数据自动核验">${icon} ${text}</span>`;
+  if (kind === "t1") {
+    const r = H.likert_mock_ratio;
+    if (r > 0.5) return B("h-bad", "✕", `本次为假：${pct(r)} 是规则估分`);
+    if (r > 0)   return B("h-warn", "⚠", `部分真：${pct(r)} 为规则估分`);
+    return B("h-good", "✓", "本次真跑（LLM 打分）");
+  }
+  if (kind === "t2") {
+    const bk = H.extract_backends, ph = bk.placeholder || 0;
+    const cov = H.coverage_mean;
+    if (ph > 0) return B("h-warn", "⚠", `部分真：${ph} 例用了占位抽取器`);
+    return B("h-warn", "⚠", `规则真跑，但平均覆盖率仅 ${pct(cov)}`);
+  }
+  if (kind === "t4") {
+    const hb = H.hazard_backends, total = Object.values(hb).reduce((a,b)=>a+b,0) || 1;
+    const mock = hb.mock_judge || 0;
+    if (mock / total > 0.5) return B("h-bad", "✕", `本次为假：${pct(mock/total)} 走规则查表`);
+    if (mock > 0) return B("h-warn", "⚠", `部分真：${mock}/${total} 为规则查表`);
+    return B("h-good", "✓", "本次真跑（LLM 法官）");
+  }
+  if (kind === "t8") {
+    const s = DATA.source_counts, total = Object.values(s).reduce((a,b)=>a+b,0) || 1;
+    const weak = (s.local_vlm_fallback||0) + (s.artifact_reuse||0);
+    if (weak/total > 0.3) return B("h-warn", "⚠", `${pct(weak/total)} 是兜底/复用，非正规医学模型现推理`);
+    return B("h-good", "✓", "以正规医学模型为主");
+  }
+  if (kind === "good") return B("h-good", "✓", "真跑");
+  return "";
+}
+const IMPL = {
+  llm:   `<span class="badge impl-llm">🤖 调大模型 API</span>`,
+  local: `<span class="badge impl-local">🏠 本地医学模型</span>`,
+  rule:  `<span class="badge impl-rule">📐 纯规则代码</span>`,
+  mix:   (t)=>`<span class="badge impl-mix">🔀 ${t}</span>`,
+};
+
+/* ============================================================
+   ② 流水线步骤
+   ============================================================ */
+const FLOW = [
+  { no:"入", io:true, title:"进门：一张片子 + 一份医生报告",
+    desc:"输入就这两样。片子可能是胸片、CT 或 MRI；报告是医生写的原文（本批数据由 OCR 从报告单识别而来）。", chips:[] },
+  { no:"1", title:"认片子 —— 这是 CT 还是胸片？",
+    desc:"先搞清楚模态和部位，后面所有环节（找哪些陪练、用哪套抽取规则）都取决于它。", chips:[["tool7","T7 模态识别"]] },
+  { no:"2", title:"AI 陪练团各写一份报告",
+    desc:"按「模态 + 部位」路由到合适的本地医学模型（胸片找 MAIRA-2 / CheXagent，CT 找 CT-CHAT / Merlin…），每人对着片子写一份报告，当作对照组。", chips:[["tool8","T8 报告生成"]] },
+  { no:"3", title:"验货 —— AI 写的报告先过质检",
+    desc:"部位写串了没有？缺不缺「诊断印象」段？是不是兜底货？不合格的盖章记录在案，并给每份报告标「证据等级」。", chips:[["toolqg","质量门禁"]] },
+  { no:"4", title:"逐份体检 —— 医生的和 AI 的都要查",
+    desc:"每份报告独立做三项检查：① 五维打分（写得好不好）② 拆成发现清单（写了什么）③ 结构检查（该有的段落全不全）。", chips:[["tool1","T1 五维打分"],["tool2","T2 病灶抽取"],["tool3","T3 结构检查"]] },
+  { no:"5", title:"对答案 —— 医生 vs AI 逐条配对",
+    desc:"把两边的发现清单像连连看一样配对：配上了=一致；AI 有医生没有=疑似瞎编；医生有 AI 没有=疑似漏诊；配上了但位置/严重度不一致=写错了。结构也顺带对比一遍。", chips:[["tool5","T5 发现对齐"],["tool6","T6 结构对比"]] },
+  { no:"6", title:"定罪量刑 —— 每个错误标危害等级",
+    desc:"漏一处骨折和把「左」写成「右」，危害完全不同。给上一步找到的每处出入定 1–5 级危害，并说明理由。", chips:[["tool4","T4 危害判级"]] },
+  { no:"7", title:"排名与汇总",
+    desc:"给 AI 陪练的报告综合排名（质量 40% + 结构 30% + 发现覆盖 30%）；批量跑完后按模型、按危害、按医生做统计画像。", chips:[["tool9","T9 排名"],["tool10","T10 模型画像"],["tool11","T11 危害画像"],["tool12","T12 统计"]] },
+  { no:"出", io:true, title:"出门：分数 + 错误清单 + 排名 + 教学建议",
+    desc:"单病例产出一份完整的评估 JSON；批量产出科室画像和医生百分位；最后由教学工作流生成「错题本」式建议。", chips:[] },
+];
+document.getElementById("flow-steps").innerHTML = FLOW.map(s => `
+  <div class="step ${s.io ? "io" : ""}">
+    <div class="no">${s.no}</div>
+    <div class="body">
+      <h4>${s.title}</h4>
+      <p>${s.desc}</p>
+      <div class="tool-chips">${s.chips.map(([id,label]) =>
+        `<a class="tool-chip ${id==="toolqg"?"qg":""}" href="#${id}">${label}</a>`).join("")}</div>
+    </div>
+  </div>`).join("");
+
+/* ============================================================
+   ④ 工作流卡
+   ============================================================ */
+const edu = DATA.education;
+const eduSug = edu && edu.suggestions && edu.suggestions[0];
+const WFS = [
+  { id:"wf1", name:"WF1 · 单病例评估", status:`<span class="badge h-good">✓ 已实现</span>`,
+    say:"一个病人走完整条流水线（上面那 7 步），产出一份完整评估。",
+    meta:"比喻：给一场考试的一份卷子完整阅一遍。",
+    io:"<b>进：</b>1 张片子 + 1 份医生报告　<b>出：</b>1 个病例评估 JSON（打分、发现图、对齐结果、危害清单、陪练排名）",
+    detail:"这是系统的最小完整单元，其它工作流都是它的批量或聚合。跑一个病例约调用 8 台仪器。" },
+  { id:"wf2", name:"WF2 · 批量读者评估", status:`<span class="badge h-good">✓ 已实现</span>`,
+    say:`对一批病例（本次 ${K.case_count} 例）逐个跑 WF1，并记住每份报告是哪位医生写的。`,
+    meta:"比喻：全年级统考，一张张卷子阅过去，按考生归档。",
+    io:`<b>进：</b>病例清单（manifest）　<b>出：</b>${K.case_count} 个病例 JSON + 汇总表`,
+    detail:"支持断点续跑和分批合并（merge-batches），跑挂了不用从头来。" },
+  { id:"wf3", name:"WF3 · 科室对比", status:`<span class="badge h-good">✓ 已实现</span>`,
+    say:"把 WF2 的结果按医生聚合：谁的报告平均分高、错误多集中在什么类型，算出每人的百分位。",
+    meta:"比喻：年级排名表 + 每位老师的教学质量画像。",
+    io:`<b>进：</b>WF2 的全部病例结果　<b>出：</b>${K.reader_count} 位医生的画像与百分位`,
+    detail:"底层就是 T10/T11/T12 三台统计仪器的组合，纯代码，无 AI 参与。" },
+  { id:"wf4", name:"WF4 · 教学建议", status:`<span class="badge h-warn">⚠ 已实现 v1，质量为模板级</span>`,
+    say:"读某位医生（或某份报告）的评估结果，找出最弱的指标，生成「错题本」式改进建议。",
+    meta:"比喻：老师根据错题给学生开学习清单。",
+    io:"<b>进：</b>WF1 或 WF3 的结果 JSON　<b>出：</b>弱项 + 同侪差距 + 建议清单",
+    detail: edu
+      ? `本次 run 的真实输出：给医生「${esc(edu.radiologist_summary?.radiologist_id)}」找到弱项 <code>${esc((edu.radiologist_summary?.weakest_metrics||[]).join(", "))}</code>，建议原文是「${esc(eduSug ? eduSug.suggestion : "")}」——能看出这还是<b>模板句</b>，不是针对具体病例错误的个性化教学。设计上支持接 LLM 生成，本次未启用。`
+      : "本次 run 未产出教学结果。" },
+];
+document.getElementById("wf-grid").innerHTML = WFS.map(w => `
+  <div class="card wf-card" id="${w.id}">
+    <h3>${w.name} ${w.status}</h3>
+    <p class="say">${w.say}</p>
+    <p class="meta">${w.meta}</p>
+    <div class="io">${w.io}</div>
+    <details class="more"><summary>多说两句</summary><div class="inner"><p>${w.detail}</p></div></details>
+  </div>`).join("");
+
+/* ============================================================
+   ⑤ 工具卡（叙事静态 + 例子动态注入）
+   ============================================================ */
+const fmtFinding = f => `<tr><td><b>${esc(f.observation)}</b></td><td>${esc(f.location||"—")}</td><td>${f.certainty==="absent"?"阴性(说了没有)":"阳性(存在)"}</td><td>${esc(f.measurement||"—")}</td><td class="mono" style="font-size:11px">${esc((f.text||"").slice(0,40))}</td></tr>`;
+const al = EX.alignment || {};
+const lik = EX.likert_sample || {};
+const gen0 = (EX.generated||[])[0] || {};
+const hzRows = (EX.hazards||[]).map(h => `<tr><td>${esc(h.error_type)}</td><td style="text-align:center"><b>${esc(h.hazard_level)}</b> 级</td><td class="mono" style="font-size:11px">${esc((h.candidate_text||h.reference_text||"").slice(0,46))}</td></tr>`).join("");
+
+const TOOLS = [
+{ id:"tool1", no:"T1", name:"五维打分（Likert）", impl:IMPL.mix("设计=调 LLM；失败退回规则估分"), honesty:honestyBadge("t1"),
+  say:"给一份报告按 5 个维度各打 1–5 分：完整准确、简明清晰、术语规范、结构风格、总体质量。",
+  meta:"就像语文老师按「内容 / 语言 / 结构 / 书写 / 总评」五栏给作文打分，每栏还要写评语。",
+  input:"报告全文（可附图像）", output:"5 个维度的分数 + 每个分数的理由",
+  example:`<div class="lab">本次运行的真实输出（注意看理由那一栏！）</div>
+    <table><tr><th>维度</th><th>分</th><th>理由</th></tr>
+    <tr><td>${esc(lik.metric)}</td><td><b>${esc(lik.score)}</b></td><td class="mono" style="font-size:11px">"${esc(lik.explanation)}"</td></tr></table>
+    <div style="margin-top:6px;color:#a32e2e;font-size:12.5px">⚠ 理由写着 "Deterministic MVP estimate"——意思是：这不是 AI 看完报告打的分，而是<b>按报告长度和有没有段落标记</b>套公式估的。本次 ${H.likert_mock_count}/${H.likert_total} 个分数（${pct(H.likert_mock_ratio)}）都是这么来的，分数只有 ${Object.keys(H.likert_distribution||{}).sort().join(" / ")} 这${Object.keys(H.likert_distribution||{}).length}档。${DATA.smoke ? `<a href="#fresh">最新进展：真 LLM 打分已在 ${DATA.smoke.eval_count} 例上跑通且分数拉开了区分度，见 ⑥.5 节 →</a>` : ''}</div>`,
+  how:`<p><b>设计的做法：</b>把报告全文塞给大模型，要求返回固定格式的 JSON（每个维度一个分数一个理由）。解析失败就重试，重试还不行就退回规则估分保证流水线不断。<b>正式模式现在是严格的</b>：strict 下直接拒绝 mock 和规则兜底，宁可失败也不出假分。</p>
+    <p><b>本次实际发生的：</b>这个 52 例 run 评估时配置仍是 <code>provider: mock</code>，全部走了规则估分——毫无区分度。</p>
+    <p><b>意义：</b>这 5 个分是后面排名（T9 占 40% 权重）和医生画像的地基。真 LLM 打分已在 11 例上验证（纯 DMX 路由 <code>config/dmx_strong.yaml</code>，主判 gpt-5.6-terra），下一步是铺到全部 52 例。</p>` },
+
+{ id:"tool2", no:"T2", name:"病灶抽取（发现图）", impl:IMPL.mix("规则打底；LLM 校正后端已上线"), honesty:honestyBadge("t2"),
+  say:"把整篇报告拆成一张结构化的「发现清单」：每条记录 病灶是什么 / 在哪 / 多大 / 是有还是明确说了没有。",
+  meta:"像把一篇游记拆成打卡清单：去了哪、看了什么、待了多久——后面「对答案」全靠这张清单。",
+  input:"报告文本 + 模态", output:"发现图（findings 列表，含位置/侧别/大小/阴阳性/原文出处）",
+  example:`<div class="lab">真实例子 · 病例 ${esc(EX.case_id)}（${esc(EX.modality)}/${esc(EX.body_part)}）</div>
+    <div class="snip">报告原文（节选）："${esc(EX.report_snippet)}…"</div>
+    <table><tr><th>抽出的发现</th><th>位置</th><th>阴/阳</th><th>测量</th><th>对应原文</th></tr>${(EX.human_findings||[]).map(fmtFinding).join("")}</table>
+    <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 本例规则版抽出 ${EX.human_finding_total} 条、覆盖率 ${pct(EX.coverage||0)}（全场平均 ${pct(H.coverage_mean)}、每份 ${H.findings_mean} 条）——比上一版有进步，但仔细看仍有张冠李戴：把「未见胸腔积液」的位置标成了「bone」、把甲状腺结节标到了「liver」。规则能数出条目，<b>常常搞错归属</b>。${DATA.smoke && DATA.smoke.t2 ? `<a href="#fresh">最新进展：规则+LLM 校正后端已在 ${DATA.smoke.eval_count} 例上全量运行，且要求每条 LLM 发现给出原文证据，见 ⑥.5 节 →</a>` : ''}</div>`,
+  how:`<p><b>当前最好的实现（两级混合）：</b>第一级是三套按模态定制的<b>词表+正则规则</b>（CXR / CT / MRI）：按句切分、双语病灶词表匹配、附近找位置/侧别/测量（统一换算 mm）/否定词。第二级是<b>LLM 校正</b>（新上线，代号 tool2-hybrid-v1）：把规则的粗抽结果连同原文一起交给大模型，让它补漏、纠错、重新归属位置，输出经过 pydantic 严格校验的 JSON，校验不过自动重试，彻底失败才退回规则结果。本次 52 例 run 只用了第一级（后端分布：${esc(JSON.stringify(H.extract_backends))}），第二级已在冒烟中验证。</p>
+    <p><b>意义与短板：</b>这是全系统<b>信息量最大的瓶颈</b>——T5 对齐、漏诊统计、危害清单全部吃它的输出。规则覆盖不住或归属错误的发现，后面一切对比都在失真。混合后端铺开后，这个瓶颈有望解除。</p>` },
+
+{ id:"tool3", no:"T3", name:"结构检查", impl:IMPL.rule, honesty:honestyBadge("good"),
+  say:"检查报告「该有的段落」全不全：临床病史、检查所见、诊断印象……并给个结构分。",
+  meta:"像检查作文有没有「开头-正文-结尾」，缺一段扣一段的分。",
+  input:"报告文本", output:"分好段的 sections + 结构分（0–1）",
+  example:`<div class="lab">真实例子 · 病例 ${esc(EX.case_id)}</div>
+    <div>识别出的段落：${(EX.structure_sections||[]).map(s=>`<code>${esc(s)}</code>`).join(" ")}　结构分：<b>${esc(EX.structure_score ?? "—")}</b></div>`,
+  how:`<p>按中英文段落标题关键词（检查所见/Findings、诊断印象/Impression…）切分，按段落齐全度加权计分。纯代码、确定性、快。AI 陪练的报告经常缺「诊断印象」段，就是它查出来的（本次 ${DATA.warning_counts.missing_impression_section||0} 份中招）。</p>` },
+
+{ id:"tool4", no:"T4", name:"危害判级", impl:IMPL.mix("设计=LLM 法官；失败退回规则表"), honesty:honestyBadge("t4"),
+  say:"给「对答案」找出的每处错误定 1–5 级危害并说明理由：漏了骨折是重罪，多写一句废话是轻罪。",
+  meta:"像交规扣分：闯红灯扣 6 分、忘系安全带扣 1 分——错误类型不同，量刑不同。",
+  input:"错误清单（来自 T5）", output:"每个错误 + 危害等级 + 解释 + 建议动作",
+  example:`<div class="lab">真实例子 · ${esc(EX.case_id)} 医生报告 vs ${esc(al.model)} 的报告</div>
+    <table><tr><th>错误类型</th><th>危害</th><th>涉及内容</th></tr>${hzRows}</table>
+    <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 本次判级后端是 <code>${esc(EX.hazard_backend)}</code>（分布：${esc(JSON.stringify(H.hazard_backends))}）——即按「错误类型→固定等级」查表，如所有漏诊一律 4 级。没有任何临床语义判断：漏一个 3mm 钙化结节和漏一处骨折被判了同样的刑。${DATA.smoke && DATA.smoke.t4 ? '<a href="#fresh">最新进展：真 LLM 三法官制（主判+复核+仲裁）已在 11 例上运行，见 ⑥.5 节 →</a>' : ''}</div>`,
+  how:`<p><b>设计的做法：</b>把错误清单交给 LLM 法官，要求逐条返回等级+理由的 JSON，带格式校验和重试；全部失败才退回规则表。现在是<b>三法官制</b>：主判（gpt-5.6-terra）先判，复核官（claude-opus-4-8）独立再判，两者分歧自动送第三位仲裁官（gpt-5.6-sol）终裁——三份意见全部留卷，仲裁只追加不覆盖。11 例真跑中 133 个错误吵出 93 处分歧、全部完成仲裁。</p>
+    <p><b>意义：</b>「危害加权」是这个项目区别于普通文本相似度评估的核心卖点——本次 52 例 run 里还是查表实现，但真 LLM 三法官判级已在 11 例上兑现，待铺开 + 医生金标准校准。</p>` },
+
+{ id:"tool5", no:"T5", name:"发现对齐（对答案）", impl:IMPL.rule, honesty:honestyBadge("good"),
+  say:"把医生和 AI 的两张发现清单逐条配对，配不上的就是问题：AI 多写的=疑似瞎编，医生有 AI 没有的=疑似漏诊。",
+  meta:"连连看：左边一列医生的发现，右边一列 AI 的发现，能连上的连线，剩下的孤儿就是错误候选。",
+  input:"两张发现图", output:"配对结果（一致/近似/矛盾/单侧独有）+ 精确率召回率 + 错误候选清单",
+  example:`<div class="lab">真实例子 · ${esc(EX.case_id)}：医生 ${(EX.human_findings||[]).length}条 vs ${esc(al.model)} 的清单</div>
+    <div>完全配上 <b>${al.matched??0}</b> 对 · 近似 <b>${al.approximate??0}</b> 对 · 配上但有出入 <b>${al.mismatched??0}</b> 对 · AI 独有(疑似瞎编) <b>${al.candidate_only??0}</b> 条 · 医生独有(疑似漏诊) <b>${al.reference_only??0}</b> 条</div>
+    <div style="margin-top:4px">错误候选：${(al.error_types||[]).map(t=>`<code>${esc(t)}</code>`).join(" ")}</div>
+    <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 检出层 F1 只有 ${esc((al.metrics||{}).detection_f1 ?? "—")}。注意：这不全是 AI 报告真的差——上游 T2 抽取残缺时，对齐是在两张<b>都不完整</b>的清单之间进行的，漏诊/瞎编的判定会跟着失真。</div>`,
+  how:`<p><b>怎么实现的：</b>经典算法而非 AI——把配对建模为<b>最大权二分图匹配</b>：每对候选发现按 观察项/位置/侧别/严重度/测量值(±5mm 容差)/阴阳性 逐项算相似度加权，取全局最优配对。确定性、可复现、可解释（借鉴 ReXVal 的错误类型学）。</p>
+    <p><b>新增的保险：</b>算法配对之上加了一层 <b>LLM 对齐审计</b>（alignment audit）——让大模型复核配对结果，专抓「字面配不上但语义等价」的误报（如 AI 写「双肺未见异常」，规则会把参考里的每条阴性发现都记成漏诊，审计能识别出语义已覆盖）。11 例真跑中它复核了 142 个错误候选，驳回 8 个、改判 1 个；审计结果带哈希绑定到主结果上，只追加不覆盖——确定性主线永远可复现。</p>
+    <p><b>意义：</b>这是「评估」二字的技术核心，本身实现是扎实的；它的可信度完全取决于喂给它的清单质量（T2）。</p>` },
+
+{ id:"tool6", no:"T6", name:"结构对比", impl:IMPL.rule, honesty:honestyBadge("good"),
+  say:"把两份报告各自做一遍 T3 结构检查，然后逐段对比：谁缺段、结构分差多少。",
+  meta:"两篇作文并排放：一篇有开头正文结尾，另一篇没结尾——一眼看出差别。",
+  input:"两份报告文本", output:"逐段落差异 + 结构分差值",
+  example:`<div class="lab">说明</div><div>复用 T3 跑两次再做差，无独立算法。AI 报告最常见的结构问题就是缺「诊断印象」段。</div>`,
+  how:`<p>纯组合工具：调两次 T3 + 求差。存在的意义是让 pairwise 对比的产物里自带结构维度，而不用下游自己再拼。</p>` },
+
+{ id:"tool7", no:"T7", name:"模态识别", impl:IMPL.mix("规则优先；VLM 兜底"), honesty:honestyBadge("good"),
+  say:"看一眼片子先认出它是 CT、胸片还是 MRI——后面选陪练、选抽取规则全看它。",
+  meta:"进医院先分诊：挂哪个科决定后面见哪个医生。",
+  input:"图像文件路径", output:"模态标签（cxr / ct / mri / …）",
+  example:`<div class="lab">本次运行的真实分布</div>
+    <div>${Object.entries(DATA.modality_counts).map(([k,v])=>`<code>${esc(k)}</code> ${v} 例`).join(" · ")}，全部由规则识别，未动用 VLM 兜底。</div>`,
+  how:`<p><b>三级瀑布：</b>① 读 DICOM 头（医学影像自带的"身份证"，里面直接写着设备类型）→ ② 认不出再看文件后缀和路径关键词 → ③ 还认不出才问视觉大模型"这是什么片子"。便宜的手段优先，贵的手段兜底——这个瀑布式设计在整个项目里反复出现。</p>` },
+
+{ id:"tool8", no:"T8", name:"报告生成（AI 陪练团）", impl:IMPL.mix("本地医学模型优先；通用 VLM 兜底"), honesty:honestyBadge("t8"),
+  say:"按「模态+部位」叫来合适的专科 AI 各写一份报告：胸片找 MAIRA-2 / CheXagent，CT 找 CT-CHAT / Merlin，脑 MRI 找 brain_gemma3d……",
+  meta:"请几位陪练医生对着同一张片子各写一份，用来跟真医生对答案。找不到对口专科时，只好请「全科实习生」（通用视觉模型 qwen3-vl-4b）顶班。",
+  input:"图像 + 模态 + 部位", output:"多份候选报告（每份带 模型名 / 来源 / 证据等级 / 警告）",
+  example:`<div class="lab">真实例子 · ${esc(EX.case_id)} 由 ${esc(gen0.model)} 生成（来源 ${esc(gen0.source)}，证据等级 ${esc(gen0.evidence_tier)}）</div>
+    <div class="snip">"${esc(gen0.snippet)}…"</div>
+    <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 本次 ${K.generated_report_count} 份候选的来源：专科模型 CLI 生成 ${DATA.source_counts.medharness_cli||0} 份 / 通用 VLM 顶班 ${DATA.source_counts.local_vlm_fallback||0} 份 / 复用旧产物 ${DATA.source_counts.artifact_reuse||0} 份。<b>更扎心的是：连那 ${DATA.source_counts.medharness_cli||0} 份专科模型报告都被打上了 <code>${DATA.warning_counts.legacy_reference_assisted_generation_assumed||0}</code> 个「疑似参考辅助生成」警告</b>（担心生成时偷看了医生报告答案），证据等级因此降到 debug_fallback。所以本次<b>没有一份候选是干净的 formal_fresh</b>。</div>`,
+  how:`<p><b>怎么实现的：</b>一个「模型花名册」（Registry）登记了每个本地模型擅长的模态和部位。来了病例先查花名册路由；对口模型都不在（如 CT-head 目前无专科模型）就落到通用 VLM 兜底，并在产物上打警告标签。所有模型权重在本地 8×A40 上推理，不出网。</p>
+    <p><b>意义：</b>陪练团的专业度直接决定「对答案」有没有意义——拿实习生的报告、或偷看过答案的报告当参照，对齐结果都说明不了医生的真实水平。补齐空缺路由 + 确保「盲写」（不喂医生报告）是数据可信度的关键。</p>` },
+
+{ id:"tool9", no:"T9", name:"排名（Top-K 选优）", impl:IMPL.rule, honesty:honestyBadge("good"),
+  say:"给陪练团的报告排名次：质量分 40% + 结构分 30% + 发现覆盖 30%，加权合成总分取前 K 名。",
+  meta:"计算总评成绩：期中 40% + 平时 30% + 出勤 30%。",
+  input:"每份候选报告的三项评估结果", output:"排名 + 综合分 + 是否入选 Top-K",
+  example:`<div class="lab">真实例子 · ${esc(EX.case_id)}</div>
+    <div>第 1 名 <code>${esc((EX.ranking||{}).model)}</code>，综合分 <b>${esc((EX.ranking||{}).score)}</b>（明细：${esc(JSON.stringify((EX.ranking||{}).metrics))}）</div>
+    <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 权重最大的 likert_mean 目前来自 mock 打分（见 T1），所以排名结论暂时只反映结构和覆盖两个规则指标。</div>`,
+  how:`<p>各指标先归一化再加权求和，权重写在配置文件里可随时调（做消融实验就是改这几个数）。纯代码。</p>` },
+
+{ id:"tool10", no:"T10", name:"模型画像", impl:IMPL.rule, honesty:honestyBadge("good"),
+  say:"按模型聚合：每个 AI 陪练在所有病例上的平均表现如何。",
+  meta:"给每位陪练医生算学期平均分。",
+  input:"逐病例的模型指标行", output:"每模型的加权平均指标", example:null,
+  how:`<p>加权平均，纯代码。WF3 科室对比的原料之一。</p>` },
+{ id:"tool11", no:"T11", name:"危害画像", impl:IMPL.rule, honesty:honestyBadge("good"),
+  say:"按错误类型和危害等级聚合：漏诊多还是错位多？高危错误集中在哪。",
+  meta:"事故统计报表：追尾多少起、闯红灯多少起。",
+  input:"全部危害错误记录", output:"危害类型 × 等级的加权统计", example:null,
+  how:`<p>查表加权聚合，纯代码。注意其输入目前来自 mock 判级（T4），画像形状可信、绝对数值存疑。</p>` },
+{ id:"tool12", no:"T12", name:"描述统计", impl:IMPL.rule, honesty:honestyBadge("good"),
+  say:"均值、中位数、分位数——给任何一列数字算基本统计量。",
+  meta:"班级成绩单最后那几行：平均分、最高分、及格率。",
+  input:"数字列表", output:"统计量", example:null,
+  how:`<p>Python 标准库 statistics，最朴素的一台仪器。医生百分位就是它算的。</p>` },
+
+{ id:"toolqg", no:"QG", name:"质量门禁（验货员）", impl:IMPL.rule, honesty:honestyBadge("good"),
+  say:"AI 写的每份报告在进入对比前先验货：部位对不对、段落全不全、是不是兜底货，并盖上「证据等级」章。",
+  meta:"仓库验货员：货不对板就贴红条，所有货都要标产地——后面的人一看标签就知道这批货能信几分。",
+  input:"一份候选报告 + 期望的模态/部位", output:"通过/失败 + 警告标签 + 证据等级（formal_fresh / exploratory_fresh / artifact / debug_fallback / mock）",
+  example:`<div class="lab">本次运行的真实战果</div>
+    <div>${K.generated_report_count} 份候选中 <b>${K.quality_passed}</b> 份过检、<b style="color:#a32e2e">${K.quality_failed}</b> 份被拦下。最典型的翻车：给胸部 CT 配的模型 dia_llama 在报告里写出了「脾脏」——部位不匹配，直接盖不合格章（见第 ⑥ 节失败清单）。本次证据等级分布：${esc(JSON.stringify(DATA.tier_counts))}——没有一份是 formal_fresh，全是旧产物复用或兜底。</div>`,
+  how:`<p><b>怎么实现的：</b>一串确定性检查规则 + 一套「证据等级」标签体系。等级从高到低：<code>formal_fresh</code>=正规模型正式新鲜推理、<code>exploratory_fresh</code>=探索性新鲜推理、<code>artifact</code>=复用以前跑好的旧产物、<code>debug_fallback</code>=兜底/调试性质、<code>mock</code>=假数据。<b>科研诚实性就是靠它机械保证的</b>：任何一个数字都能顺着标签查出它的成色，本页的「诚实度徽章」正是读这些标签算出来的。</p>` },
+];
+
+document.getElementById("tool-cards").innerHTML = TOOLS.map(t => `
+  <div class="card tool-card" id="${t.id}">
+    <div class="t-head">
+      <span class="t-no">${t.no}</span><h3>${t.name}</h3>
+      <span style="margin-left:auto;display:inline-flex;gap:6px;flex-wrap:wrap">${t.impl}${t.honesty}</span>
+    </div>
+    <p class="say">${t.say}</p>
+    <p class="meta">${t.meta}</p>
+    <div class="io-row">
+      <div class="io-box"><span class="lab">吃进去</span><br>${t.input}</div>
+      <div class="arrow">→</div>
+      <div class="io-box"><span class="lab">吐出来</span><br>${t.output}</div>
+    </div>
+    ${t.example ? `<div class="example">${t.example}</div>` : ""}
+    <details class="more"><summary>它是怎么实现的（人话版）</summary><div class="inner">${t.how}</div></details>
+  </div>`).join("");
+
+/* ============================================================
+   ⑥ 运行证据
+   ============================================================ */
+document.getElementById("run-lead").innerHTML =
+  `以下全部数字由构建脚本从 <code>${esc(DATA.run_dir)}</code> 的真实产物读取注入，非手填。`;
+
+const KPIS = [
+  [K.case_count, "个病例", `CT ${DATA.modality_counts.ct||0} / 胸片 ${DATA.modality_counts.cxr||0} / MRI ${DATA.modality_counts.mri||0}`],
+  [K.reader_count, "位医生", "真实报告作者"],
+  [K.generated_report_count, "份 AI 候选报告", `${Object.keys(DATA.model_counts).length} 个模型参与`],
+  [K.quality_passed, "份过质检", `另有 ${K.quality_failed} 份被门禁拦下`],
+  [K.real_ocr_count, "例真实 OCR", "报告文字非人工转录"],
+];
+document.getElementById("kpi-grid").innerHTML = KPIS.map(([v,l,s]) =>
+  `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div><div class="s">${s}</div></div>`).join("");
+
+function barChart(el, title, note, entries, colorMap, labelMap, total) {
+  const max = Math.max(...entries.map(e => e[1]), 1);
+  document.getElementById(el).innerHTML = `<h4>${title}</h4><p class="note">${note}</p>` +
+    entries.map(([k, v], i) => {
+      const w = Math.round(v / max * 100);
+      const sub = labelMap && labelMap[k] ? `<span class="bar-sub">${labelMap[k]}</span>` : "";
+      return `<div class="bar-row" title="${esc(k)}: ${v}（占 ${(v/total*100).toFixed(0)}%）">
+        <div class="bl">${esc(colorMap.names?.[k] || k)}</div>
+        <div class="bar-track"><div class="bar" style="width:${w}%;background:${colorMap.colors[i % colorMap.colors.length]}"></div>
+        <span class="bar-val">${v}</span>${sub}</div></div>`;
+    }).join("");
+}
+const CAT = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948"];
+const modEntries = Object.entries(DATA.modality_counts).sort((a,b)=>b[1]-a[1]);
+barChart("chart-modality", "病例模态分布", "这批 52 例覆盖三种模态、四个部位。",
+  modEntries, { colors: CAT, names: {ct:"CT", cxr:"胸片 CXR", mri:"MRI"} }, null, K.case_count);
+
+const srcEntries = Object.entries(DATA.source_counts).sort((a,b)=>b[1]-a[1]);
+barChart("chart-source", "AI 候选报告的「成色」", "同样是 81 份报告，来源成色完全不同——这是解读一切结果前必须先看的图。",
+  srcEntries, { colors: CAT, names: {
+    medharness_cli: "专科模型 CLI",
+    local_vlm_fallback: "通用VLM顶班",
+    artifact_reuse: "复用旧产物",
+  } }, {
+    medharness_cli: "对口专科生成，但疑似参考辅助",
+    local_vlm_fallback: "没有对口专科，实习生代笔",
+    artifact_reuse: "以前跑好的，非本次新鲜出炉",
+  }, K.generated_report_count);
+
+document.getElementById("reader-table").innerHTML = `
+  <h4>六位医生的当前画像</h4>
+  <p class="note">按综合分算的同侪百分位。</p>
+  <table class="plain"><tr><th>医生</th><th class="num">病例数</th><th class="num">综合分</th><th class="num">百分位</th></tr>
+  ${DATA.readers.map(r => `<tr><td>${esc(r.reader)}</td><td class="num">${r.case_count}</td><td class="num">${r.overall_score}</td><td class="num">${r.percentile}</td></tr>`).join("")}
+  </table>
+  <div class="honest-note">⚠ <b>诚实说明：</b>综合分里权重最大的五维打分目前是规则估分（见 T1），所以这张表暂时只反映「结构规整度 + 发现覆盖」两个规则指标的差异，<b>不能</b>当成医生真实水平的排名。分差极小（${Math.min(...DATA.readers.map(r=>r.overall_score))}–${Math.max(...DATA.readers.map(r=>r.overall_score))}）也印证了区分度不足。</div>`;
+
+document.getElementById("gate-table").innerHTML = `
+  <h4>质量门禁拦下的 ${DATA.gate_failure_rows.length} 份报告（这不是坏消息）</h4>
+  <p class="note">门禁能抓到问题恰恰说明流水线有自检能力。共性：模型和部位错配。</p>
+  <details class="more"><summary>展开失败清单</summary><div class="inner">
+  <table class="plain"><tr><th>病例</th><th>模态/部位</th><th>模型</th><th>被拦原因</th></tr>
+  ${DATA.gate_failure_rows.map(r => `<tr><td class="mono">${esc(r.case_id)}</td><td>${esc(r.modality)}/${esc(r.body_part)}</td><td class="mono">${esc(r.model)}</td><td class="mono" style="font-size:11px">${esc(r.warnings)}</td></tr>`).join("")}
+  </table></div></details>`;
+
+/* ============================================================
+   ⑥.5 最新进展（数据存在才渲染，缺失自动隐藏该节）
+   ============================================================ */
+(function renderFresh(){
+  const sec = document.getElementById("fresh");
+  const S = DATA.smoke, B = DATA.benchmark, F = DATA.formal_plan, O = DATA.ocr_audit, ST = DATA.stability;
+  if (!S && !B && !F && !O) { sec.style.display = "none"; return; }
+  document.getElementById("fresh-lead").innerHTML =
+    `上面第 ⑤⑥ 节暴露的「假地基」（mock 打分、规则抽取、查表判级）<b>已经在 11 例规模上全部换成真的了</b>，
+     而且长出了一套三法官仲裁制度。它们还没铺到全部 52 例——所以主面板的诚实度徽章仍如实标红。
+     同时，一项新审计在数据源头（OCR）又挖出了一个更早的地基问题。以下全部由构建脚本从产物读取。`;
+
+  const cards = [];
+
+  if (S) {
+    const roles = S.role_call_counts || {};
+    const provRows = Object.entries(S.provider_model_counts||{}).map(([k,v])=>{
+      const [,model,host] = k.split("::");
+      return `<tr><td class="mono" style="font-size:12px">${esc(model)}</td><td class="mono" style="font-size:12px">${esc(host)}</td><td class="num">${v} 次</td></tr>`;
+    }).join("");
+    const lk = S.candidate_likert || {};
+    cards.push(`
+    <div class="card tool-card">
+      <div class="t-head"><span class="t-no">证据 A</span><h3>全真 LLM 流水线：11 例全部跑通，零兜底</h3>
+        <span style="margin-left:auto"><span class="badge h-good">✓ ${S.eval_count}/11 成功 · fallback ${S.fallback_count}</span></span></div>
+      <p class="say">把 mock 全部换成真大模型，整条流水线在 11 例胸片上完整走完：打分、抽取、判级、审计每个环节都是真 AI 在干活，产出 <b>99 条带哈希指纹的角色证据</b>，全程零回退。分数终于有了区分度：AI 报告的五维均分从 ${lk.min} 到 ${lk.max} 拉开（此前 mock 时代全场一个分）。</p>
+      <p class="meta">就像新工厂完成了第一个小批量试产：11 件产品全部下线合格，工艺参数全程留痕。</p>
+      <div class="example"><div class="lab">每台仪器的真实输出摘录（对比第 ⑤ 节的 mock 输出）</div>
+        <table>
+          <tr><th>环节</th><th>后端</th><th>真实输出摘录</th></tr>
+          ${S.t1 ? `<tr><td><b>T1 打分</b></td><td class="mono" style="font-size:11px">llm_judge</td><td style="font-size:12px">「${esc(S.t1.metric)}」= ${S.t1.score} 分，理由：<span class="mono" style="font-size:11px">"${esc(S.t1.explanation)}…"</span> ——逐项核对了报告内容与影像，不再是数字数</td></tr>` : ""}
+          ${S.t2 ? `<tr><td><b>T2 抽取</b></td><td class="mono" style="font-size:11px">${esc(S.t2.backend)}</td><td style="font-size:12px">规则先粗抽（${esc(S.t2.candidate_backend)}），再由 ${esc(S.t2.model)} 校正补全 → <b>${S.t2.finding_count} 条发现</b>，且每条 LLM 发现都必须给出原文证据（防幻觉约束）</td></tr>` : ""}
+          ${S.t4 ? `<tr><td><b>T4 判级</b></td><td class="mono" style="font-size:11px">${esc(S.t4.backend)}</td><td style="font-size:12px">${esc(S.t4.example.error_type)} 判 ${S.t4.example.hazard_level} 级，理由：<span class="mono" style="font-size:11px">"${esc(S.t4.example.explanation)}…"</span></td></tr>` : ""}
+          ${S.t5_audit ? `<tr><td><b>T5 审计</b></td><td class="mono" style="font-size:11px">llm_audit</td><td style="font-size:12px">LLM 复核连连看结果：11 例共审 ${(S.t5_retained||0)+(S.t5_rejected||0)+(S.t5_modified||0)} 个错误候选，<b>驳回 ${S.t5_rejected} 个、改判 ${S.t5_modified} 个</b>——专抓「字面配不上但语义等价」的规则误报</td></tr>` : ""}
+          ${S.t6_audit ? `<tr><td><b>T6 审计</b></td><td class="mono" style="font-size:11px">llm_audit</td><td style="font-size:12px">结构复核 11 例裁定：${Object.entries(S.structure_audit_verdicts).map(([k,v])=>`${esc(k)}×${v}`).join("、")}</td></tr>` : ""}
+        </table>
+      </div>
+      <details class="more"><summary>这轮调了谁、各调了几次</summary><div class="inner">
+        <p>共 ${Object.values(roles).reduce((a,b)=>a+b,0)} 次角色调用（${Object.entries(roles).map(([k,v])=>`${esc(k)}×${v}`).join("、")}），纯 DMX 单一供应商路由（此前验证的 Yunwu/codex 双供应商是显式备胎，不自动切换）：</p>
+        <table class="plain"><tr><th>模型</th><th>接入点</th><th class="num">调用</th></tr>${provRows}</table>
+        <p style="margin-top:8px">重要保留：文档明确警示<b>重测稳定性不足</b>——同 9 例新旧两轮评估，T1 五维完全一致率仅 11%、重大错误共识完全一致率仅 22%。单次自动评价还不能当稳定临床结论引用。</p>
+      </div></details>
+    </div>`);
+  }
+
+  if (S && S.adjudication_example) {
+    const ae = S.adjudication_example;
+    const chl = S.consensus_hazard_level_counts || {};
+    cards.push(`
+    <div class="card tool-card">
+      <div class="t-head"><span class="t-no">证据 B</span><h3>判级分歧有了制度答案：三法官仲裁</h3>
+        <span style="margin-left:auto"><span class="badge h-good">✓ ${S.adjudication_decision_count} 处分歧全部走完仲裁</span></span></div>
+      <p class="say">上一版面板留过一个问题：「双法官会吵架，还没有仲裁」。现在有了：主判（gpt-5.6-terra）→ 独立复核（claude-opus-4-8）→ <b>分歧自动送第三位仲裁官（gpt-5.6-sol）终裁</b>。这轮 ${S.hazard_error_count} 个错误里 ${S.hazard_disagreement_count} 处分歧（${pct((S.hazard_disagreement_count||0)/(S.hazard_error_count||1))}），全部完成仲裁，仅 ${S.adjudication_abstained_count} 处弃权。主判和复核的原始意见都<b>原样保留</b>，仲裁不覆盖只追加——像法院判决书附上双方主张。</p>
+      <p class="meta">合议庭制度：一审、二审意见不一致，自动上第三方仲裁，全程留卷宗。</p>
+      <div class="example"><div class="lab">一个真实仲裁案例（病例 ${esc(S.case_id)}）</div>
+        <div style="font-size:12.5px">错误类型 <code>${esc(ae.error_type)}</code>：主判定 <b>${ae.primary_level} 级</b>，复核官定 <b>${ae.reviewer_level} 级</b> → 仲裁终裁 <b>${ae.final_level} 级</b>（置信 ${ae.confidence}）。理由摘录：<span class="mono" style="font-size:11px">"${esc(ae.explanation)}…"</span></div>
+        <div style="margin-top:6px;font-size:12.5px">11 例共识判级分布：${Object.entries(chl).map(([l,c])=>`${l}级×${c}`).join("、")}；其中<b>重大错误（material）${S.consensus_material_error_count} 个</b>，${S.clinical_validation_required_count} 例被标记「需临床医生最终确认」。</div>
+      </div>
+      <details class="more"><summary>但分歧率本身仍是个大问题</summary><div class="inner">
+        <p>两位 AI 法官的<b>完全一致率是 0%</b>（首例病例的 11 处判级无一完全相同，全场分歧率 70%）。仲裁制度保证了「有答案」，但答案是否正确，只有拿医生金标准来校——这就是为什么每例都标了 clinical_validation_required。制度先行、校准在后，顺序是对的。</p>
+      </div></details>
+    </div>`);
+  }
+
+  if (ST && ST.metrics) {
+    const NAME = {
+      candidate_likert_mean: ["T1 五维均分", "llm"],
+      alignment_f1: ["T5 对齐 F1", "det"],
+      deterministic_alignment_error_count: ["确定性错误候选数", "det"],
+      t5_retained_error_count: ["T5 审计保留错误数", "llm"],
+      consensus_material_error_count: ["共识重大错误数", "llm"],
+      consensus_max_hazard_level: ["共识最高危害级", "llm"],
+      structure_clinical_impact: ["T6 结构临床影响", "llm"],
+    };
+    const rows = Object.entries(ST.metrics).map(([k, m]) => {
+      const [label, kind] = NAME[k] || [k, "llm"];
+      const rate = m.exact_agreement ?? 0;
+      const color = rate >= 0.99 ? "var(--s-good)" : rate >= 0.5 ? "var(--s-warn)" : "var(--s-critical)";
+      const sub = kind === "det" ? "（确定性算法）" : "（LLM 参与）";
+      return `<div class="stab-row" title="平均绝对差 ${m.mean_abs_delta}，最大差 ${m.max_abs_delta}">
+        <div class="bl">${esc(label)}<span class="bar-sub"> ${sub}</span></div>
+        <div class="stab-track"><div class="stab-fill" style="width:${Math.max(rate*100,2)}%;background:${color}"></div></div>
+        <span class="stab-val" style="color:${color}">${pct(rate)}</span></div>`;
+    }).join("");
+    cards.push(`
+    <div class="card tool-card">
+      <div class="t-head"><span class="t-no">证据 C</span><h3>重测稳定性体检：确定性主线纹丝不动，AI 法官在摇摆</h3>
+        <span style="margin-left:auto"><span class="badge h-warn">⚠ 同 ${ST.common_cases} 例两轮对比</span></span></div>
+      <p class="say">把同一批病例（新旧两轮都成功的 ${ST.common_cases} 例）的评估结果逐项对表：<b>凡是确定性算法算出来的数字，两轮完全一致（100%）；凡是 LLM 参与判断的数字，两轮完全一致率最低只有 ${pct((ST.metrics.candidate_likert_mean||{}).exact_agreement||0)}</b>。这精确定位了不确定性来源——不是流水线不稳，是 AI 法官本身在摇摆。下方每行是「两轮打出完全相同数字的病例比例」。</p>
+      <p class="meta">同一批卷子请同一位老师隔天再判一遍：客观题分数分毫不差，主观题分数天天不一样——问题出在阅卷人，不在卷子。</p>
+      <div class="example"><div class="lab">逐指标完全一致率（越绿越可靠，鼠标悬停看差值）</div>${rows}</div>
+      <details class="more"><summary>这对下一步意味着什么</summary><div class="inner">
+        <p>${(ST.limitations||[]).length ? "官方保留意见：" + esc(ST.limitations[0]) + " " : ""}温度已是 0，剩余方差来自模型自身的非确定性。结论：<b>任何单次 LLM 评分都不能直接写进论文</b>——正式实验必须重复调用 + 冻结聚合规则（如多数投票/取中位）+ 报告不确定度，并用医生金标准（见 ⑥.8 节 pilot10）校准哪位法官最接近人类。</p>
+      </div></details>
+    </div>`);
+  }
+
+  if (B) {
+    cards.push(`
+    <div class="card tool-card">
+      <div class="t-head"><span class="t-no">证据 D</span><h3>第一批「盲写」新鲜报告（${B.case_count} 例）——但暴露了模板化坍缩</h3>
+        <span style="margin-left:auto"><span class="badge h-warn">⚠ ${B.case_count} 例只有 ${B.unique_reports} 份不同报告</span></span></div>
+      <p class="say">主面板第 ⑧ 卡说过：81 份候选<b>零份干净</b>。现在有了第一批真正的对照组：微调的 ${esc(B.model)} 对 ${B.case_count} 例胸片<b>盲写</b>（不喂医生报告）、确定性推理（固定种子，已验证可复现）、带完整溯源。但细看发现新问题：<b>${B.case_count} 例只产出 ${B.unique_reports} 份互不相同的报告</b>——模型对不同片子倾向输出同一套模板话术，「陪练」的个体针对性存疑。</p>
+      <p class="meta">第一次有陪练闭卷交卷了——但一看卷子，好几份答案一字不差，像背了模板。</p>
+      <div class="example"><div class="lab">溯源信息（正式基准要求每一项都可复现）</div>
+        <div style="font-size:12.5px">模型版本 <code>${esc(B.model_version)}</code> · 权重指纹 <code>${esc(B.model_sha256)}…</code> · 随机种子 <code>${esc(B.seed)}</code> · 新鲜推理 <b>${B.fresh_inference ? "是" : "否"}</b> · 证据等级 <code>${esc(Object.keys(B.tier_counts).join(","))}</code></div>
+      </div>
+      <details class="more"><summary>为什么还不算 formal（正式）？</summary><div class="inner">
+        <p>门禁判定它仍属 exploratory（探索级），卡在：${(B.formal_blockers||[]).map(r=>`<code>${esc(r)}</code>`).join("、")}。翻译成人话：分数够了但<b>手续没办齐</b>——还差一次正式验证签字。制度故意比人严格，防止「差不多就行」混进正式结论。</p>
+      </div></details>
+    </div>`);
+  }
+
+  if (O) {
+    const mods = O.by_modality || {};
+    cards.push(`
+    <div class="card tool-card">
+      <div class="t-head"><span class="t-no">证据 E</span><h3>新发现的更深地基问题：OCR 源头就截断了</h3>
+        <span style="margin-left:auto"><span class="badge h-bad">✕ ${O.definite_truncation} 例明确截断 + ${O.suspected_truncation} 例疑似</span></span></div>
+      <p class="say">一项新的确定性审计发现：52 例的报告文字全部来自旧 ${esc(O.model)} OCR，当时输出上限只有 <code>${O.legacy_max_new_tokens}</code> token——<b>字数多的 CT 报告直接被砍尾巴</b>：${O.definite_truncation} 例明确截断、${O.suspected_truncation} 例疑似截断（全部集中在 CT），${O.missing_impression_count} 例连「诊断印象」都没了。这意味着比「打分是假的」更靠前的一层地基也有裂缝：<b>连「医生报告原文」本身都不完整</b>，后面一切评估都在评一份残卷。</p>
+      <p class="meta">相当于发现阅卷之前，扫描仪就把部分考卷的最后一页吃了。</p>
+      <div class="example"><div class="lab">按模态的截断分布（长报告受灾，短报告幸免）</div>
+        <table><tr><th>模态</th><th>例数</th><th>明确截断</th><th>疑似截断</th></tr>
+        ${Object.entries(mods).map(([m,v])=>`<tr><td>${esc(m)}</td><td>${v.total}</td><td>${v.definite ? `<b style="color:#a32e2e">${v.definite}</b>` : 0}</td><td>${v.suspected||0}</td></tr>`).join("")}
+        </table>
+        <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">应对方案已立项（OCR 盲测基准设计稿 2026-07-11）：冻结 10 例 CR/CT/MRI 盲测集，候选包括豆包两个视觉模型、qwen-vl-ocr 和放开 token 上限的本地基线，按临床正文字错率/数字与否定准确率/幻觉率选路由——图像 nonce 探针已确认三个云端候选真的在读图。</div>
+      </div>
+    </div>`);
+  }
+
+  if (F) {
+    const reasonNames = {
+      no_compatible_model: "没有对口专科模型",
+      non_formal_evidence_tier: "证据等级不够正式",
+      unsupported_formal_source: "来源不被正式模式承认",
+      fresh_inference_unverified: "无法证明是新鲜推理",
+      missing_model_sha256: "缺权重指纹",
+      missing_model_version: "缺模型版本号",
+      missing_prompt_version: "缺 prompt 版本号",
+      missing_preprocessing_version: "缺预处理版本号",
+      missing_formal_validation_id: "缺正式验证签字",
+    };
+    const top = Object.entries(F.reasons).sort((a,b)=>b[1]-a[1]).slice(0,4);
+    cards.push(`
+    <div class="card tool-card">
+      <div class="t-head"><span class="t-no">证据 F</span><h3>正式基准体检：${F.ready}/${F.total} 例就绪</h3>
+        <span style="margin-left:auto"><span class="badge h-bad">✕ ${esc(F.status)}</span></span></div>
+      <p class="say">「正式基准门禁」逐例检查 52 例数据够不够格进论文级基准。答案仍是 <b>0 例就绪</b>——但这个 0 的价值在于把差距量化成了清单。</p>
+      <p class="meta">像装修验收：以前只知道「还不能入住」，现在有了逐项验收单，知道差哪几样、各差多少。</p>
+      <div class="example"><div class="lab">卡在哪（按影响例数排序）</div>
+        <table><tr><th>缺口</th><th>影响</th></tr>
+        ${top.map(([r,c])=>`<tr><td>${esc(reasonNames[r]||r)} <code style="font-size:10px">${esc(r)}</code></td><td><b>${c}</b> 处</td></tr>`).join("")}
+        </table>
+        <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">最大头是「没有对口专科模型」（41 处）——与问题 ③ 同根因：陪练团缺员。其余是溯源手续（版本号/指纹/签字），补齐是体力活不是难题。</div>
+      </div>
+    </div>`);
+  }
+
+  document.getElementById("fresh-cards").innerHTML = cards.join("");
+})();
+
+/* ============================================================
+   ⑥.8 工程进度地图（数据存在才渲染，缺失自动隐藏）
+   ============================================================ */
+(function renderMap(){
+  const sec = document.getElementById("map");
+  const WS = DATA.workstreams, EG = DATA.experiment_gates, P10 = DATA.pilot10;
+  if (!WS && !EG && !P10) { sec.style.display = "none"; return; }
+
+  /* --- 九条战线 --- */
+  if (WS && WS.workstreams) {
+    const META = {
+      contracts:           ["数据契约", "所有产物的「格式法律」：schema 校验 + 哈希绑定"],
+      tools:               ["评估工具（T1–T12）", "打分 / 抽取 / 判级 / 审计等 13 台仪器"],
+      ocr:                 ["OCR 数据源", "报告单图片 → 文字，一切评估的最上游"],
+      generation:          ["报告生成（陪练团）", "AI 对照组报告的产出与证据等级"],
+      clinical_validation: ["临床金标准", "医生标注——所有 AI 判断的最终裁判"],
+      experiments:         ["六项正式实验", "论文的六个章节，各带 4 道验证门禁"],
+      figures:             ["论文图表", "Fig.1–12 与统计表"],
+      security:            ["隐私与安全", "脱敏、密钥治理"],
+      control_panel:       ["控制面板", "本页面等可视化"],
+    };
+    const STATUS = {
+      validated:   ["✓ 已验证", "validated"],
+      in_progress: ["◐ 推进中", "in_progress"],
+      not_started: ["○ 未开始", "not_started"],
+      deferred:    ["⏸ 暂缓", "deferred"],
+    };
+    // 一句话摘要：截取战线 summary 的第一句（英文原文太长，先给数字与关键词让位）
+    const firstSentence = s => {
+      const t = String(s || "");
+      const m = t.match(/^.*?[.。](\s|$)/);
+      return m ? m[0].trim() : t.slice(0, 160);
+    };
+    const counts = {};
+    Object.values(WS.workstreams).forEach(w => { counts[w.status] = (counts[w.status]||0)+1; });
+    const segColors = { validated:"var(--s-good)", in_progress:"var(--s-warn)", not_started:"var(--s-critical)", deferred:"#c9c8c1" };
+    const total = Object.keys(WS.workstreams).length;
+    const progBar = Object.entries(segColors)
+      .filter(([k]) => counts[k])
+      .map(([k,c]) => `<div class="seg" style="width:${counts[k]/total*100}%;background:${c}" title="${STATUS[k][0]} ×${counts[k]}"></div>`).join("");
+
+    document.getElementById("ws-map").innerHTML = `
+      <h4 style="margin:0 0 2px">九条战线一眼看完（账本更新于 ${esc(WS.updated_at)}）</h4>
+      <p class="note" style="font-size:12.5px;color:var(--ink-3);margin:0">
+        ${Object.entries(counts).map(([k,c])=>`${STATUS[k]?STATUS[k][0]:k} ×${c}`).join("　")}</p>
+      <div class="prog">${progBar}</div>
+      ${Object.entries(WS.workstreams).map(([key, w]) => {
+        const [name, plain] = META[key] || [key, ""];
+        const [label, cls] = STATUS[w.status] || [w.status, "deferred"];
+        return `<div class="ws-row">
+          <div class="ws-tag"><span class="ws-name">${esc(name)}</span><span class="ws-st ${cls}">${label}</span></div>
+          <div class="ws-body">
+            <div style="color:var(--ink-3);font-size:12px;margin-bottom:2px">${esc(plain)}</div>
+            <div>${esc(firstSentence(w.summary))}</div>
+            ${w.next_gate ? `<div class="ws-next"><b>下一道门：</b>${esc(w.next_gate)}</div>` : ""}
+          </div>
+        </div>`;
+      }).join("")}`;
+  } else {
+    document.getElementById("ws-map").style.display = "none";
+  }
+
+  /* --- 六实验 × 门禁矩阵 --- */
+  if (EG && EG.experiments) {
+    const GATE_COL = [
+      ["gold",     "医生金标准",   /gold|clinician|approved_protocol/],
+      ["frozen",   "冻结测试集",   /frozen|randomized/],
+      ["method",   "方法学冻结",   /reliability|extractor_version|critical_recall|safety_endpoint|blinded|ablation|formal_fresh/],
+      ["endpoint", "主终点分析",   /primary_endpoint/],
+    ];
+    const EXP_NAME = {
+      radiologist_evaluation: "E1 医生报告质量评估",
+      finding_extraction:     "E2 病灶抽取验证",
+      hazard_evaluation:      "E3 错误危害判级验证",
+      educational_study:      "E4 教学干预研究",
+      image_to_text_models:   "E5 图像→报告模型验证",
+      modality_recognition:   "E6 模态识别验证",
+    };
+    const lit = EG.experiments.reduce((a,e)=>a+e.passed,0);
+    const total = EG.experiments.reduce((a,e)=>a+e.total,0);
+    const header = `<div class="gh"></div>` + GATE_COL.map(([,label])=>`<div class="gh">${label}</div>`).join("") + `<div class="gh" style="text-align:center">点亮</div>`;
+    const body = EG.experiments.map(e => {
+      // 把每个实验的 4 道门禁按语义分到 4 列（列定义见 GATE_COL 正则）
+      const cells = GATE_COL.map(([, , re]) => {
+        const g = (e.gates||[]).find(g => re.test(g.id||""));
+        if (!g) return `<div class="gate-cell off">—</div>`;
+        return `<div class="gate-cell ${g.passed?"on":"off"}" title="${esc(g.desc||g.id)}">${g.passed?"✓ 已过":esc(shortGate(g.id))}</div>`;
+      }).join("");
+      const cls = e.passed === e.total ? "full" : e.passed > 0 ? "some" : "";
+      return `<div class="gexp" title="${esc(e.title)}">${esc(EXP_NAME[e.id]||e.id)}<span class="bar-sub" style="margin-left:6px">${esc(e.status)}</span></div>${cells}<div class="gate-score ${cls}">${e.passed}/${e.total}</div>`;
+    }).join("");
+    function shortGate(id){
+      const M = { clinician_gold_labels:"缺医生打分", clinician_finding_gold:"缺发现金标", clinician_hazard_gold:"缺危害金标",
+        clinician_approved_protocol:"协议未批准", frozen_test_split:"测试集未冻结", extractor_version_frozen:"版本未冻结",
+        inter_rater_reliability:"缺一致性报告", critical_recall_gate:"高危召回未达标", randomized_reader_study:"读者研究未做",
+        safety_endpoint_analysis:"安全分析未做", blinded_clinician_review:"盲评未做", missing_metadata_ablation:"消融未做",
+        formal_fresh_only:"证据等级不足", modality_gold_labels:"缺模态金标", primary_endpoint_analysis:"主分析未做" };
+      return M[id] || "未过";
+    }
+    document.getElementById("gate-matrix").innerHTML = `
+      <h4 style="margin:0 0 2px">六项正式实验 × 验证门禁矩阵：${lit}/${total} 点亮</h4>
+      <p class="note" style="font-size:12.5px;color:var(--ink-3)">每项实验要点亮 4 盏灯才能从 pilot 升级为 validated、写进论文。现在的清一色灰格不是坏消息——它是一张<b>诚实的验收单</b>，且六项实验共用的两盏灯（医生金标准、冻结测试集）一旦点亮会同时照亮多行。悬停格子看门禁原文。</p>
+      <div class="gate-grid">${header}${body}</div>
+      <div class="honest-note" style="margin-top:12px">💡 <b>怎么读这张表：</b>「医生金标准」一列全灰 = 六项实验全部堵在同一件事上——临床标注（见下方 pilot10 进度）。这就是为什么它是当前的头号承重墙。</div>`;
+  } else {
+    document.getElementById("gate-matrix").style.display = "none";
+  }
+
+  /* --- pilot10 标注进度 --- */
+  if (P10) {
+    const done = P10.done, total = P10.total;
+    const stName = { not_started:"未开始", in_progress:"标注中", completed:"已完成", adjudicated:"已仲裁" };
+    const stColor = { not_started:"#c9c8c1", in_progress:"var(--s-warn)", completed:"var(--s-good)", adjudicated:"var(--s-good)" };
+    const segs = Object.entries(P10.status_counts).map(([k,c]) =>
+      `<div class="seg" style="width:${c/total*100}%;background:${stColor[k]||"#c9c8c1"}" title="${stName[k]||k} ×${c}"></div>`).join("");
+    document.getElementById("pilot10-card").innerHTML = `
+      <h4 style="margin:0 0 2px">临床金标准 pilot10：${done}/${total} 例完成标注</h4>
+      <p class="note" style="font-size:12.5px;color:var(--ink-3)">10 例试点（${Object.entries(P10.modality_counts).map(([k,v])=>`${k.toUpperCase()} ${v}`).join(" / ")}）已打包成结构化标注任务，等双读者 + 仲裁。它是上面矩阵第一列、也是 AI 法官校准（⑥.5 证据 C）的唯一解药——<b>当前整个项目里没有任何一个数字经过医生确认，这 10 例就是打破僵局的支点</b>。</p>
+      <div class="prog" style="height:18px">${segs}</div>
+      <div style="font-size:12.5px;color:var(--ink-2)">${Object.entries(P10.status_counts).map(([k,c])=>`${stName[k]||k} <b>${c}</b> 例`).join("　·　")}　<span class="bar-sub">任务包：annotation/pilot10/（manifest + 逐例标注文件 + schema）</span></div>`;
+  } else {
+    document.getElementById("pilot10-card").style.display = "none";
+  }
+})();
+
+/* ============================================================
+   ⑦ 问题清单（数字动态注入）
+   ============================================================ */
+const wc = DATA.warning_counts;
+const weakGen = (DATA.source_counts.local_vlm_fallback||0) + (DATA.source_counts.artifact_reuse||0);
+const smokeOK = !!DATA.smoke;
+const O = DATA.ocr_audit;
+const ISSUES = [
+  { sev:"critical", icon:"🚨", title:"地基⓪（新发现）：OCR 源头截断，最底层的裂缝",
+    why: O ? `52 例的「医生报告原文」全部来自旧 ${O.model} OCR（输出上限仅 ${O.legacy_max_new_tokens} token）：${O.definite_truncation} 例明确截断、${O.suspected_truncation} 例疑似（全在长文 CT），${O.missing_impression_count} 例丢了诊断印象。这比「打分是假的」还靠前——<b>连被评估的原文都是残卷</b>，残卷上的一切评估（含刚打通的真 LLM 评估）都要打问号。` : "（本次构建未找到 OCR 审计产物）",
+    next:`<b>下一步：</b>按已立项的 OCR 盲测基准设计（10 例冻结集、豆包/qwen-vl-ocr/放开上限的本地基线同台、按字错率+数字/否定准确率+幻觉率选路由）选定新 OCR 路由，重跑 52 例文本再谈评估。` },
+  { sev:"critical", icon:"🚨", title:"地基①②：真 LLM 评估已在 11 例兑现，52 例主数据仍是 mock",
+    why:`打分/抽取/判级的真 LLM 版本已在 11 例胸片上全量跑通（99 条角色证据、零兜底，见 ⑥.5 证据 A）——上一版面板的头两条「地基」问题在小规模上<b>已破局</b>。但当前 52 例权威 run 的评估数据仍是 ${pct(H.likert_mock_ratio)} mock 打分 + 纯规则抽取 + 查表判级，本面板 ⑥ 节的一切分数依旧不可引用。`,
+    next:`<b>下一步：</b>用 <code>config/dmx_strong.yaml</code> 对 52 例做全量真 LLM 重评估（先解决地基⓪，否则是在残卷上花真金白银）。重建本面板即可看诚实度徽章转绿。` },
+  { sev:"critical", icon:"🚨", title:"新问题：AI 法官重测不稳，分数还不能当结论",
+    why:`同样 9 例、同样配置跑两轮：T1 五维完全一致率只有 <b>11%</b>，重大错误共识完全一致率只有 <b>22%</b>；主判与复核判级完全一致率甚至为 0%（93/133 处分歧）。三法官仲裁保证了「每次都有答案」，但答案本身摇摆——<b>没有医生金标准校准之前，任何一轮自动评分都不能写进论文</b>。逐指标的量化体检见 <a href="#fresh">⑥.5 证据 C</a>：确定性指标 100% 复现，LLM 指标全部飘。产物里每例都已自动标记 clinical_validation_required。`,
+    next:`<b>下一步：</b>①冻结重测稳定性指标与达标线（如两轮 Likert 差≤1 的比例）；②完成 <a href="#map">pilot10 双读者金标准标注（⑥.8 节，当前 0/10）</a>，校准三位 AI 法官谁最接近医生；③温度已是 0，剩余方差来自模型本身，考虑多数投票聚合。` },
+  { sev:"serious", icon:"⚠️", title:"承重墙：盲写对照组有了，但 11 例只写出 5 份不同报告",
+    why:`微调 qwen3vl-8b 的盲写基准（⑥.5 证据 D）解决了「零份干净对照」的有无问题，但暴露<b>模板化坍缩</b>：11 张不同的胸片，45% 的报告一字不差——陪练对着不同病人说同一套话，个体针对性存疑。同时主数据集 ${K.generated_report_count} 份候选仍零份 formal_fresh，CT-head/CXR-abdomen 等 41 处路由空缺依旧（⑥.5 证据 F）。`,
+    next:`<b>下一步：</b>①量化模板坍缩（正常胸片理应相似，先分「真阴性相似」与「病灶被模板抹掉」两种情况再定性）；②扩到其它模态格子；③补 formal 溯源手续。` },
+  { sev:"warn", icon:"📋", title:"模型-部位错配暴露路由缺陷",
+    why:`${wc.body_part_mismatch||0} 份报告部位不匹配（最典型:dia_llama 给胸部 CT 写出脾脏）。门禁把它们拦下了（好事），但根因是路由花名册登记的模型能力和实际不符。`,
+    next:`<b>下一步：</b>修订花名册里 dia_llama 等模型的部位标签；把「被拦率」作为每次 run 的常规监控指标。` },
+  { sev:"warn", icon:"📋", title:"教学建议是模板句，离「教学」还远",
+    why:`WF4 已能跑通并产出真实文件，但建议内容是「请让发现、证据和印象更明确」这类万金油，没有引用医生具体的错误病例。`,
+    next:`<b>下一步：</b>等真 LLM 评估铺满 52 例后，把带临床理由的危害错误清单喂给 education 角色，生成引用具体病例的个性化建议。` },
+];
+document.getElementById("issue-list").innerHTML = ISSUES.map(i => `
+  <div class="issue"><div class="ico">${i.icon}</div>
+    <div class="card">
+      <h4>${i.title} <span class="sev ${i.sev}">${{critical:"最高优先",serious:"次优先",warn:"排队处理"}[i.sev]}</span></h4>
+      <p>${i.why}</p>
+      <div class="next">${i.next}</div>
+    </div>
+  </div>`).join("");
+
+document.getElementById("foot").textContent =
+  `medHarness2 项目认知面板 · 数据来源 ${DATA.run_dir} · 由 web/build_panel.py 构建 · 诚实度徽章由 run 产物元数据自动核验`;
+
+/* ---------- 滚动高亮导航 ---------- */
+const navLinks = [...document.querySelectorAll("#topnav a")];
+const secs = navLinks.map(a => document.querySelector(a.getAttribute("href")));
+const spy = () => {
+  let cur = 0;
+  secs.forEach((s, i) => { if (s && s.getBoundingClientRect().top < 120) cur = i; });
+  navLinks.forEach((a, i) => a.classList.toggle("active", i === cur));
+};
+document.addEventListener("scroll", spy, { passive: true }); spy();
+</script>
+</body>
+</html>

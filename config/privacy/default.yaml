@@ -1,0 +1,6 @@
+enforce_external: true
+block_external_images: true
+allowed_external_classifications:
+  - deidentified_structured
+  - synthetic_test
+  - public_nonclinical

@@ -1,0 +1,470 @@
+{
+  "$defs": {
+    "HazardDisagreement": {
+      "additionalProperties": false,
+      "properties": {
+        "error_index": {
+          "minimum": 0,
+          "title": "Error Index",
+          "type": "integer"
+        },
+        "error_type": {
+          "minLength": 1,
+          "title": "Error Type",
+          "type": "string"
+        },
+        "primary_hazard_level": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Primary Hazard Level",
+          "type": "integer"
+        },
+        "reviewer_hazard_level": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Reviewer Hazard Level",
+          "type": "integer"
+        },
+        "level_delta": {
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Level Delta",
+          "type": "integer"
+        },
+        "primary_recommended_action": {
+          "minLength": 1,
+          "title": "Primary Recommended Action",
+          "type": "string"
+        },
+        "reviewer_recommended_action": {
+          "minLength": 1,
+          "title": "Reviewer Recommended Action",
+          "type": "string"
+        },
+        "disagreement_types": {
+          "items": {
+            "enum": [
+              "hazard_level",
+              "recommended_action"
+            ],
+            "type": "string"
+          },
+          "title": "Disagreement Types",
+          "type": "array"
+        },
+        "requires_adjudication": {
+          "default": true,
+          "title": "Requires Adjudication",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "error_index",
+        "error_type",
+        "primary_hazard_level",
+        "reviewer_hazard_level",
+        "level_delta",
+        "primary_recommended_action",
+        "reviewer_recommended_action"
+      ],
+      "title": "HazardDisagreement",
+      "type": "object"
+    },
+    "HazardJudgement": {
+      "additionalProperties": false,
+      "properties": {
+        "error_type": {
+          "minLength": 1,
+          "title": "Error Type",
+          "type": "string"
+        },
+        "hazard_level": {
+          "maximum": 5,
+          "minimum": 1,
+          "title": "Hazard Level",
+          "type": "integer"
+        },
+        "explanation": {
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "recommended_action": {
+          "minLength": 1,
+          "title": "Recommended Action",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "evidence_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Ids",
+          "type": "array"
+        },
+        "abstain": {
+          "default": false,
+          "title": "Abstain",
+          "type": "boolean"
+        },
+        "finding": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Finding"
+        },
+        "candidate": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference"
+        },
+        "a": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "A"
+        },
+        "b": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "B"
+        },
+        "observation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "measurement": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measurement"
+        },
+        "certainty": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Certainty"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Text"
+        },
+        "alignment_error_index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alignment Error Index"
+        },
+        "alignment_audit_judgement": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alignment Audit Judgement"
+        },
+        "original_error_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Original Error Type"
+        }
+      },
+      "required": [
+        "error_type",
+        "hazard_level",
+        "explanation",
+        "recommended_action"
+      ],
+      "title": "HazardJudgement",
+      "type": "object"
+    },
+    "HazardResult": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "2.0",
+          "default": "2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "artifact_type": {
+          "const": "hazard_result",
+          "default": "hazard_result",
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "errors": {
+          "items": {
+            "$ref": "#/$defs/HazardJudgement"
+          },
+          "title": "Errors",
+          "type": "array"
+        },
+        "provenance": {
+          "$ref": "#/$defs/ModelProvenance"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "provenance"
+      ],
+      "title": "HazardResult",
+      "type": "object"
+    },
+    "ModelProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "implementation_type": {
+          "minLength": 1,
+          "title": "Implementation Type",
+          "type": "string"
+        },
+        "provider": {
+          "default": "",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "default": "",
+          "title": "Model",
+          "type": "string"
+        },
+        "version": {
+          "default": "",
+          "title": "Version",
+          "type": "string"
+        },
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        },
+        "prompt_version": {
+          "default": "",
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "fallback_used": {
+          "default": false,
+          "title": "Fallback Used",
+          "type": "boolean"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "implementation_type"
+      ],
+      "title": "ModelProvenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_type": {
+      "const": "hazard_review",
+      "default": "hazard_review",
+      "title": "Artifact Type",
+      "type": "string"
+    },
+    "primary_result_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Primary Result Sha256",
+      "type": "string"
+    },
+    "primary_provenance": {
+      "$ref": "#/$defs/ModelProvenance"
+    },
+    "reviewer_result": {
+      "$ref": "#/$defs/HazardResult"
+    },
+    "disagreements": {
+      "items": {
+        "$ref": "#/$defs/HazardDisagreement"
+      },
+      "title": "Disagreements",
+      "type": "array"
+    },
+    "agreement_summary": {
+      "additionalProperties": true,
+      "title": "Agreement Summary",
+      "type": "object"
+    },
+    "primary_preserved": {
+      "const": true,
+      "default": true,
+      "title": "Primary Preserved",
+      "type": "boolean"
+    },
+    "requires_adjudication": {
+      "default": false,
+      "title": "Requires Adjudication",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "primary_result_sha256",
+    "primary_provenance",
+    "reviewer_result"
+  ],
+  "title": "HazardReviewArtifact",
+  "type": "object"
+}

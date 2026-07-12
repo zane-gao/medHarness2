@@ -1,0 +1,677 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>medHarness2 Control Panel</title>
+<style>
+  /* ============ 设计令牌：暗色“阅片室”主题（配色已过 dataviz 校验器） ============ */
+  :root {
+    --bg: #0e1116;             /* 页面底 */
+    --surface: #161b22;        /* 卡片面（图表表面，校验基准） */
+    --surface-2: #1b222c;      /* 抬升面 */
+    --hair: #262d38;           /* 发丝线 */
+    --hair-soft: #1f2530;
+    --ink: #eef2f7;            /* 主文字 */
+    --ink-2: #a3aebc;          /* 次要文字 */
+    --ink-3: #77828f;          /* 弱化文字 */
+    --accent: #3987e5;         /* series-1 blue */
+    --accent-soft: rgba(57, 135, 229, 0.14);
+    --c-blue: #3987e5;  --c-aqua: #199e70;  --c-yellow: #c98500;
+    --c-violet: #9085e9; --c-red: #e66767;
+    --s-good: #0ca30c; --s-warn: #fab219; --s-serious: #ec835a; --s-critical: #d03b3b;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB",
+            "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    --rail-w: 208px;
+    --maxw: 1180px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.6 var(--sans);
+    /* 阅片室氛围：极淡网格 + 顶部冷光晕 */
+    background-image:
+      radial-gradient(1200px 480px at 68% -160px, rgba(57,135,229,0.09), transparent 65%),
+      linear-gradient(rgba(255,255,255,0.016) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.016) 1px, transparent 1px);
+    background-size: auto, 44px 44px, 44px 44px;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  code, .mono { font-family: var(--mono); font-size: 12px; }
+
+  /* ============ 顶栏 ============ */
+  .topbar {
+    position: sticky; top: 0; z-index: 40;
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 24px;
+    background: rgba(14, 17, 22, 0.88);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--hair);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+  .brand b { font-size: 16px; letter-spacing: 0.2px; font-weight: 700; }
+  .brand .sub { color: var(--ink-3); font-size: 12px; letter-spacing: 2px; text-transform: uppercase; font-family: var(--mono); }
+  .top-meta { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 2px 10px; border: 1px solid var(--hair); border-radius: 999px;
+    color: var(--ink-2); font-size: 12px; background: var(--surface);
+    white-space: nowrap;
+  }
+  .chip.mono { font-family: var(--mono); }
+  .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-3); flex: none; }
+  .chip.ok { color: #7ed67e; border-color: rgba(12,163,12,0.35); }
+  .chip.ok .dot { background: var(--s-good); box-shadow: 0 0 0 0 rgba(12,163,12,0.5); animation: pulse 2.4s infinite; }
+  .chip.bad { color: #f0908f; border-color: rgba(208,59,59,0.4); }
+  .chip.bad .dot { background: var(--s-critical); }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(12,163,12,0.45); } 70% { box-shadow: 0 0 0 7px rgba(12,163,12,0); } 100% { box-shadow: 0 0 0 0 rgba(12,163,12,0); } }
+
+  /* ============ 布局：左侧锚点导航 + 内容 ============ */
+  .shell { display: grid; grid-template-columns: var(--rail-w) minmax(0, 1fr); max-width: calc(var(--maxw) + var(--rail-w)); margin: 0 auto; }
+  .rail { position: sticky; top: 58px; align-self: start; height: calc(100vh - 58px); padding: 26px 8px 26px 20px; overflow-y: auto; }
+  .rail nav { display: flex; flex-direction: column; gap: 2px; }
+  .rail a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 12px; border-radius: 8px; color: var(--ink-2); font-size: 13px;
+    border-left: 2px solid transparent;
+  }
+  .rail a .idx { font-family: var(--mono); font-size: 10px; color: var(--ink-3); width: 18px; }
+  .rail a:hover { background: var(--surface); color: var(--ink); }
+  .rail a.active { background: var(--accent-soft); color: #bcd7f7; border-left-color: var(--accent); }
+  .rail a.active .idx { color: var(--accent); }
+  main { padding: 26px 24px 90px; min-width: 0; }
+
+  /* ============ 分节 ============ */
+  .panel-sec { margin-bottom: 46px; }
+  .sec-head { margin-bottom: 16px; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 3px; text-transform: uppercase;
+    color: var(--accent); display: inline-flex; align-items: center; gap: 8px;
+  }
+  .eyebrow::before { content: ""; width: 22px; height: 1px; background: var(--accent); opacity: 0.7; }
+  .sec-head h2 { margin: 6px 0 4px; font-size: 21px; font-weight: 700; letter-spacing: 0.2px; }
+  .sec-note { margin: 0; color: var(--ink-3); font-size: 13px; max-width: 76ch; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--hair); border-radius: 12px;
+    padding: 16px 18px;
+  }
+  .card h3 { margin: 0 0 4px; font-size: 14px; font-weight: 650; color: var(--ink); }
+  .card .h3-note { color: var(--ink-3); font-size: 12px; margin: 0 0 10px; }
+
+  /* ============ KPI ============ */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 10px; margin-bottom: 12px; }
+  .kpi {
+    background: var(--surface); border: 1px solid var(--hair); border-radius: 12px;
+    padding: 13px 15px 11px; position: relative; overflow: hidden;
+  }
+  .kpi::before { content: ""; position: absolute; inset: 0 auto auto 0; width: 100%; height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent 70%); opacity: 0.55; }
+  .kpi-lab { display: block; color: var(--ink-3); font-size: 11px; letter-spacing: 0.6px; }
+  .kpi-val { display: block; font-family: var(--mono); font-size: 27px; font-weight: 700; letter-spacing: -0.5px; margin: 3px 0 1px; font-variant-numeric: tabular-nums; }
+  .kpi-sub { display: block; color: var(--ink-2); font-size: 11px; }
+  .health-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+
+  /* ============ 图表 ============ */
+  .chart-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .chart-block .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 2px 0 8px; }
+  .legend .lg { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 12px; }
+  .legend .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .chart svg { display: block; }
+  .chart .c-lab { fill: var(--ink-2); font-size: 12px; font-family: var(--sans); }
+  .chart .c-val { fill: var(--ink-2); font-size: 11px; font-family: var(--mono); }
+  .chart .bar { cursor: default; }
+  .chart .bar:hover { filter: brightness(1.18); }
+  #tip {
+    position: fixed; z-index: 99; pointer-events: none; display: none;
+    background: #0b0e13; border: 1px solid var(--hair); border-radius: 8px;
+    padding: 7px 10px; font-size: 12px; color: var(--ink); max-width: 320px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+  #tip .t-sub { color: var(--ink-3); font-size: 11px; }
+
+  /* ============ 徽章 ============ */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px;
+    border: 1px solid; white-space: nowrap;
+  }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .b-ok       { color: #7ed67e; border-color: rgba(12,163,12,0.4);  background: rgba(12,163,12,0.08); }
+  .b-warn     { color: var(--s-warn); border-color: rgba(250,178,25,0.4); background: rgba(250,178,25,0.07); }
+  .b-serious  { color: var(--s-serious); border-color: rgba(236,131,90,0.4); background: rgba(236,131,90,0.07); }
+  .b-critical { color: #f0908f; border-color: rgba(208,59,59,0.45); background: rgba(208,59,59,0.09); }
+  .b-local  { color: #6da7ec; border-color: rgba(57,135,229,0.42); background: rgba(57,135,229,0.09); }
+  .b-code   { color: #4cc39a; border-color: rgba(25,158,112,0.42); background: rgba(25,158,112,0.09); }
+  .b-hybrid { color: #a89ef0; border-color: rgba(144,133,233,0.42); background: rgba(144,133,233,0.09); }
+  .b-rule   { color: #e2a53c; border-color: rgba(201,133,0,0.45); background: rgba(201,133,0,0.09); }
+  .b-plain  { color: var(--ink-2); border-color: var(--hair); background: var(--surface-2); }
+  .mchip {
+    display: inline-block; font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+    background: var(--surface-2); border: 1px solid var(--hair-soft); border-radius: 6px;
+    padding: 1px 7px; margin: 1px 2px 1px 0; white-space: nowrap;
+  }
+  .mchip b { color: var(--ink); font-weight: 600; }
+
+  /* ============ 表格 ============ */
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--hair); border-radius: 12px; background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  thead th {
+    position: sticky; top: 0; z-index: 2; text-align: left;
+    font-family: var(--mono); font-size: 10.5px; font-weight: 600;
+    letter-spacing: 1.4px; text-transform: uppercase; color: var(--ink-3);
+    background: var(--surface-2); padding: 9px 12px;
+    border-bottom: 1px solid var(--hair);
+  }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid var(--hair-soft); vertical-align: top; color: var(--ink-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: rgba(57,135,229,0.05); }
+  td .primary { color: var(--ink); }
+  td code { color: var(--ink-2); word-break: break-all; white-space: pre-wrap; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ============ 卡片网格（工具 / 实验 / API 角色 / 协议） ============ */
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .card-grid.wide { grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+  .tool-card, .role-card, .exp-card, .proto-card {
+    background: var(--surface); border: 1px solid var(--hair); border-radius: 12px;
+    padding: 14px 16px; display: flex; flex-direction: column; gap: 8px;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .tool-card:hover, .exp-card:hover, .proto-card:hover { border-color: rgba(57,135,229,0.45); transform: translateY(-1px); }
+  .tool-card header, .exp-card header, .proto-card header, .role-card header
+    { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .tid { color: var(--accent); font-weight: 600; }
+  .tool-card h4, .exp-card h4, .proto-card h4 { margin: 0; font-size: 14px; font-weight: 650; color: var(--ink); }
+  .tdesc { margin: 0; color: var(--ink-2); font-size: 12.5px; }
+  .io { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11.5px; flex-wrap: wrap; }
+  .io .io-in  { color: var(--ink-2); }
+  .io .io-arrow { color: var(--accent); }
+  .io .io-out { color: #4cc39a; }
+  .tool-card footer { color: var(--ink-3); font-size: 11.5px; border-top: 1px dashed var(--hair); padding-top: 7px; }
+  .role-card .rc-model { font-family: var(--mono); font-size: 17px; font-weight: 700; color: var(--ink); }
+  .rc-rows { display: grid; gap: 3px; font-size: 12px; color: var(--ink-2); }
+  .rc-rows span b { color: var(--ink-3); font-weight: 500; margin-right: 6px; font-size: 11px; }
+  .proto-card dl { margin: 0; display: grid; gap: 8px; }
+  .proto-card dt { font-family: var(--mono); font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ink-3); margin-bottom: 2px; }
+  .proto-card dd { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+  .proto-card .rq { margin: 0; font-size: 12.5px; color: var(--ink-2); font-style: italic; border-left: 2px solid var(--hair); padding-left: 10px; }
+  .proto-card ul { margin: 2px 0 0; padding-left: 18px; }
+  .proto-card li { margin: 2px 0; }
+
+  /* ============ 图表产物画廊 ============ */
+  .fig-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+  .fig-card { background: var(--surface); border: 1px solid var(--hair); border-radius: 12px; overflow: hidden; }
+  .fig-frame { background: #ffffff; padding: 8px; display: flex; align-items: center; justify-content: center; min-height: 132px; }
+  .fig-frame svg { width: 100%; height: auto; max-height: 190px; }
+  .fig-frame .fig-none { color: #8a8a8a; font-size: 12px; font-family: var(--mono); }
+  .fig-meta { padding: 10px 13px; display: flex; flex-direction: column; gap: 4px; }
+  .fig-meta .fm-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .fig-meta code { font-size: 10.5px; color: var(--ink-3); word-break: break-all; }
+
+  /* ============ 运行台账时间线 ============ */
+  .timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+  .timeline::before { content: ""; position: absolute; left: 7px; top: 8px; bottom: 8px; width: 1px; background: var(--hair); }
+  .reg-item { display: flex; gap: 14px; padding: 9px 0; position: relative; }
+  .reg-item .dot { flex: none; width: 15px; height: 15px; border-radius: 50%; margin-top: 3px;
+    background: var(--surface); border: 2px solid var(--ink-3); z-index: 1; }
+  .reg-item .dot.ok { border-color: var(--s-good); }
+  .reg-item .dot.bad { border-color: var(--s-critical); background: rgba(208,59,59,0.25); }
+  .reg-body { min-width: 0; flex: 1; }
+  .reg-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .reg-head .stage { font-family: var(--mono); font-size: 12.5px; color: var(--ink); font-weight: 600; }
+  .reg-head time { color: var(--ink-3); font-size: 11.5px; font-family: var(--mono); margin-left: auto; }
+  .reg-metrics { margin-top: 4px; }
+
+  /* ============ 过滤输入 / 折叠 ============ */
+  .filter-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .filter-input {
+    background: var(--surface); border: 1px solid var(--hair); border-radius: 8px;
+    color: var(--ink); padding: 6px 12px; font: 13px var(--sans); width: 260px; outline: none;
+  }
+  .filter-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .filter-count { color: var(--ink-3); font-size: 12px; font-family: var(--mono); }
+  details.fold { border: 1px solid var(--hair); border-radius: 12px; background: var(--surface); margin-top: 12px; }
+  details.fold > summary {
+    cursor: pointer; padding: 11px 16px; color: var(--ink-2); font-weight: 600; font-size: 13px;
+    list-style: none; display: flex; align-items: center; gap: 8px;
+  }
+  details.fold > summary::before { content: "▸"; color: var(--accent); transition: transform 0.15s; }
+  details.fold[open] > summary::before { transform: rotate(90deg); }
+  details.fold > .fold-body { border-top: 1px solid var(--hair); padding: 12px 16px 16px; }
+  details.fold .tbl-wrap { border: none; border-radius: 0; }
+
+  .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .stack { display: flex; flex-direction: column; gap: 12px; }
+  .warn-list { margin: 4px 0 0; padding: 0; list-style: none; }
+  .warn-list li { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-bottom: 1px dashed var(--hair-soft); font-size: 12px; }
+  .warn-list li:last-child { border-bottom: none; }
+  .warn-list .num { color: var(--ink); }
+
+  @media (max-width: 1100px) {
+    .shell { grid-template-columns: 1fr; }
+    .rail { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <b>medHarness2</b>
+    <span class="sub">Control Panel</span>
+  </div>
+  <div class="top-meta">
+    <span class="chip mono" title="run 目录">__MH2_RUN_ID__</span>
+    __MH2_STATUS_CHIP__
+    <span class="chip">面板生成 __MH2_GENERATED__</span>
+  </div>
+</header>
+
+<div class="shell">
+  <aside class="rail">
+    <nav id="rail-nav">
+      <a href="#overview"><span class="idx">01</span>系统总览</a>
+      <a href="#analysis"><span class="idx">02</span>运行分析</a>
+      <a href="#workflows"><span class="idx">03</span>工作流进展</a>
+      <a href="#tools"><span class="idx">04</span>工具矩阵</a>
+      <a href="#models"><span class="idx">05</span>模型路由</a>
+      <a href="#apis"><span class="idx">06</span>API 路由</a>
+      <a href="#experiments"><span class="idx">07</span>实验进展</a>
+      <a href="#protocol"><span class="idx">08</span>实验协议</a>
+      <a href="#figures"><span class="idx">09</span>图表产物</a>
+      <a href="#registry"><span class="idx">10</span>运行台账</a>
+    </nav>
+  </aside>
+
+  <main>
+    <!-- ==================== 01 总览 ==================== -->
+    <section id="overview" class="panel-sec">
+      <div class="sec-head">
+        <span class="eyebrow">Overview</span>
+        <h2>系统总览</h2>
+        <p class="sec-note">当前运行目录的一屏概况：核心规模指标、验证健康度、候选报告来源构成与病例分布。所有数字来自真实运行产物，非示意数据。</p>
+      </div>
+      <div class="kpi-grid">__MH2_KPI__</div>
+      <div class="health-strip">__MH2_HEALTH__</div>
+      <div class="chart-row">
+        <div class="card chart-block" id="blk-source" style="grid-column: 1 / -1;">
+          <h3>候选报告 · 模型 × 来源</h3>
+          <p class="h3-note">每个生成模型产出的候选报告数量；颜色 = 报告来源渠道，同一模型只走一个渠道。</p>
+          <div class="legend" id="legend-source"></div>
+          <div class="chart" id="chart-source"></div>
+        </div>
+        <div class="card chart-block" id="blk-modality">
+          <h3>病例 · 模态分布</h3>
+          <p class="h3-note">manifest 中经真实 OCR 验证的病例模态计数。</p>
+          <div class="chart" id="chart-modality"></div>
+        </div>
+        <div class="card chart-block" id="blk-bodypart">
+          <h3>病例 · 部位分布</h3>
+          <p class="h3-note">同一批病例按检查部位的计数。</p>
+          <div class="chart" id="chart-bodypart"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 02 运行分析 ==================== -->
+    <section id="analysis" class="panel-sec">
+      <div class="sec-head">
+        <span class="eyebrow">Run Analysis</span>
+        <h2>运行分析</h2>
+        <p class="sec-note">analyze-run 产出的明细：读者水平、生成警告、危害错误画像与质量门控失败清单。图表下方均附完整数据表。</p>
+      </div>
+      <div class="chart-row">
+        <div class="card chart-block" id="blk-readers">
+          <h3>读者综合得分（overall_score）</h3>
+          <p class="h3-note">柱长为得分（0 起点）；标签附本轮运行内百分位，不代表机构常模。</p>
+          <div class="chart" id="chart-readers"></div>
+        </div>
+        <div class="card chart-block" id="blk-hazard">
+          <h3>危害评估 · 错误类型计数</h3>
+          <p class="h3-note">Tool 5 图对齐错误经 Tool 4 危害判定后的类型分布。</p>
+          <div class="chart" id="chart-hazard"></div>
+        </div>
+        <div class="card chart-block" id="blk-warnings" style="grid-column: 1 / -1;">
+          <h3>生成警告计数（按类型）</h3>
+          <p class="h3-note">候选报告生成阶段记录的警告；同一份报告可能触发多个警告。</p>
+          <div class="chart" id="chart-warnings"></div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <h3>读者明细表</h3>
+          <div class="tbl-wrap" style="border:none"><table>
+            <thead><tr><th>读者</th><th>病例数</th><th>综合得分</th><th>百分位</th></tr></thead>
+            <tbody>__MH2_READER_ROWS__</tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <h3>模态 × 部位 明细表</h3>
+          <div class="tbl-wrap" style="border:none"><table>
+            <thead><tr><th>模态</th><th>部位</th><th>病例</th><th>候选</th><th>通过</th><th>失败</th></tr></thead>
+            <tbody>__MH2_MODBP_ROWS__</tbody>
+          </table></div>
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:12px">
+        <h3>模型 × 来源 汇总表</h3>
+        <div class="tbl-wrap" style="border:none"><table>
+          <thead><tr><th>模型</th><th>来源</th><th>报告数</th><th>质量通过</th><th>质量失败</th><th>入选 Top-N</th><th>警告</th></tr></thead>
+          <tbody>__MH2_MODELSRC_ROWS__</tbody>
+        </table></div>
+      </div>
+      __MH2_QGF_BLOCK__
+      __MH2_ROUTES_BLOCK__
+    </section>
+
+    <!-- ==================== 03 工作流 ==================== -->
+    <section id="workflows" class="panel-sec">
+      <div class="sec-head">
+        <span class="eyebrow">Workflow Development</span>
+        <h2>工作流进展</h2>
+        <p class="sec-note">全部流水线阶段的开发状态、实现类型与每阶段输入 / 输出契约（来自 capability catalog，随代码同步）。</p>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>阶段</th><th>状态</th><th>实现类型</th><th>输入</th><th>输出</th><th>模型策略</th></tr></thead>
+        <tbody>__MH2_WORKFLOW_ROWS__</tbody>
+      </table></div>
+    </section>
+
+    <!-- ==================== 04 工具矩阵 ==================== -->
+    <section id="tools" class="panel-sec">
+      <div class="sec-head">
+        <span class="eyebrow">Tool Implementation</span>
+        <h2>工具矩阵 · Tool 1–12</h2>
+        <p class="sec-note">每个工具的接入方式一目了然：<span class="badge b-hybrid">LLM API</span> <span class="badge b-local">本地模型</span> <span class="badge b-code">规则 / 代码</span> <span class="badge b-rule">规则 + 占位</span>，及其输入 → 输出契约与医学专用模型需求。</p>
+      </div>
+      <div class="card-grid">__MH2_TOOL_CARDS__</div>
+      <details class="fold">
+        <summary>工具明细表（Tool / Type / Details / Medical Model / IO）</summary>
+        <div class="fold-body tbl-wrap"><table>
+          <thead><tr><th>Tool</th><th>Type</th><th>Details</th><th>Medical Model</th><th>Inputs</th><th>Outputs</th></tr></thead>
+          <tbody>__MH2_TOOL_TABLE_ROWS__</tbody>
+        </table></div>
+      </details>
+    </section>
+
+    <!-- ==================== 05 模型路由 ==================== -->
+    <section id="models" class="panel-sec">
+      <div class="sec-head">
+        <span class="eyebrow">Model Routing</span>
+        <h2>模型路由</h2>
+        <p class="sec-note">报告生成模型注册表：来源渠道、路由角色、支持模态与新旧推理属性。</p>
+      </div>
+      <div class="filter-row">
+        <input class="filter-input" id="model-filter" type="search" placeholder="过滤模型 / 模态 / 来源…" autocomplete="off">
+        <span class="filter-count" id="model-count">__MH2_MODEL_COUNT__ 个模型</span>
+      </div>
+      <div class="tbl-wrap"><table id="model-table">
+        <thead><tr><th>模型</th><th>来源</th><th>路由角色</th><th>模态</th><th>新推理</th><th>备注</th></tr></thead>
+        <tbody>__MH2_MODEL_ROWS__</tbody>
+      </table></div>
+    </section>
+
+    <!-- ==================== 06 API 路由 ==================== -->
+    <section id="apis" class="panel-sec">
+      <div class="sec-head">
+        <span class="eyebrow">Judge/API Routing</span>
+        <h2>API 路由</h2>
+        <p class="sec-note">评审 / 教育等角色所路由的外部 API 模型与端点配置（密钥只显示环境变量名，不落地明文）。</p>
+      </div>
+      <div class="card-grid">__MH2_ROLE_CARDS__</div>
+    </section>
+
+    <!-- ==================== 07 实验进展 ==================== -->
+    <section id="experiments" class="panel-sec">
+      <div class="sec-head">
+        <span class="eyebrow">Experiment Progress</span>
+        <h2>实验进展</h2>
+        <p class="sec-note">Notion 实验安排对应的六项研究当前状态与关键指标（experiments.run 产物）。</p>
+      </div>
+      <div class="card-grid wide">__MH2_EXPERIMENT_CARDS__</div>
+    </section>
+
+    <!-- ==================== 08 实验协议 ==================== -->
+    <section id="protocol" class="panel-sec">
+      <div class="sec-head">
+        <span class="eyebrow">Experiment Protocol</span>
+        <h2>实验协议</h2>
+        <p class="sec-note">每项研究的研究问题、实现方式、模型 / API 策略、当前证据与明确的局限性——防止把工程指标误读为医学结论。</p>
+      </div>
+      <div class="card-grid wide">__MH2_PROTOCOL_CARDS__</div>
+    </section>
+
+    <!-- ==================== 09 图表产物 ==================== -->
+    <section id="figures" class="panel-sec">
+      <div class="sec-head">
+        <span class="eyebrow">Figure Artifacts</span>
+        <h2>图表产物</h2>
+        <p class="sec-note">figures.build 生成的论文图表清单（Fig.1–9 + Table 1–2），SVG 预览为白底原稿。</p>
+      </div>
+      <div class="fig-grid">__MH2_FIGURE_GALLERY__</div>
+    </section>
+
+    <!-- ==================== 10 运行台账 ==================== -->
+    <section id="registry" class="panel-sec">
+      <div class="sec-head">
+        <span class="eyebrow">Run Registry</span>
+        <h2>运行台账</h2>
+        <p class="sec-note">run_registry.json 中最近的阶段执行记录（最新在前），含每次执行的关键指标。</p>
+      </div>
+      <div class="card">
+        <ul class="timeline">__MH2_REGISTRY_ROWS__</ul>
+      </div>
+    </section>
+
+    <footer style="color:var(--ink-3);font-size:12px;border-top:1px solid var(--hair);padding-top:14px;">
+      medHarness2 · 由 <code>medharness2 dashboard build</code> 自动生成的自包含页面 · 数据快照嵌入于
+      <code>#medharness2-data</code>（含 catalog / workflow_stages / experiment_protocol 全量 JSON）。
+    </footer>
+  </main>
+</div>
+
+<div id="tip"></div>
+
+<script type="application/json" id="medharness2-data">__MH2_PAYLOAD__</script>
+<script>
+(function () {
+  "use strict";
+  /* ---------- 数据 ---------- */
+  var P = {};
+  try { P = JSON.parse(document.getElementById("medharness2-data").textContent); }
+  catch (e) { console.warn("payload parse failed", e); }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function get(obj, path, dflt) {
+    var cur = obj;
+    for (var i = 0; i < path.length; i++) {
+      if (cur == null || typeof cur !== "object") return dflt;
+      cur = cur[path[i]];
+    }
+    return cur == null ? dflt : cur;
+  }
+
+  /* ---------- 通用横向条形图（thin marks / 圆角数据端 / 直接标注 / hover） ---------- */
+  function hbar(el, rows, opts) {
+    opts = opts || {};
+    if (!el) return;
+    if (!rows || !rows.length) { var blk = el.closest(".chart-block"); if (blk) blk.style.display = "none"; return; }
+    var W = Math.max(320, el.clientWidth || 600);
+    var labelW = opts.labelW || 168, valW = opts.valW || 86, barH = opts.barH || 16, gap = 10, padY = 8;
+    var H = rows.length * (barH + gap) + padY * 2 - gap;
+    var plotW = Math.max(60, W - labelW - valW - 10);
+    var max = 0;
+    rows.forEach(function (r) { if (r.value > max) max = r.value; });
+    if (max <= 0) max = 1;
+    var s = '<svg viewBox="0 0 ' + W + " " + H + '" width="100%" height="' + H + '" role="img">';
+    for (var g = 1; g <= 4; g++) { // 隐性网格：四条发丝竖线
+      var gx = labelW + (plotW * g) / 4;
+      s += '<line x1="' + gx + '" y1="0" x2="' + gx + '" y2="' + H + '" stroke="var(--hair-soft)" stroke-width="1"/>';
+    }
+    rows.forEach(function (r, i) {
+      var y = padY + i * (barH + gap);
+      var w = Math.max(2, (plotW * r.value) / max);
+      var rr = Math.min(4, barH / 2);
+      var color = r.color || "var(--c-blue)";
+      // 仅数据端圆角，基线端方角贴齐坐标基线
+      var d = "M" + labelW + "," + y + " h" + (w - rr) + " a" + rr + "," + rr + " 0 0 1 " + rr + "," + rr +
+              " v" + (barH - 2 * rr) + " a" + rr + "," + rr + " 0 0 1 -" + rr + "," + rr + " h-" + (w - rr) + " z";
+      s += '<text x="' + (labelW - 10) + '" y="' + (y + barH / 2 + 4) + '" text-anchor="end" class="c-lab">' + esc(r.label) + "</text>";
+      s += '<path class="bar" d="' + d + '" fill="' + color + '" data-tip="' + esc(r.tip || r.label + "：" + r.value) + '"/>';
+      s += '<text x="' + (labelW + w + 8) + '" y="' + (y + barH / 2 + 4) + '" class="c-val">' + esc(r.valueLabel != null ? r.valueLabel : r.value) + "</text>";
+    });
+    s += "</svg>";
+    el.innerHTML = s;
+  }
+
+  /* ---------- tooltip ---------- */
+  var tip = document.getElementById("tip");
+  document.addEventListener("mousemove", function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest("[data-tip]") : null;
+    if (t) {
+      tip.innerHTML = esc(t.getAttribute("data-tip")).replace(/\n/g, "<br>");
+      tip.style.display = "block";
+      var x = ev.clientX + 14, y = ev.clientY + 14;
+      var r = tip.getBoundingClientRect();
+      if (x + r.width > window.innerWidth - 8) x = ev.clientX - r.width - 12;
+      if (y + r.height > window.innerHeight - 8) y = ev.clientY - r.height - 12;
+      tip.style.left = x + "px"; tip.style.top = y + "px";
+    } else { tip.style.display = "none"; }
+  });
+
+  /* ---------- 各图数据装配 ---------- */
+  var SRC_COLOR = { medharness_cli: "var(--c-blue)", artifact_reuse: "var(--c-yellow)", local_vlm_fallback: "var(--c-red)" };
+  var SRC_LABEL = { medharness_cli: "medharness CLI 新推理", artifact_reuse: "工件复用", local_vlm_fallback: "本地 VLM 兜底" };
+
+  function renderSource() {
+    var el = document.getElementById("chart-source");
+    var tbl = get(P, ["analysis_tables", "model_source"], []);
+    var rows;
+    if (tbl.length) {
+      rows = tbl.map(function (r) {
+        var n = Number(r.report_count) || 0, failed = Number(r.quality_failed) || 0;
+        return {
+          label: r.model, value: n, color: SRC_COLOR[r.source] || "var(--c-violet)",
+          valueLabel: failed ? n + "（失败 " + failed + "）" : String(n),
+          tip: r.model + "\n来源：" + (SRC_LABEL[r.source] || r.source) + "\n报告 " + n + " · 质量通过 " + (r.quality_passed || 0) + " · 失败 " + failed
+        };
+      });
+    } else {
+      var counts = get(P, ["analysis", "generated_report_model_counts"], {});
+      rows = Object.keys(counts).map(function (k) { return { label: k, value: Number(counts[k]) || 0 }; });
+    }
+    rows.sort(function (a, b) { return b.value - a.value; });
+    hbar(el, rows, { labelW: 224, valW: 110 });
+    // 图例（≥2 个来源时必须出现，颜色不单独承载语义：来源同时写进 tooltip 与汇总表）
+    var lg = document.getElementById("legend-source");
+    if (lg && tbl.length) {
+      var seen = {};
+      lg.innerHTML = tbl.filter(function (r) { return !seen[r.source] && (seen[r.source] = 1); })
+        .map(function (r) {
+          var c = SRC_COLOR[r.source] || "var(--c-violet)";
+          return '<span class="lg"><span class="sw" style="background:' + c + '"></span>' + esc(SRC_LABEL[r.source] || r.source) + "</span>";
+        }).join("");
+    }
+  }
+
+  function countChart(elId, counts, unit) {
+    var el = document.getElementById(elId);
+    var rows = Object.keys(counts || {}).map(function (k) {
+      return { label: k, value: Number(counts[k]) || 0, tip: k + "：" + counts[k] + " " + (unit || "") };
+    });
+    rows.sort(function (a, b) { return b.value - a.value; });
+    hbar(el, rows, { labelW: 132 });
+  }
+
+  function renderReaders() {
+    var el = document.getElementById("chart-readers");
+    var rows = get(P, ["analysis_tables", "readers"], []).map(function (r) {
+      var score = Number(r.overall_score) || 0;
+      var pct = Math.round(Number(r.percentile) || 0);
+      return {
+        label: r.reader, value: score, valueLabel: score.toFixed(3) + " · P" + pct,
+        tip: r.reader + "\n病例 " + r.case_count + " · 综合得分 " + score.toFixed(4) + "\n本轮百分位 P" + pct
+      };
+    });
+    rows.sort(function (a, b) { return b.value - a.value; });
+    hbar(el, rows, { labelW: 110, valW: 118 });
+  }
+
+  function renderHazard() {
+    var exps = get(P, ["experiments", "experiments"], []);
+    var hz = null;
+    exps.forEach(function (e) { if (e.id === "hazard_evaluation") hz = e; });
+    countChart("chart-hazard", hz && hz.metrics ? hz.metrics.error_type_counts : null, "处");
+  }
+
+  function renderAll() {
+    renderSource();
+    countChart("chart-modality", get(P, ["run_summary", "validation", "summary", "modality_counts"], null), "例");
+    countChart("chart-bodypart", get(P, ["run_summary", "validation", "summary", "body_part_counts"], null), "例");
+    renderReaders();
+    renderHazard();
+    countChart("chart-warnings", get(P, ["analysis", "generated_report_warning_counts"], null), "次");
+  }
+  renderAll();
+  var rsz;
+  window.addEventListener("resize", function () { clearTimeout(rsz); rsz = setTimeout(renderAll, 160); });
+
+  /* ---------- 模型表过滤 ---------- */
+  var mf = document.getElementById("model-filter");
+  if (mf) {
+    var mtbody = document.querySelectorAll("#model-table tbody tr");
+    var mcount = document.getElementById("model-count");
+    mf.addEventListener("input", function () {
+      var q = mf.value.trim().toLowerCase(), shown = 0;
+      mtbody.forEach(function (tr) {
+        var hit = !q || tr.textContent.toLowerCase().indexOf(q) >= 0;
+        tr.style.display = hit ? "" : "none";
+        if (hit) shown++;
+      });
+      if (mcount) mcount.textContent = shown + " / " + mtbody.length + " 个模型";
+    });
+  }
+
+  /* ---------- 病例路由表过滤 ---------- */
+  var rf = document.getElementById("route-filter");
+  if (rf) {
+    var rtbody = document.querySelectorAll("#route-table tbody tr");
+    var rcount = document.getElementById("route-count");
+    rf.addEventListener("input", function () {
+      var q = rf.value.trim().toLowerCase(), shown = 0;
+      rtbody.forEach(function (tr) {
+        var hit = !q || tr.textContent.toLowerCase().indexOf(q) >= 0;
+        tr.style.display = hit ? "" : "none";
+        if (hit) shown++;
+      });
+      if (rcount) rcount.textContent = shown + " / " + rtbody.length + " 例";
+    });
+  }
+
+  /* ---------- 左侧导航 scrollspy ---------- */
+  var links = Array.prototype.slice.call(document.querySelectorAll("#rail-nav a"));
+  var secs = links.map(function (a) { return document.querySelector(a.getAttribute("href")); }).filter(Boolean);
+  if ("IntersectionObserver" in window && secs.length) {
+    var current = null;
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (en) { if (en.isIntersecting) current = en.target.id; });
+      if (!current) return;
+      links.forEach(function (a) { a.classList.toggle("active", a.getAttribute("href") === "#" + current); });
+    }, { rootMargin: "-20% 0px -70% 0px", threshold: 0 });
+    secs.forEach(function (s) { io.observe(s); });
+  }
+})();
+</script>
+</body>
+</html>

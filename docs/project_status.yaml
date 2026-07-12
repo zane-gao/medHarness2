@@ -1,0 +1,144 @@
+schema_version: "1.0"
+updated_at: "2026-07-11"
+current_phase: production_research_foundations
+release_readiness: pilot_only
+
+baseline:
+  branch: feat/production-foundations-20260710
+  git_sha: fdd89900f6f2d5510dce3fcedb00992f5830b55c
+  dirty_worktree: true
+  pytest_passed: 330
+  pytest_warnings: 17
+  current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
+  case_count: 52
+  generated_report_count: 81
+  generated_report_evidence_tiers:
+    formal_fresh: 0
+    artifact: 14
+    debug_fallback: 67
+  validated_artifacts:
+    contract_schemas: 9
+    case_evaluations: 52
+    finding_graphs: 277
+    generated_reports: 81
+    hazard_results: 72
+    alignment_audits: 0
+    hazard_reviews: 0
+    structure_audits: 0
+  experiment_states:
+    pilot: 6
+    validated: 0
+  formal_benchmark_ready_cases: 0
+  exploratory_generation_benchmark:
+    status: succeeded
+    case_count: 11
+    result_count: 11
+    model: qwen3vl_8b_mimic_cxr_sft
+    modality: cxr
+    body_part: chest
+    evidence_tier: exploratory_fresh
+    formal_claim_allowed: false
+    unique_report_count: 5
+    unique_report_rate: 0.454545
+    deterministic_generation_verified: true
+    generation_seed: 20260710
+    output: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/attempt_001
+    posthoc_evaluation:
+      status: succeeded
+      profile: config/dmx_strong.yaml
+      case_count: 11
+      fallback_count: 0
+      real_llm_evidence_count: 99
+      implementation_sha256: ed9d26ca0e73f777ee419fbdc3683f803fd93edac7499c492265909371e12b4a
+      evaluation_config_sha256: 2ccc541797fc011ea665a80ac7f7cfb14f6d31301f361ca539816f502a892818
+      output: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/evaluation_dmx_ontology_v2_v2/attempt_001
+
+workstreams:
+  contracts:
+    status: validated
+    summary: Versioned v2 case, finding, generated-report, hazard, run, and optional audit contracts are enforced recursively; audit hashes are bound to deterministic primary artifacts, and the 52-case v1 migration path is directly validatable.
+    evidence_paths:
+      - docs/schemas/index.json
+      - outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710/run_summary.json
+      - src/medharness2/contracts/migrations.py
+      - tests/contracts/test_migrations.py
+      - tests/test_validation.py
+    next_gate: Add typed contracts for remaining workflow2/workflow3 aggregate payloads and validate a frozen run with nonzero T4/T5/T6 audit artifacts.
+  tools:
+    status: in_progress
+    summary: T1 uses a strict real LLM judge; T2/T4 use deterministic templates plus LLM judgement; T5/T6 preserve deterministic primary results and emit hash-linked LLM audit artifacts. A pure-DMX 11-case run passed 11/11 with 99 verified role artifacts and zero fallback after fixing the T5 suggested-error-type prompt/schema mismatch. Test-retest instability remains material, so clinical gold-set calibration and repeated-run reliability validation are outstanding.
+    evidence_paths:
+      - docs/llm_tooling_upgrade_20260710.md
+      - docs/llm_tools_synthetic_smoke_20260710.json
+      - src/medharness2/tools/tool1_likert.py
+      - src/medharness2/tools/tool2_extract.py
+      - src/medharness2/tools/tool4_hazard.py
+      - src/medharness2/alignment/audit.py
+      - src/medharness2/tools/tool6_structure_diff.py
+      - src/medharness2/extractors/rules.py
+      - tests/extractors/test_cxr.py
+      - tests/alignment/test_matcher.py
+    next_gate: Freeze repeated-run reliability targets, complete dual-reader gold labels, and benchmark every model role before a formal case run.
+  ocr:
+    status: in_progress
+    summary: DMX model discovery and image-only nonce probes confirm that doubao-seed-2-1-pro-260628, doubao-seed-1-6-vision-250815, and qwen-vl-ocr-latest all accept real image input. Doubao Seed 2.1 Pro exactly transcribed one real CXR clinical section and returned complete findings/impression for one dense CT report. The legacy local Qwen3-VL 4B cache has six definite and seven suspected truncations, all among 25 CT reports, because max_new_tokens was 384.
+    evidence_paths:
+      - docs/superpowers/specs/2026-07-11-dmx-doubao-ocr-benchmark-design.md
+      - outputs/ocr_quality_audit_qwen3vl4b_20260711/summary.json
+      - outputs/ocr_quality_audit_qwen3vl4b_20260711/ocr_completeness_audit.png
+    next_gate: Approve the frozen 10-case OCR benchmark design, rerun every candidate with non-truncating output budgets, produce visual gold text, and select the production OCR route by clinical CER and material-error rate.
+  generation:
+    status: in_progress
+    summary: Every report has an evidence tier. Benchmark planning separates eligible/rejected models, formal candidate coverage, and modality-aware image/volume assets. Eleven frozen CXR chest cases completed true Qwen3-VL 8B fresh inference with do_sample=false and seed 20260710. The reports remain exploratory_fresh, contain only five unique outputs, and the 52-case legacy run contains no formal_fresh report.
+    evidence_paths:
+      - outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710/formal_benchmark_plan.json
+      - config/formal_benchmark.yaml
+      - experiments/benchmarks/cxr_chest_qwen3vl8b_11_v1/experiment.yaml
+      - outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/attempt_001/benchmark_manifest.json
+    next_gate: Expand the frozen CXR chest exploratory matrix, add clinician labels and formal validation IDs, then promote only models that pass the locked benchmark.
+  clinical_validation:
+    status: not_started
+    summary: Ten pilot cases are packaged, but reader A, reader B, and adjudication labels are not complete.
+    evidence_paths:
+      - annotation/pilot10/manifest.jsonl
+      - annotation/pilot10/annotation.schema.json
+    next_gate: Complete pilot annotations and inter-rater reliability review.
+  experiments:
+    status: in_progress
+    summary: Six executable YAML protocols and strict validation gates exist; all current results remain pilot with zero validated gates.
+    evidence_paths:
+      - experiments/protocols/e1_radiologist_evaluation.yaml
+      - outputs/experiments/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710/results.json
+    next_gate: Produce trusted gate evidence for frozen splits, clinician labels, and primary endpoint analyses.
+  figures:
+    status: in_progress
+    summary: Reproducible exploratory PNG/SVG/PDF figures now show LLM metric repeatability and legacy OCR completeness; publication statistics and final figures remain blocked on validated cohorts.
+    evidence_paths:
+      - outputs/figures/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710/figure_manifest.json
+      - outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/evaluation_dmx_ontology_v2_v2/attempt_001/analysis_v1/figure_manifest.json
+    next_gate: Rebuild publication-grade figures from validated experiment tables.
+  security:
+    status: deferred
+    summary: Privacy enforcement exists in code; hardening and credential rotation are temporarily deprioritized by user direction.
+    evidence_paths:
+      - src/medharness2/privacy.py
+      - config/privacy/default.yaml
+    next_gate: Re-enable strict data-governance review before any external clinical-data run.
+  control_panel:
+    status: deferred
+    summary: Frontend and control-panel work are outside the current scope by user direction.
+    evidence_paths: []
+    next_gate: Resume only after explicit user reprioritization.
+
+api_verification:
+  preferred_profile: config/dmx_strong.yaml
+  explicit_backup_profiles:
+    - config/yunwu_strong.yaml
+    - config/codex_proxy_strong.yaml
+    - config/codex_dmx_strong.yaml
+  dmx_status: pure-DMX T1/T2/T5/T4/T6 completed 11/11 exploratory CXR cases with zero fallback; T5 prompt/schema mismatch fixed and both prior failure cases recovered
+  yunwu_status: complete synthetic T1/T2/T5/T4/T6 chain passed with no fallback
+  codex_proxy_status: GPT path works; Claude channel returns HTTP 503
+  codex_dmx_status: complete synthetic chain passed with no fallback and all three audit hashes verified
+  static_analysis_status: ruff and mypy are not installed in the current environment
+  evidence: docs/llm_tools_synthetic_smoke_20260710.json

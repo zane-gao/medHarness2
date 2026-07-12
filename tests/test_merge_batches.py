@@ -68,6 +68,41 @@ def test_cli_merge_batches(tmp_path: Path):
     assert code == 0
     run_summary = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
     assert run_summary["validation"]["passed"] is True
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.merge-batches"
+    assert entry["metrics"]["case_count"] == 1
+    assert entry["metrics"]["validation_passed"] is True
+
+
+def test_cli_merge_batches_records_failed_registry_on_exception(tmp_path: Path):
+    manifest = tmp_path / "manifest.jsonl"
+    _write_manifest(manifest, ["case1", "case2"])
+    batch = _write_batch(tmp_path / "batch", "case1", "reader_a", "maira_2", "medharness_cli")
+    output_dir = tmp_path / "merged"
+
+    code = main(
+        [
+            "workflow",
+            "merge-batches",
+            "--manifest",
+            str(manifest),
+            "--batch-result",
+            str(batch),
+            "--output-dir",
+            str(output_dir),
+            "--expected-cases",
+            "2",
+        ]
+    )
+
+    assert code == 1
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.merge-batches"
+    assert entry["status"] == "failed"
+    assert entry["metrics"]["exception_type"] == "ValueError"
+    assert "missing_cases" in entry["warnings"][0]
 
 
 def _write_manifest(path: Path, case_ids: list[str]) -> None:

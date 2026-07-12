@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from medharness2.checkpoints import StageCheckpointStore
 from medharness2.config import AppConfig, load_config
 from medharness2.llm_client import LLMClient
 from medharness2.modules.pairwise_report import evaluate_pairwise
@@ -29,6 +30,7 @@ def run_single_case(
     precomputed_generated_reports: list[GeneratedReport] | None = None,
     config: AppConfig | None = None,
     llm_client: LLMClient | None = None,
+    checkpoint_store: StageCheckpointStore | None = None,
 ) -> dict[str, Any]:
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
@@ -66,18 +68,23 @@ def run_single_case(
         modality=modality_key,
         config=cfg,
         llm_client=client,
+        checkpoint_store=checkpoint_store,
+        checkpoint_namespace="reference",
     )
     generated_evaluations: list[dict[str, Any]] = []
-    for report in generated:
+    for report_index, report in enumerate(generated):
         evaluation = evaluate_single_report(
             report.report,
             image_path=image,
             modality=modality_key,
             config=cfg,
             llm_client=client,
+            checkpoint_store=checkpoint_store,
+            checkpoint_namespace=f"candidate_{report_index}",
         )
         evaluation["model"] = report.model
         evaluation["source"] = report.source
+        evaluation["evidence_tier"] = report.evidence_tier
         evaluation["warnings"] = report.warnings
         evaluation["quality_gate"] = report.metadata.get("quality_gate", {"passed": True})
         generated_evaluations.append(evaluation)
@@ -98,6 +105,7 @@ def run_single_case(
     )
     for row in rankings:
         row["index"] = ranking_index_map[row["index"]]
+        row["evidence_tier"] = generated[row["index"]].evidence_tier
     pairwise = []
     for row in rankings:
         evaluation = generated_evaluations[row["index"]]
@@ -105,19 +113,27 @@ def run_single_case(
         pairwise.append(
             {
                 "model": generated_report.model,
+                "evidence_tier": generated_report.evidence_tier,
                 "rank": row["rank"],
                 "comparison": evaluate_pairwise(
                     report_text,
                     generated_report.report,
                     image_path=image,
                     modality=modality_key,
+                    reference_graph=human_evaluation["finding_graph"],
+                    candidate_graph=evaluation["finding_graph"],
                     config=cfg,
                     llm_client=client,
+                    checkpoint_store=checkpoint_store,
+                    checkpoint_namespace=f"candidate_{row['index']}",
                 ),
                 "selected_evaluation": evaluation,
             }
         )
     result = {
+        "schema_version": "2.0",
+        "artifact_type": "case_evaluation",
+        "case_id": Path(output_path).stem,
         "input": {
             "report_path": str(report_path) if report_path is not None else None,
             "image_path": image,

@@ -1,0 +1,34 @@
+schema_version: "1.0"
+id: radiologist_evaluation
+notion_section: Radiologist Evaluation Study
+research_question: Can automated report-quality evaluation agree with blinded clinician ratings and stably summarize reader-level performance?
+implementation:
+  stage: experiments.run
+  method: deterministic aggregation plus clinician agreement analysis
+  primary_tools: [Tool 1, Tool 10, Tool 12, workflow.department]
+model_policy:
+  general_model: benchmark_candidate
+  medical_specialist_model: benchmark_candidate
+  local_model: optional
+  api_model: DMX_candidates_require_gold_validation
+inputs: [workflow2.json, workflow3.json, clinician_reader_labels.jsonl]
+outputs: [reader_agreement, reader_rank_stability, confidence_intervals]
+cohort:
+  unit: case_reader_pair
+  split: patient_level_frozen_test
+primary_endpoints: [spearman_correlation, icc_2k, mean_absolute_error]
+secondary_endpoints: [reader_rank_bootstrap_stability, subgroup_bias]
+statistics: [cluster_bootstrap_95ci, mixed_effects_model, bland_altman]
+validation_gates:
+  - id: clinician_gold_labels
+    description: Blinded clinician quality labels are complete.
+  - id: frozen_test_split
+    description: Patient-level test split and hash are frozen.
+  - id: inter_rater_reliability
+    description: Clinician inter-rater reliability report is accepted.
+  - id: primary_endpoint_analysis
+    description: Pre-registered primary endpoint analysis is complete.
+limitations:
+  - Pilot reader percentiles are run-internal and are not institutional norms.
+next_steps:
+  - Complete clinician labels and frozen test analysis.

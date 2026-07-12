@@ -4,9 +4,9 @@
 
 ## 一、工作背景
 
-本周工作围绕 medHarness2 的完整落地展开。原始系统设计稿由洪学长提出，核心目标是建立医学影像报告生成与评估闭环：以人工报告和影像/体数据为输入，调用本地或云端模型生成候选报告，再完成单报告评估、Top-N 排序、human-vs-AI 成对比较和批量统计输出。
+本周工作围绕 medHarness2 的完整落地展开。原始系统设计稿核心目标是建立医学影像报告生成与评估闭环：以人工报告和影像/体数据为输入，调用本地或云端模型生成候选报告，再完成单报告评估、Top-N 排序、human-vs-AI 成对比较和批量统计输出。
 
-本周的工作是在洪学长原设计基础上继续完善、实现和验证，重点不是重新提出设计，而是把设计稿中的工具、模块、工作流和样本数据运行链路工程化落地，并确认本机已就位模型资源能否支撑真实样本运行。
+本周的工作是在洪学长原设计基础上继续完善、实现和验证，把设计稿中的工具、模块、工作流和样本数据运行链路工程化落地，并确认本机已就位模型资源能否支撑真实样本运行。
 
 ## 二、本周主要目标
 
@@ -86,9 +86,12 @@ outputs/sample_data_2026-06-05_final_local_routed_52_20260606
 
 ```text
 python -m compileall src tests: passed
-PYTHONPATH=src python -m pytest -q: 101 passed, 19 warnings
-make final-sample-check: passed
-validate-run --require-real-ocr: passed=true
+PYTHONPATH=src python -m pytest -q: 146 passed, 17 warnings
+validate-run --expected-cases 52 --require-real-ocr: passed=true, real_ocr_count=52
+experiments run: experiments=6
+experiment protocol: experiment_protocol.json/md/csv, protocol_count=6
+figures build: figures=11
+dashboard build: cases=52 tools=12 experiments=6
 ```
 
 最终分析表已生成在：
@@ -107,6 +110,14 @@ outputs/sample_data_2026-06-05_final_local_routed_52_20260606/analysis
 - `modality_body_part_summary.csv`
 - `quality_gate_failures.csv`
 
+Tool 2 升级后已通过 `workflow reevaluate-run` 复用原有 81 条生成报告完成低成本重评估，输出目录为：
+
+```text
+outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_tool2_v1
+```
+
+该重评估目录不新增报告生成，`new_generation_count=0`；`run_summary.validation` 继承真实 OCR 校验策略，`real_ocr_count=52`。对应实验、图表和控制面板已分别刷新到 `outputs/experiments/..._reeval_tool2_v1/`、`outputs/figures/..._reeval_tool2_v1/` 与 `web/control_panel.html`。实验目录新增 `experiment_protocol.json/md/csv`，将 Notion 六类实验逐项绑定到输入输出、实现方式、模型/API 策略、当前证据、限制和下一步。
+
 ## 七、质量门控与问题暴露
 
 本周运行中暴露并记录了 9 条质量门控失败：
@@ -120,8 +131,8 @@ outputs/sample_data_2026-06-05_final_local_routed_52_20260606/analysis
 
 当前系统已经跑通设计稿要求的核心闭环，但仍应按 MVP/工程闭环理解，不应直接等同于最终医学评价器：
 
-1. Tool 2 的 CXR extractor 是规则版，其他模态仍以 schema-valid placeholder 为主，后续需要接更稳定的结构化 finding extractor。
-2. Tool 4 hazard evaluator 目前是 deterministic/规则估计，后续需要接入医学评价模型或本地 LLM，并保留可复现 fallback。
+1. Tool 2 的 CXR extractor 已从英文规则版增强为中英双语规则版，覆盖 observation、location、measurement、certainty/negation 和 severity 的基础标准化；其他模态仍以 schema-valid placeholder 为主，后续需要接更稳定的结构化 finding extractor。
+2. Tool 4 已升级为可配置外部/本地 judge：支持角色级 DMX 路由、严格 JSON schema retry、最小化结构化外发、provenance 和 deterministic fallback。DMX `gpt-5.5` 主 judge 与 `claude-opus-4-6` reviewer 已通过合成 smoke，但尚未完成医生 gold label 和真实病例级临床有效性验证。
 3. CR abdomen 与 CT head 暂无本机 report-trained 报告生成模型，本周使用本机 Qwen3-VL 4B 作为 fallback/debug baseline。
 4. CT chest 当前使用 artifact baseline，尚未完成本批 fresh inference。
 5. BrainGemma3D 已在 MRI brain 子集跑通，但 MRI spacing/orientation、series 选择和 impression 后处理仍有增强空间。
@@ -129,8 +140,8 @@ outputs/sample_data_2026-06-05_final_local_routed_52_20260606/analysis
 
 ## 九、下周计划
 
-1. 强化结构化 finding extractor，统一 observation、location、measurement、certainty、negation 等字段。
-2. 升级 hazard evaluator，将规则估计替换或增强为更可靠的医学评估后端。
+1. 继续强化结构化 finding extractor：扩大中文/英文医学同义词覆盖，补齐 CT/MRI 等非 CXR 模态，并对真实病例重跑后做一致性审计。
+2. 基于医生 gold labels 评估 DMX hazard 主 judge/reviewer 的一致性、校准和 prompt 稳健性；在数据治理确认后再运行病例衍生数据。
 3. 继续寻找 CR abdomen、CT head、CT chest 更匹配的本地 report-trained 模型或可复现路线。
 4. 对 BrainGemma3D 的 MRI 输入处理做进一步核查，重点包括 spacing、orientation、series 选择和 impression 生成质量。
 5. 基于现有分析表继续整理论文/汇报用统计表，区分 fresh 模型、artifact baseline 和 fallback/debug baseline。

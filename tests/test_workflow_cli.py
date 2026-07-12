@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from medharness2.checkpoints import StageCheckpointStore
 from medharness2.cli import main
-from medharness2.config import AppConfig, GeneratorConfig, load_config
+from medharness2.config import AppConfig, GeneratorConfig, LLMConfig, ModelRoleConfig, load_config
 from medharness2.llm_client import build_mock_client
 from medharness2.modules.pairwise_report import evaluate_pairwise
 from medharness2.modules.single_report import evaluate_single_report
@@ -18,6 +19,134 @@ def test_single_report_module_returns_composite_inputs():
     assert result["finding_graph"]["findings"]
 
 
+def test_single_report_routes_likert_through_general_judge_role():
+    response = {
+        metric: {"score": 4, "explanation": "Evidence-based score."}
+        for metric in [
+            "Completeness and Accuracy",
+            "Conciseness and Clarity",
+            "Terminological Accuracy",
+            "Structure and Style",
+            "Overall Writing Quality",
+        ]
+    }
+    client = _SequenceClient([response])
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock", max_retries=1),
+        model_roles={
+            "general_judge": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.5",
+                api_key_env="DMX_API_KEY",
+                base_url="https://www.DMXAPI.cn/v1",
+                max_retries=2,
+            )
+        },
+    )
+
+    result = evaluate_single_report(
+        "FINDINGS: Clear lungs. IMPRESSION: No acute disease.",
+        modality="cxr",
+        config=cfg,
+        llm_client=client,
+    )
+
+    assert client.call_kwargs[0]["provider"] == "chat_completions"
+    assert client.call_kwargs[0]["model"] == "gpt-5.5"
+    assert result["likert"]["_metadata"]["backend"] == "llm_judge"
+    assert result["likert"]["_metadata"]["role"] == "general_judge"
+
+
+def test_single_report_uses_separate_schema_and_transport_retry_budgets():
+    complete = {
+        metric: {"score": 4, "explanation": "Evidence-based score."}
+        for metric in [
+            "Completeness and Accuracy",
+            "Conciseness and Clarity",
+            "Terminological Accuracy",
+            "Structure and Style",
+            "Overall Writing Quality",
+        ]
+    }
+    client = _SequenceClient([{"invalid": True}, complete])
+    cfg = AppConfig(
+        model_roles={
+            "general_judge": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.6-terra",
+                schema_max_attempts=2,
+                transport_max_retries=1,
+            )
+        }
+    )
+
+    result = evaluate_single_report(
+        "FINDINGS: Clear lungs.",
+        modality="cxr",
+        config=cfg,
+        llm_client=client,
+    )
+
+    assert client.call_count == 2
+    assert [kwargs["max_retries"] for kwargs in client.call_kwargs] == [1, 1]
+    assert result["likert"]["_metadata"]["attempt_count"] == 2
+
+
+def test_single_report_routes_template_candidate_through_finding_extractor_role():
+    likert_response = {
+        metric: {"score": 4, "explanation": "Evidence-based score."}
+        for metric in [
+            "Completeness and Accuracy",
+            "Conciseness and Clarity",
+            "Terminological Accuracy",
+            "Structure and Style",
+            "Overall Writing Quality",
+        ]
+    }
+    extraction_response = {
+        "findings": [
+            {
+                "observation_code": "nodule",
+                "observation_text": "pulmonary nodule",
+                "anatomy_code": "right upper lobe",
+                "location_text": "right upper lobe",
+                "laterality": "right",
+                "certainty": "present",
+                "severity": None,
+                "measurements": [{"value": 6, "unit": "mm"}],
+                "evidence": "A 6 mm nodule is present in the right upper lobe.",
+                "attributes": {},
+            }
+        ],
+        "relations": [],
+    }
+    client = _SequenceClient([likert_response, extraction_response])
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock", max_retries=1),
+        model_roles={
+            "finding_extractor": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.5",
+                api_key_env="DMX_API_KEY",
+                base_url="https://www.DMXAPI.cn/v1",
+                max_retries=2,
+            )
+        },
+    )
+
+    result = evaluate_single_report(
+        "FINDINGS: A 6 mm nodule is present in the right upper lobe.",
+        modality="cxr",
+        config=cfg,
+        llm_client=client,
+    )
+
+    assert client.call_kwargs[1]["provider"] == "chat_completions"
+    assert client.call_kwargs[1]["model"] == "gpt-5.5"
+    assert result["finding_graph"]["backend"] == "template_llm"
+    assert result["finding_graph"]["metadata"]["llm_correction"]["role"] == "finding_extractor"
+
+
 def test_pairwise_module_returns_alignment():
     result = evaluate_pairwise(
         "FINDINGS: Mild right lung opacity. IMPRESSION: Opacity.",
@@ -26,6 +155,244 @@ def test_pairwise_module_returns_alignment():
         llm_client=build_mock_client(),
     )
     assert result["alignment"]["metrics"]["f1"] == 1.0
+
+
+def test_pairwise_reuses_precomputed_finding_graphs_without_reextracting():
+    graph = {
+        "schema_version": "2.0",
+        "artifact_type": "finding_graph",
+        "modality": "cxr",
+        "backend": "template_llm",
+        "findings": [],
+        "relations": [],
+        "missing": ["findings"],
+        "coverage": 0.0,
+        "nodes": [],
+        "template_coverage": {},
+        "warnings": [],
+        "metadata": {},
+    }
+    client = _SequenceClient([])
+    cfg = AppConfig(
+        model_roles={
+            "finding_extractor": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.5",
+            )
+        }
+    )
+
+    result = evaluate_pairwise(
+        "FINDINGS: Clear lungs.",
+        "FINDINGS: Clear lungs.",
+        modality="cxr",
+        config=cfg,
+        llm_client=client,
+        reference_graph=graph,
+        candidate_graph=graph,
+    )
+
+    assert client.call_count == 0
+    assert result["graph_a"] is graph
+    assert result["graph_b"] is graph
+
+
+def test_pairwise_routes_both_template_graphs_through_finding_extractor_role():
+    extraction_response = {
+        "findings": [
+            {
+                "observation_code": "nodule",
+                "observation_text": "pulmonary nodule",
+                "anatomy_code": "right upper lobe",
+                "location_text": "right upper lobe",
+                "laterality": "right",
+                "certainty": "present",
+                "severity": None,
+                "measurements": [{"value": 6, "unit": "mm"}],
+                "evidence": "A 6 mm nodule is present in the right upper lobe.",
+                "attributes": {},
+            }
+        ],
+        "relations": [],
+    }
+    client = _SequenceClient([extraction_response, extraction_response])
+    cfg = AppConfig(
+        model_roles={
+            "finding_extractor": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.5",
+                max_retries=2,
+            )
+        }
+    )
+
+    result = evaluate_pairwise(
+        "FINDINGS: A 6 mm nodule is present in the right upper lobe.",
+        "FINDINGS: A 6 mm nodule is present in the right upper lobe.",
+        modality="cxr",
+        config=cfg,
+        llm_client=client,
+    )
+
+    assert client.call_count == 2
+    assert all(kwargs["provider"] == "chat_completions" for kwargs in client.call_kwargs)
+    assert result["graph_a"]["backend"] == "template_llm"
+    assert result["graph_b"]["backend"] == "template_llm"
+
+
+def test_pairwise_routes_deterministic_alignment_through_llm_auditor():
+    client = _SequenceClient(
+        [
+            {
+                "verdict": "pass",
+                "confidence": 0.97,
+                "summary": "The deterministic alignment is clinically coherent.",
+                "issues": [],
+            }
+        ]
+    )
+    cfg = AppConfig(
+        model_roles={
+            "alignment_auditor": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.5",
+                max_retries=2,
+            )
+        }
+    )
+
+    result = evaluate_pairwise(
+        "FINDINGS: A 6 mm nodule is present in the right upper lobe.",
+        "FINDINGS: A 6 mm nodule is present in the right upper lobe.",
+        modality="cxr",
+        config=cfg,
+        llm_client=client,
+    )
+
+    assert client.call_count == 1
+    assert client.call_kwargs[0]["provider"] == "chat_completions"
+    assert client.call_kwargs[0]["model"] == "gpt-5.5"
+    assert result["alignment"]["metrics"]["f1"] == 1.0
+    assert result["alignment_audit"]["verdict"] == "pass"
+    assert result["alignment_audit"]["primary_preserved"] is True
+
+
+def test_pairwise_hazard_judge_uses_t5_adjudicated_error_candidates():
+    client = _SequenceClient(
+        [
+            {
+                "verdict": "issues_found",
+                "confidence": 0.99,
+                "summary": "The normal-lung statements are equivalent.",
+                "issues": [],
+                "error_judgements": [
+                    {
+                        "error_index": 0,
+                        "disposition": "unsupported",
+                        "suggested_error_type": None,
+                        "explanation": "Candidate statement is supported.",
+                        "confidence": 0.99,
+                    },
+                    {
+                        "error_index": 1,
+                        "disposition": "unsupported",
+                        "suggested_error_type": None,
+                        "explanation": "Reference statement is covered.",
+                        "confidence": 0.99,
+                    },
+                ],
+            },
+            {"errors": []},
+        ]
+    )
+    cfg = AppConfig(
+        model_roles={
+            "alignment_auditor": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.5",
+            ),
+            "hazard_primary": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.5",
+            ),
+        }
+    )
+    reference_graph = {
+        "findings": [
+            {
+                "finding_id": "f1",
+                "observation_code": "normal lung appearance",
+                "anatomy_code": "lungs",
+                "laterality": "bilateral",
+                "certainty": "present",
+            }
+        ]
+    }
+    candidate_graph = {
+        "findings": [
+            {
+                "finding_id": "f1",
+                "observation_code": "clear lungs",
+                "anatomy_code": "lungs",
+                "laterality": "bilateral",
+                "certainty": "present",
+            }
+        ]
+    }
+
+    result = evaluate_pairwise(
+        "FINDINGS: Normal lung appearance.",
+        "FINDINGS: Clear lungs.",
+        modality="cxr",
+        reference_graph=reference_graph,
+        candidate_graph=candidate_graph,
+        config=cfg,
+        llm_client=client,
+    )
+
+    assert len(result["alignment"]["error_candidates"]) == 2
+    assert result["alignment_audit"]["adjudicated_error_candidates"] == []
+    assert result["hazards"]["errors"] == []
+    assert client.call_count == 2
+
+
+def test_pairwise_uses_tool6_and_routes_structure_through_llm_assessor():
+    client = _SequenceClient(
+        [
+            {
+                "verdict": "no_material_issue",
+                "clinical_impact": 1,
+                "confidence": 0.96,
+                "summary": "Both reports have equivalent clinically usable structure.",
+                "issues": [],
+            }
+        ]
+    )
+    cfg = AppConfig(
+        model_roles={
+            "structure_auditor": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.5",
+                max_retries=2,
+            )
+        }
+    )
+    report = "FINDINGS: Clear lungs.\nIMPRESSION: No acute cardiopulmonary disease."
+
+    result = evaluate_pairwise(
+        report,
+        report,
+        modality="cxr",
+        config=cfg,
+        llm_client=client,
+    )
+
+    assert client.call_count == 1
+    assert client.call_kwargs[0]["provider"] == "chat_completions"
+    assert result["structure_diff"]["artifact_type"] == "structure_diff"
+    assert result["structure_diff"]["metric_version"] == "tool6-structure-v2"
+    assert result["structure_audit"]["verdict"] == "no_material_issue"
+    assert result["structure_audit"]["primary_preserved"] is True
 
 
 def test_pairwise_aligns_candidate_against_human_reference():
@@ -38,7 +405,225 @@ def test_pairwise_aligns_candidate_against_human_reference():
     error_types = [item["error_type"] for item in result["alignment"]["error_candidates"]]
     assert "false_finding" in error_types
     assert "omission_finding" in error_types
-    assert result["alignment"]["candidate_only"][0]["observation"] == "effusion"
+    assert result["alignment"]["candidate_only"][0]["observation_code"] == "effusion"
+
+
+def test_pairwise_uses_configured_hazard_schema_retries():
+    client = _SequenceClient(["not json", {"errors": [{"error_type": "incorrect_severity", "hazard_level": 5, "explanation": "clinically important severity mismatch"}]}])
+    cfg = AppConfig(llm=LLMConfig(provider="mock", max_retries=2))
+
+    result = evaluate_pairwise(
+        "FINDINGS: Mild pneumothorax.",
+        "FINDINGS: Severe pneumothorax.",
+        modality="cxr",
+        config=cfg,
+        llm_client=client,
+    )
+
+    assert client.call_count == 2
+    assert result["hazards"]["metadata"]["backend"] == "llm_judge"
+    assert result["hazards"]["metadata"]["attempt_count"] == 2
+    assert result["hazards"]["errors"][0]["hazard_level"] == 5
+
+
+def test_pairwise_routes_hazard_judge_through_configured_model_role():
+    client = _SequenceClient(
+        [
+            {
+                "errors": [
+                    {
+                        "error_type": "incorrect_severity",
+                        "hazard_level": 4,
+                        "explanation": "important",
+                        "recommended_action": "radiologist_review",
+                        "confidence": 0.9,
+                        "evidence_ids": ["e1"],
+                        "abstain": False,
+                    }
+                ]
+            }
+        ]
+    )
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock", max_retries=1),
+        model_roles={
+            "hazard_primary": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.5",
+                api_key_env="DMX_API_KEY",
+                base_url="https://www.DMXAPI.cn/v1",
+                max_retries=2,
+            )
+        },
+    )
+
+    result = evaluate_pairwise(
+        "FINDINGS: Mild pneumothorax.",
+        "FINDINGS: Severe pneumothorax.",
+        modality="cxr",
+        config=cfg,
+        llm_client=client,
+    )
+
+    assert client.call_kwargs[0]["provider"] == "chat_completions"
+    assert client.call_kwargs[0]["model"] == "gpt-5.5"
+    assert result["hazards"]["metadata"]["role"] == "hazard_primary"
+    assert result["hazards"]["metadata"]["fallback_used"] is False
+
+
+def test_pairwise_runs_independent_hazard_reviewer_and_preserves_primary():
+    primary_response = {
+        "errors": [
+            {
+                "error_type": "incorrect_severity",
+                "hazard_level": 4,
+                "explanation": "Potentially important undercall.",
+                "recommended_action": "radiologist_review",
+                "confidence": 0.9,
+                "evidence_ids": ["e1"],
+                "abstain": False,
+            }
+        ]
+    }
+    reviewer_response = {
+        "errors": [
+            {
+                "error_type": "incorrect_severity",
+                "hazard_level": 2,
+                "explanation": "Limited immediate impact.",
+                "recommended_action": "review_if_relevant",
+                "confidence": 0.8,
+                "evidence_ids": ["e1"],
+                "abstain": False,
+            }
+        ]
+    }
+    client = _SequenceClient([primary_response, reviewer_response])
+    cfg = AppConfig(
+        model_roles={
+            "hazard_primary": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.5",
+                max_retries=2,
+            ),
+            "hazard_reviewer": ModelRoleConfig(
+                provider="chat_completions",
+                model="claude-opus-4-6",
+                max_retries=2,
+            ),
+        }
+    )
+
+    result = evaluate_pairwise(
+        "FINDINGS: Mild pneumothorax.",
+        "FINDINGS: Severe pneumothorax.",
+        modality="cxr",
+        config=cfg,
+        llm_client=client,
+    )
+
+    assert client.call_count == 2
+    assert client.call_kwargs[0]["model"] == "gpt-5.5"
+    assert client.call_kwargs[1]["model"] == "claude-opus-4-6"
+    assert result["hazards"]["errors"][0]["hazard_level"] == 4
+    assert result["hazard_review"]["reviewer_result"]["errors"][0]["hazard_level"] == 2
+    assert result["hazard_review"]["primary_preserved"] is True
+    assert result["hazard_review"]["requires_adjudication"] is True
+
+
+def test_pairwise_routes_hazard_disagreements_to_third_adjudicator(tmp_path: Path):
+    primary_response = {
+        "errors": [
+            {
+                "error_type": "incorrect_severity",
+                "hazard_level": 4,
+                "explanation": "Potentially important undercall.",
+                "recommended_action": "radiologist_review",
+                "confidence": 0.9,
+                "evidence_ids": ["e1"],
+                "abstain": False,
+            }
+        ]
+    }
+    reviewer_response = {
+        "errors": [
+            {
+                "error_type": "incorrect_severity",
+                "hazard_level": 2,
+                "explanation": "Limited impact.",
+                "recommended_action": "review_if_relevant",
+                "confidence": 0.8,
+                "evidence_ids": ["e1"],
+                "abstain": False,
+            }
+        ]
+    }
+    adjudicator_response = {
+        "decisions": [
+            {
+                "error_index": 0,
+                "error_type": "incorrect_severity",
+                "hazard_level": 3,
+                "recommended_action": "radiologist_review",
+                "explanation": "Moderate risk best fits the available evidence.",
+                "confidence": 0.85,
+                "evidence_ids": ["d1"],
+                "abstain": False,
+            }
+        ]
+    }
+    client = _SequenceClient(
+        [primary_response, reviewer_response, adjudicator_response]
+    )
+    cfg = AppConfig(
+        model_roles={
+            "hazard_primary": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.6-terra",
+            ),
+            "hazard_reviewer": ModelRoleConfig(
+                provider="chat_completions",
+                model="claude-opus-4-8",
+            ),
+            "hazard_adjudicator": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.6-terra-ultra",
+            ),
+        }
+    )
+
+    checkpoint_root = tmp_path / "checkpoints"
+    first_store = StageCheckpointStore(checkpoint_root)
+    result = evaluate_pairwise(
+        "FINDINGS: Mild pneumothorax.",
+        "FINDINGS: Severe pneumothorax.",
+        modality="cxr",
+        config=cfg,
+        llm_client=client,
+        checkpoint_store=first_store,
+        checkpoint_namespace="candidate_0",
+    )
+
+    assert client.call_count == 3
+    assert client.call_kwargs[2]["model"] == "gpt-5.6-terra-ultra"
+    assert result["hazard_adjudication"]["decisions"][0]["hazard_level"] == 3
+    assert first_store.summary()["stats"] == {"hits": 0, "misses": 3, "writes": 3}
+
+    replay_client = _SequenceClient(["cached stages must not call the provider"])
+    second_store = StageCheckpointStore(checkpoint_root)
+    replay = evaluate_pairwise(
+        "FINDINGS: Mild pneumothorax.",
+        "FINDINGS: Severe pneumothorax.",
+        modality="cxr",
+        config=cfg,
+        llm_client=replay_client,
+        checkpoint_store=second_store,
+        checkpoint_namespace="candidate_0",
+    )
+
+    assert replay == result
+    assert replay_client.call_count == 0
+    assert second_store.summary()["stats"] == {"hits": 3, "misses": 0, "writes": 0}
 
 
 def test_single_case_workflow_writes_json(tmp_path: Path):
@@ -66,6 +651,75 @@ def test_cli_single_case(tmp_path: Path):
     assert code == 0
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert "pairwise_comparisons" in payload
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.single-case"
+    assert entry["outputs"]["result"] == str(output)
+    assert entry["metrics"]["generated_report_count"] == len(payload["generated_reports"])
+
+
+def test_cli_benchmark_evaluate_uses_explicit_config_and_resume_flag(
+    tmp_path: Path,
+    monkeypatch,
+):
+    captured = {}
+
+    def fake_evaluate(benchmark_dir, manifest, output_dir, **kwargs):
+        captured.update(
+            {
+                "benchmark_dir": benchmark_dir,
+                "manifest": manifest,
+                "output_dir": output_dir,
+                **kwargs,
+            }
+        )
+        return {"status": "succeeded", "evaluation_count": 1, "failure_count": 0}
+
+    monkeypatch.setattr(
+        "medharness2.cli.evaluate_generation_benchmark",
+        fake_evaluate,
+    )
+    benchmark_dir = tmp_path / "benchmark"
+    manifest = tmp_path / "manifest.jsonl"
+    output_dir = tmp_path / "evaluation"
+
+    code = main(
+        [
+            "benchmark",
+            "evaluate",
+            "--benchmark-dir",
+            str(benchmark_dir),
+            "--manifest",
+            str(manifest),
+            "--output-dir",
+            str(output_dir),
+            "--config",
+            "config/codex_yunwu_strong.yaml",
+            "--no-resume",
+        ]
+    )
+
+    assert code == 0
+    assert captured["benchmark_dir"] == str(benchmark_dir)
+    assert captured["manifest"] == str(manifest)
+    assert captured["output_dir"] == str(output_dir)
+    assert captured["resume"] is False
+    assert captured["config"].model_roles["general_judge"].model == "gpt-5.6-terra"
+
+
+class _SequenceClient:
+    def __init__(self, responses):
+        self.responses = responses
+        self.call_count = 0
+        self.call_kwargs = []
+
+    def call(self, prompt: str, image_path: str | None = None, **kwargs):
+        self.call_count += 1
+        self.call_kwargs.append(kwargs)
+        response = self.responses[min(self.call_count - 1, len(self.responses) - 1)]
+        if isinstance(response, str):
+            return response
+        return json.dumps(response, ensure_ascii=False)
 
 
 def test_single_case_quality_gate_blocks_off_domain_generated_report(tmp_path: Path):
@@ -172,6 +826,25 @@ def test_single_case_fallback_uses_primary_image_instead_of_volume(tmp_path: Pat
     assert client.generation_image_path == str(primary)
 
 
+def test_cli_sample_data_writes_run_registry(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
+    output_dir = tmp_path / "dataset"
+
+    code = main(["workflow", "sample-data", "--sample-root", str(sample_root), "--output-dir", str(output_dir), "--limit", "1", "--skip-ocr"])
+
+    assert code == 0
+    assert (output_dir / "manifest.jsonl").exists()
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.sample-data"
+    assert entry["outputs"]["manifest"] == str(output_dir / "manifest.jsonl")
+    assert entry["metrics"]["case_count"] == 1
+
+
 def test_cli_sample_full(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
@@ -215,6 +888,11 @@ def test_cli_sample_full(tmp_path: Path):
     assert code == 0
     payload = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
     assert payload["validation"]["passed"] is True
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.sample-full"
+    assert entry["metrics"]["case_count"] == 1
+    assert entry["metrics"]["validation_passed"] is True
 
 
 def test_cli_sample_full_dry_run_all_compatible(tmp_path: Path):
@@ -242,6 +920,10 @@ def test_cli_sample_full_dry_run_all_compatible(tmp_path: Path):
     route_plan = json.loads((output_dir / "route_plan.json").read_text(encoding="utf-8"))
     assert "maira_2" in route_plan["cases"][0]["compatible_model_keys"]
     assert not (output_dir / "workflow2.json").exists()
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.sample-full.dry-run"
+    assert entry["metrics"]["case_count"] == 1
 
 
 def test_cli_sample_full_dry_run_filters_model_source(tmp_path: Path):
@@ -282,6 +964,70 @@ def test_cli_models_list_shows_local_ready_generators(capsys):
     assert "brain_gemma3d" not in captured.out
 
 
+def test_cli_batch_readers_and_department_write_run_registry(tmp_path: Path):
+    report = tmp_path / "report.txt"
+    image = tmp_path / "image.dcm"
+    manifest = tmp_path / "manifest.jsonl"
+    config_path = _mock_no_local_config(tmp_path)
+    report.write_text("FINDINGS: No pneumothorax. IMPRESSION: No acute disease.", encoding="utf-8")
+    image.write_text("dummy", encoding="utf-8")
+    manifest.write_text(
+        json.dumps(
+            {
+                "case_id": "case1",
+                "reader": "reader_a",
+                "modality": "cxr",
+                "body_part": "chest",
+                "report_text": str(report),
+                "image_paths": [str(image)],
+                "derived_assets": {"primary_image": str(image)},
+                "warnings": [],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    workflow2 = tmp_path / "workflow2.json"
+    workflow3 = tmp_path / "workflow3.json"
+
+    batch_code = main(
+        [
+            "workflow",
+            "batch-readers",
+            "--manifest",
+            str(manifest),
+            "--output",
+            str(workflow2),
+            "--config",
+            str(config_path),
+        ]
+    )
+    dept_code = main(["workflow", "department", "--batch-result", str(workflow2), "--output", str(workflow3)])
+
+    assert batch_code == 0
+    assert dept_code == 0
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    stages = [entry["stage"] for entry in registry["entries"]]
+    assert stages[-2:] == ["workflow.batch-readers", "workflow.department"]
+    assert registry["entries"][-2]["metrics"]["case_count"] == 1
+    assert registry["entries"][-1]["outputs"]["workflow3"] == str(workflow3)
+
+
+def test_cli_validate_run_writes_failed_run_registry(tmp_path: Path):
+    output_dir = tmp_path / "run"
+    output_dir.mkdir()
+
+    code = main(["workflow", "validate-run", "--output-dir", str(output_dir), "--expected-cases", "1"])
+
+    assert code == 1
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.validate-run"
+    assert entry["status"] == "failed"
+    assert entry["metrics"]["passed"] is False
+    assert entry["metrics"]["error_count"] >= 1
+
+
 def test_cli_preflight_returns_nonzero_when_real_ocr_is_blocked(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
@@ -306,3 +1052,43 @@ def test_cli_preflight_returns_nonzero_when_real_ocr_is_blocked(tmp_path: Path):
     assert code == 1
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert "real_ocr_required_but_provider_is_mock" in payload["blockers"]
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.preflight"
+    assert entry["status"] == "failed"
+    assert entry["metrics"]["passed"] is False
+
+
+def test_cli_preflight_records_failed_registry_on_exception(tmp_path: Path):
+    output = tmp_path / "preflight.json"
+
+    code = main(["workflow", "preflight", "--sample-root", str(tmp_path / "missing_sample"), "--output", str(output)])
+
+    assert code == 1
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.preflight"
+    assert entry["status"] == "failed"
+    assert entry["metrics"]["exception_type"] == "FileNotFoundError"
+
+
+def _mock_no_local_config(root: Path) -> Path:
+    config_path = root / "config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "llm:",
+                "  provider: mock",
+                "extractor:",
+                "  backend: placeholder",
+                "generator:",
+                "  cloud_fallback_enabled: true",
+                "  default_models: []",
+                "  local_models: []",
+                "  include_legacy_ready_models: false",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return config_path

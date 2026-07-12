@@ -1,0 +1,43 @@
+{
+  "schema_version": "2.0",
+  "artifact_type": "clinical_annotation_case",
+  "pilot_case_id": "pilot-006",
+  "source_case_sha256": "ea45799cc62bd2899c86e334e9dc4e94e6d76193c90f02ea44a25f09bf7c6aea",
+  "modality": "mri",
+  "body_part": "brain",
+  "reference_report": "检查所见：\n右侧基底节区及左侧丘脑区见点结状异常信号影，T1WI呈稍低信号、T2WI呈高信号影、T2Flair呈低信号、DWI未见信号增高；双侧侧脑室旁、额叶见结节状异常信号影，T2WI及T2-Flair呈高信号、T1WI呈等信号，DWI未见信号增高。脑室系统稍扩张，脑沟、裂、池稍增宽。中线结构居中。扫及双侧筛窦黏膜增厚。\n诊断印象：\n右侧基底节区及左侧丘脑区腔隙性软化灶。脑白质高信号，Fazekas 1级。轻度脑萎缩。扫及双侧筛窦黏膜增厚。",
+  "candidate_reports": [
+    {
+      "candidate_id": "candidate-01",
+      "blinded_model_id": "model-01",
+      "report_text": "Findings: The scan is a brain MRI FLAIR sequence. No obvious lesion sites are present in the image, and no lesions or abnormal high signals were detected from these regions of interest."
+    }
+  ],
+  "annotations": {
+    "reader_a": {
+      "reader_slot": "reader_a",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    },
+    "reader_b": {
+      "reader_slot": "reader_b",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    },
+    "adjudication": {
+      "reader_slot": "adjudication",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    }
+  },
+  "instructions_version": "1.0"
+}

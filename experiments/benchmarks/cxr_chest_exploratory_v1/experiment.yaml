@@ -1,0 +1,123 @@
+schema_version: "2.0"
+artifact_type: generation_benchmark_experiment
+experiment_id: cxr_chest_exploratory_v1
+status: succeeded
+mode: exploratory
+formal_claim_allowed: false
+created_at: "2026-07-10"
+case_manifest: experiments/benchmarks/cxr_chest_exploratory_v1/manifest.jsonl
+config: experiments/benchmarks/cxr_chest_exploratory_v1/config.yaml
+output_dir: outputs/benchmarks/cxr_chest_exploratory_v1_qwen3vl8b_case1_20260710/attempt_005
+runtime:
+  python_bin: /home/ubuntu/bin/python
+  python_paths:
+    - /nfsdata_a40/isbi/gzp/medHarness2/.venv/qwen3vl_jinja31
+  requirements: experiments/benchmarks/cxr_chest_exploratory_v1/runtime-requirements.txt
+generation_policy:
+  do_sample: false
+  generation_seed: 20260710
+  max_new_tokens: 128
+  reproducibility_check_attempts:
+    - attempt_004
+    - attempt_005
+selection:
+  modality: cxr
+  body_part: chest
+  case_count: 1
+  case_ids:
+    - CR2605290003
+  model_keys:
+    - qwen3vl_8b_mimic_cxr_sft
+provenance:
+  source_manifest: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710/manifest.jsonl
+  source_manifest_sha256: 0a15dcff422b1a62e0ef5dc2c1f4585281bede959b242c4d71517884fa4d78c1
+  input_asset_sha256: cd9b2f9bb69b0baddf3d7bb2f739e10d6273d46faaa46d5345e5083b555bccae
+  model_file: /nfsdata_a40/isbi/gzp/medHarness/resources/models/qwen3vl_8b_mimic_cxr_sft/model.safetensors
+  model_sha256: 69278670cb7ee72c8c8ba2b5fd0e1004fe02fdb8ade1cb84d7cbbd49167dd937
+gates:
+  reference_report_used: false
+  required_evidence_tier: exploratory_fresh
+  cloud_fallback_allowed: false
+  mock_allowed: false
+  formal_validation_id_required_for_claim: true
+limitations:
+  - Single-case operational benchmark; no efficacy conclusion is permitted.
+  - No clinician gold label or blinded preference assessment is attached.
+  - The model snapshot lacks a verified repository revision and formal validation ID.
+attempts:
+  - attempt_id: attempt_001
+    status: failed
+    output_dir: outputs/benchmarks/cxr_chest_exploratory_v1_qwen3vl8b_case1_20260710/attempt_001
+    reason: transformers 5.12.1 requires Jinja2 >= 3.1 for apply_chat_template; shared runtime had 3.0.3.
+    hashes:
+      benchmark_results_jsonl: d6227acf62458860272a74a3e41b4932276e656a80e85e86a0b51154df1382b7
+      benchmark_manifest_json: 4207d0bd73374e45236ac06cef8c108bc312f793bfe06b8bfe4e4c9f874d5a43
+      benchmark_summary_json: 1449156bff8a070e42f81026102855a4c7cead35aac61c2c86acf71b5c66ac9f
+  - attempt_id: attempt_002
+    status: succeeded_inherited_sampling_policy
+    output_dir: outputs/benchmarks/cxr_chest_exploratory_v1_qwen3vl8b_case1_20260710/attempt_002
+    latency_sec: 17.2524
+    result_count: 1
+    failure_count: 0
+    evidence_tier: exploratory_fresh
+    reference_report_used: false
+    quality_gate_passed: true
+    warnings:
+      - section_parse_fallback_full_text_as_findings
+    hashes:
+      benchmark_results_jsonl: 5e6e5daeb674d1cdefe5ab9b3ab0d1a73b16b5f94921cd571e850507dc06f977
+      benchmark_manifest_json: 5177397e12151afc5c74e3a38c9e9baaa10908e76ebbaae9f7702cea7074055a
+      benchmark_summary_json: 53d6491d2bfc0a424abb4e5331f4e07f75211c449b81c25ed00af1a887d71740
+  - attempt_id: attempt_003
+    status: succeeded_nondeterministic_policy
+    output_dir: outputs/benchmarks/cxr_chest_exploratory_v1_qwen3vl8b_case1_20260710/attempt_003
+    latency_sec: 19.2162
+    adapter_latency_sec: 4.363
+    report: The lungs are clear without focal consolidation. No pleural effusion or pneumothorax is seen. The cardiac and mediastinal silhouettes are unremarkable.
+    generation_policy: inherited_sampling_from_model_generation_config
+    hashes:
+      benchmark_results_jsonl: 0ee5b83d971d22f2a1ee6f518246e73efb8df548b4f2b30cfa55df0b9543169f
+      benchmark_manifest_json: e33867c42005cb2ce267f8505c5770be00cde9e125d2a5816691066d1cbe9f67
+      benchmark_summary_json: 93ffe109373d658eb2897efc5f13d8ab1bbcd91aa6eda3a782dd88bc0fc5a804
+  - attempt_id: attempt_004
+    status: succeeded
+    output_dir: outputs/benchmarks/cxr_chest_exploratory_v1_qwen3vl8b_case1_20260710/attempt_004
+    latency_sec: 18.9393
+    adapter_latency_sec: 3.414
+    report: The lungs are clear. The cardiomediastinal silhouette is normal. No acute osseous abnormalities identified.
+    generation_policy:
+      do_sample: false
+      generation_seed: 20260710
+    hashes:
+      benchmark_results_jsonl: e8c429ff55fee1e0b038192fd96a6f999f0d5f6f132888da20fbbfc818997ad9
+      benchmark_manifest_json: 35204ebc799f203f6678f78421f43c8f2f40f3de4431f9c6b571d65a99a128c3
+      benchmark_summary_json: 14f9ada1d5b7110aa68b907feadd83a26ab4b6beda07c4d14ed0887070464bbd
+  - attempt_id: attempt_005
+    status: succeeded
+    output_dir: outputs/benchmarks/cxr_chest_exploratory_v1_qwen3vl8b_case1_20260710/attempt_005
+    latency_sec: 18.9703
+    adapter_latency_sec: 3.534
+    report: The lungs are clear. The cardiomediastinal silhouette is normal. No acute osseous abnormalities identified.
+    generation_policy:
+      do_sample: false
+      generation_seed: 20260710
+    hashes:
+      benchmark_results_jsonl: 88491df213cff43eb178b958faeed2d7f55029d716de3fd95e147c05025c3c9f
+      benchmark_manifest_json: ae5841e5b52ca0dd3c82eabfb884430cbb1b83568d1468799e801e34ba13d563
+      benchmark_summary_json: e011d6d4277a337ff61109ecb6e9cefb95ba2068b6e87f7cab7f7d03b1e2fcfa
+results:
+  generated_report: The lungs are clear. The cardiomediastinal silhouette is normal. No acute osseous abnormalities identified.
+  qualitative_reference_alignment: Directionally consistent with the source report conclusion of no obvious cardiopulmonary abnormality; not clinician adjudicated.
+  reproducibility:
+    attempts:
+      - attempt_004
+      - attempt_005
+    raw_model_output_identical: true
+    config_sha256_identical: true
+    config_sha256: dfc2e0498264ca866245d9a62cdd13c436ea1bbc3d14ac1718e7186b3b29d76c
+    input_manifest_sha256_identical: true
+    input_manifest_sha256: 4e6857a9d67c5fded8502dcb62bf7b51163867bc61ac9fd721d85613dc165a44
+  hashes:
+    benchmark_results_jsonl: 88491df213cff43eb178b958faeed2d7f55029d716de3fd95e147c05025c3c9f
+    benchmark_manifest_json: ae5841e5b52ca0dd3c82eabfb884430cbb1b83568d1468799e801e34ba13d563
+    benchmark_summary_json: e011d6d4277a337ff61109ecb6e9cefb95ba2068b6e87f7cab7f7d03b1e2fcfa

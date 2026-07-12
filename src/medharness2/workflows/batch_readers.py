@@ -125,7 +125,7 @@ def _precompute_medharness_cli_reports(
     grouped: dict[str, tuple[GeneratorEntry, list[dict[str, Any]]]] = {}
     source_filter = set(model_sources or [])
     for row in rows:
-        case_input = _case_generation_input(row)
+        case_input = _case_generation_input(row, include_reference=config.generator.reference_assisted_generation)
         if not case_input:
             continue
         entries = registry.select(row.modality, requested=model_keys, body_part=row.body_part, sources=source_filter)
@@ -143,7 +143,7 @@ def _precompute_medharness_cli_reports(
     return reports_by_case
 
 
-def _case_generation_input(row: CaseManifest) -> dict[str, Any] | None:
+def _case_generation_input(row: CaseManifest, *, include_reference: bool) -> dict[str, Any] | None:
     report_text, report_path = _resolve_report_text(row.report_text)
     if report_text is None and report_path is not None:
         if not report_path.exists():
@@ -162,7 +162,7 @@ def _case_generation_input(row: CaseManifest) -> dict[str, Any] | None:
         "image_path": image_path,
         "modality": row.modality,
         "body_part": row.body_part,
-        "reference_report": report_text or "",
+        "reference_report": (report_text or "") if include_reference else "",
         "prompt": _case_generation_prompt(row),
     }
 

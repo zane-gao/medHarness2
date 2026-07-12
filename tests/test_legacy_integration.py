@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
+import medharness2.config as config_module
+import yaml
 from medharness2.config import AppConfig, GeneratorConfig, LLMConfig, load_config
 from medharness2.generators.registry import ReportGeneratorRegistry
 from medharness2.llm_client import LLMClient
@@ -82,7 +85,9 @@ def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: P
 
     def fake_run(cmd, check, capture_output, text, timeout):
         assert cmd[0] == "/opt/isolated/bin/python"
-        assert "/data/isbi/gzp/medHarness/scripts/run_report_generation.py" in cmd
+        script_path = Path(cmd[1])
+        assert script_path.name == "run_report_generation.py"
+        assert script_path.exists()
         config_path = Path(cmd[cmd.index("--config") + 1])
         assert config_path != legacy_config
         assert "/opt/isolated/bin/python" in config_path.read_text(encoding="utf-8")
@@ -91,7 +96,28 @@ def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: P
         assert Path(input_row["image_paths"][0]).is_absolute()
         out_index = cmd.index("--output-jsonl") + 1
         Path(cmd[out_index]).write_text(
-            json.dumps({"model_key": "maira_2", "generated_text": "FINDINGS: Clear lungs.", "modality": "xray"})
+            json.dumps(
+                {
+                    "case_id": "case-1",
+                    "model_key": "maira_2",
+                    "generated_text": "FINDINGS: Clear lungs.",
+                    "generated_sections": {
+                        "findings": "Clear lungs.",
+                        "impression": "",
+                    },
+                    "modality": "xray",
+                    "body_part": "chest",
+                    "input_assets": {"image_paths": ["/input/image.png"]},
+                    "runtime": {
+                        "device": "cuda:0",
+                        "dtype": "bf16",
+                        "max_new_tokens": 128,
+                        "latency_sec": 1.25,
+                    },
+                    "raw_output": "FINDINGS: Clear lungs.",
+                    "adapter_status": "passed",
+                }
+            )
             + "\n",
             encoding="utf-8",
         )
@@ -120,6 +146,344 @@ def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: P
     assert reports[0].model == "maira_2"
     assert reports[0].source == "medharness_cli"
     assert reports[0].report == "FINDINGS: Clear lungs."
+    assert reports[0].metadata["adapter_runtime"] == {
+        "device": "cuda:0",
+        "dtype": "bf16",
+        "max_new_tokens": 128,
+        "latency_sec": 1.25,
+    }
+    assert reports[0].metadata["adapter_input_assets"] == {
+        "image_paths": ["/input/image.png"]
+    }
+    assert reports[0].metadata["adapter_generated_sections"] == {
+        "findings": "Clear lungs.",
+        "impression": "",
+    }
+    assert reports[0].metadata["raw_model_output"] == "FINDINGS: Clear lungs."
+
+
+def test_legacy_cli_overlay_rewrites_legacy_mount_paths_with_default_python(
+    monkeypatch,
+    tmp_path: Path,
+):
+    stale_root = tmp_path / "stale_mount"
+    live_root = tmp_path / "live_mount"
+    model_dir = live_root / "models" / "benchmark"
+    model_dir.mkdir(parents=True)
+    script = live_root / "run_report_generation.py"
+    script.write_text("# test script\n", encoding="utf-8")
+    legacy_config = live_root / "reportgen_models.yaml"
+    legacy_config.write_text(
+        "project_root: " + str(stale_root) + "\n"
+        "models:\n"
+        "  benchmark-model:\n"
+        "    model_path: " + str(stale_root / "models" / "benchmark") + "\n"
+        "    python_bin: python\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        config_module,
+        "LEGACY_MOUNT_FALLBACKS",
+        ((stale_root, live_root),),
+    )
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        config_path = Path(cmd[cmd.index("--config") + 1])
+        assert config_path != legacy_config
+        overlay = config_path.read_text(encoding="utf-8")
+        assert str(live_root) in overlay
+        assert str(stale_root) not in overlay
+        output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+        output_path.write_text(
+            json.dumps(
+                {
+                    "model_key": "benchmark-model",
+                    "generated_text": "FINDINGS: Clear lungs.",
+                    "modality": "xray",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["benchmark-model"],
+            local_models=[
+                {
+                    "key": "benchmark-model",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["cxr"],
+                    "medharness_model_key": "benchmark-model",
+                    "python_bin": "python",
+                    "script_path": str(script),
+                    "config_path": str(legacy_config),
+                    "ready": True,
+                }
+            ],
+        )
+    )
+
+    reports = generate_reports(str(tmp_path / "image.png"), "cxr", config=cfg)
+
+    assert reports[0].report == "FINDINGS: Clear lungs."
+
+
+def test_legacy_cli_default_python_preserves_model_specific_runner_python(
+    monkeypatch,
+    tmp_path: Path,
+):
+    runner_python = tmp_path / "specialized_env" / "bin" / "python"
+    runner_python.parent.mkdir(parents=True)
+    runner_python.write_text("", encoding="utf-8")
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# test script\n", encoding="utf-8")
+    legacy_config = tmp_path / "reportgen_models.yaml"
+    legacy_config.write_text(
+        "models:\n"
+        "  benchmark-model:\n"
+        "    python_bin: " + str(runner_python) + "\n",
+        encoding="utf-8",
+    )
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        assert cmd[0] == "python"
+        config_path = Path(cmd[cmd.index("--config") + 1])
+        overlay = config_path.read_text(encoding="utf-8")
+        assert str(runner_python) in overlay
+        output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+        output_path.write_text(
+            json.dumps(
+                {
+                    "model_key": "benchmark-model",
+                    "generated_text": "FINDINGS: Clear lungs.",
+                    "modality": "xray",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["benchmark-model"],
+            local_models=[
+                {
+                    "key": "benchmark-model",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["cxr"],
+                    "medharness_model_key": "benchmark-model",
+                    "python_bin": "python",
+                    "script_path": str(script),
+                    "config_path": str(legacy_config),
+                    "ready": True,
+                }
+            ],
+        )
+    )
+
+    reports = generate_reports(str(tmp_path / "image.png"), "cxr", config=cfg)
+
+    assert reports[0].report == "FINDINGS: Clear lungs."
+
+
+def test_legacy_cli_resolves_absolute_python_bin_from_legacy_mount(
+    monkeypatch,
+    tmp_path: Path,
+):
+    stale_root = tmp_path / "stale_mount"
+    live_root = tmp_path / "live_mount"
+    python_bin = live_root / "env" / "bin" / "python"
+    python_bin.parent.mkdir(parents=True)
+    python_bin.write_text("", encoding="utf-8")
+    script = live_root / "run_report_generation.py"
+    script.write_text("# test script\n", encoding="utf-8")
+    legacy_config = live_root / "reportgen_models.yaml"
+    legacy_config.write_text(
+        "models:\n"
+        "  benchmark-model:\n"
+        "    python_bin: " + str(stale_root / "env" / "bin" / "python") + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        config_module,
+        "LEGACY_MOUNT_FALLBACKS",
+        ((stale_root, live_root),),
+    )
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        assert cmd[0] == str(python_bin)
+        output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+        output_path.write_text(
+            json.dumps(
+                {
+                    "model_key": "benchmark-model",
+                    "generated_text": "FINDINGS: Clear lungs.",
+                    "modality": "xray",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["benchmark-model"],
+            local_models=[
+                {
+                    "key": "benchmark-model",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["cxr"],
+                    "medharness_model_key": "benchmark-model",
+                    "python_bin": str(stale_root / "env" / "bin" / "python"),
+                    "script_path": str(script),
+                    "config_path": str(legacy_config),
+                    "ready": True,
+                }
+            ],
+        )
+    )
+
+    reports = generate_reports(str(tmp_path / "image.png"), "cxr", config=cfg)
+
+    assert reports[0].report == "FINDINGS: Clear lungs."
+
+
+def test_legacy_cli_prepends_model_specific_python_paths(
+    monkeypatch,
+    tmp_path: Path,
+):
+    overlay = tmp_path / "python_overlay"
+    overlay.mkdir()
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# test script\n", encoding="utf-8")
+    legacy_config = tmp_path / "reportgen_models.yaml"
+    legacy_config.write_text(
+        "models:\n  benchmark-model:\n    python_bin: python\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PYTHONPATH", "/existing/pythonpath")
+
+    def fake_run(cmd, check, capture_output, text, timeout, env):
+        python_paths = env["PYTHONPATH"].split(os.pathsep)
+        assert python_paths == [str(overlay), "/existing/pythonpath"]
+        assert os.environ["PYTHONPATH"] == "/existing/pythonpath"
+        output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+        output_path.write_text(
+            json.dumps(
+                {
+                    "model_key": "benchmark-model",
+                    "generated_text": "FINDINGS: Clear lungs.",
+                    "modality": "xray",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["benchmark-model"],
+            local_models=[
+                {
+                    "key": "benchmark-model",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["cxr"],
+                    "medharness_model_key": "benchmark-model",
+                    "python_bin": "python",
+                    "python_paths": [str(overlay)],
+                    "script_path": str(script),
+                    "config_path": str(legacy_config),
+                    "ready": True,
+                }
+            ],
+        )
+    )
+
+    reports = generate_reports(str(tmp_path / "image.png"), "cxr", config=cfg)
+
+    assert reports[0].report == "FINDINGS: Clear lungs."
+
+
+def test_legacy_cli_overlay_applies_explicit_generation_parameters(
+    monkeypatch,
+    tmp_path: Path,
+):
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# test script\n", encoding="utf-8")
+    legacy_config = tmp_path / "reportgen_models.yaml"
+    legacy_config.write_text(
+        "models:\n"
+        "  benchmark-model:\n"
+        "    do_sample: true\n"
+        "    temperature: 0.7\n",
+        encoding="utf-8",
+    )
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        config_path = Path(cmd[cmd.index("--config") + 1])
+        overlay = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        model = overlay["models"]["benchmark-model"]
+        assert model["do_sample"] is False
+        assert model["generation_seed"] == 17
+        assert "temperature" not in model
+        output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+        output_path.write_text(
+            json.dumps(
+                {
+                    "model_key": "benchmark-model",
+                    "generated_text": "FINDINGS: Clear lungs.",
+                    "modality": "xray",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["benchmark-model"],
+            local_models=[
+                {
+                    "key": "benchmark-model",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["cxr"],
+                    "medharness_model_key": "benchmark-model",
+                    "script_path": str(script),
+                    "config_path": str(legacy_config),
+                    "generation_parameters": {
+                        "do_sample": False,
+                        "generation_seed": 17,
+                        "temperature": None,
+                    },
+                    "ready": True,
+                }
+            ],
+        )
+    )
+
+    reports = generate_reports(str(tmp_path / "image.png"), "cxr", config=cfg)
+
+    assert reports[0].metadata["generation_parameters"] == {
+        "do_sample": False,
+        "generation_seed": 17,
+        "temperature": None,
+    }
 
 
 def test_legacy_cli_generator_uses_brain_mri_prompt_for_braingemma(monkeypatch, tmp_path: Path):
@@ -313,7 +677,7 @@ def test_default_config_uses_maira2_compatible_python_bin():
 
 def test_cxr_rule_extractor_marks_negated_observation_absent():
     graph = extract_findings("FINDINGS: There is no pneumothorax. Mild right lung opacity.", modality="cxr", backend="cxr_rule")
-    pneumothorax = [item for item in graph["findings"] if item["observation"] == "pneumothorax"][0]
+    pneumothorax = [item for item in graph["findings"] if item["observation_code"] == "pneumothorax"][0]
     assert pneumothorax["certainty"] == "absent"
     assert graph["backend"] == "cxr_rule"
     assert graph["coverage"] > 0
@@ -349,7 +713,7 @@ def test_openai_extract_text_and_json_payload(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     client = LLMClient(AppConfig(llm=LLMConfig(provider="openai", model="gpt-test", max_retries=1)))
-    result = client.call("return json", response_format="json")
+    result = client.call("return json", response_format="json", payload_classification="synthetic_test")
     assert result == "{\"ok\": true}"
     assert calls["body"]["text"]["format"]["type"] == "json_object"
 

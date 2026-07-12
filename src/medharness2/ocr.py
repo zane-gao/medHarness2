@@ -50,7 +50,14 @@ def extract_report_text(
             "Extract the radiology report text from this scanned PDF. "
             "Return only the report body. Preserve Findings and Impression sections when present."
         )
-        text = str(client.call(prompt, image_path=str(pdf), response_format="text")).strip()
+        text = str(
+            client.call(
+                prompt,
+                image_path=str(pdf),
+                response_format="text",
+                payload_classification="raw_medical_document",
+            )
+        ).strip()
         method = "vlm_ocr"
         provider = cfg.llm.provider
         if not text:

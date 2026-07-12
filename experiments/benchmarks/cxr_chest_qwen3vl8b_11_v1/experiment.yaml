@@ -1,0 +1,130 @@
+schema_version: "2.0"
+artifact_type: generation_benchmark_experiment
+experiment_id: cxr_chest_qwen3vl8b_11_v1
+status: succeeded
+mode: exploratory
+formal_claim_allowed: false
+created_at: "2026-07-11"
+completed_at: "2026-07-11"
+case_manifest: outputs/cxr_real_ocr_three_fresh_11_20260606/manifest.jsonl
+config: experiments/benchmarks/cxr_chest_exploratory_v1/config.yaml
+output_dir: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/attempt_001
+selection:
+  modality: cxr
+  body_part: chest
+  case_count: 11
+  selection_rule: all cxr/chest cases in the frozen 52-case pilot manifest
+  case_ids:
+    - CR2605290003
+    - CR2605290004
+    - CR2605290006
+    - CR2605290009
+    - CR2605290011
+    - CR2605290012
+    - CR2605290013
+    - CR2605300005
+    - CR2605300012
+    - CR2605300013
+    - CR2605300015
+  model_keys:
+    - qwen3vl_8b_mimic_cxr_sft
+generation_policy:
+  do_sample: false
+  generation_seed: 20260710
+  max_new_tokens: 128
+  expected_execution_mode: batch
+  expected_model_process_count: 1
+provenance:
+  case_manifest_sha256: 7b58bc5648f3f0e38dbf6cf7c0385b16238f62941d2cb5f02592c1ea0a38ff1d
+  config_file_sha256: 4db7f9022f95a6091bb80a386df40f53fd514bb19e52ac8a4653a6c61b2a7e64
+  model_file: /nfsdata_a40/isbi/gzp/medHarness/resources/models/qwen3vl_8b_mimic_cxr_sft/model.safetensors
+  model_sha256: 69278670cb7ee72c8c8ba2b5fd0e1004fe02fdb8ade1cb84d7cbbd49167dd937
+gates:
+  reference_report_used: false
+  required_evidence_tier: exploratory_fresh
+  cloud_fallback_allowed: false
+  mock_allowed: false
+  all_input_assets_required: true
+  all_cases_must_return_output: true
+  formal_validation_id_required_for_claim: true
+limitations:
+  - Single-model exploratory benchmark; no between-model conclusion is permitted.
+  - Existing reference reports are present in the source manifest but are never passed to generation.
+  - No clinician gold label, blinded preference assessment, or formal validation ID is attached.
+  - Exact duplicate outputs occur across cases; model quality requires post-hoc clinical evaluation and cannot be inferred from generation success.
+result_summary:
+  case_count: 11
+  result_count: 11
+  succeeded_count: 11
+  failure_count: 0
+  evidence_tier_counts:
+    exploratory_fresh: 11
+  execution_mode_counts:
+    batch: 11
+  expected_model_process_count_observed: 1
+  reference_report_used_count: 0
+  empty_report_count: 0
+  unique_report_count: 5
+  unique_report_rate: 0.454545
+  batch_latency_sec: 29.6098
+  adapter_latency_sec:
+    mean: 1.3619
+    min: 0.896
+    max: 2.139
+  warning_counts:
+    section_parse_fallback_full_text_as_findings: 11
+artifacts:
+  benchmark_manifest:
+    path: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/attempt_001/benchmark_manifest.json
+    sha256: 32c6311662a1257a704914e60fc09951c1f447e4e0cd2750de6e1db3e8d26922
+  benchmark_results:
+    path: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/attempt_001/benchmark_results.jsonl
+    sha256: 3ae07e52e0c82ae37546fb2985dc97916d61cf05e601da686235cc4b7d42d9c2
+  benchmark_summary:
+    path: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/attempt_001/benchmark_summary.json
+    sha256: fc2ddffd33b67671001de6561eee99665267b5e52b2764b9bb654fc6b4851aa5
+posthoc_evaluation:
+  status: exploratory_full_11_dmx_succeeded
+  case_count: 11
+  profile: config/dmx_strong.yaml
+  output_dir: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/evaluation_dmx_ontology_v2_v2/attempt_001
+  fallback_count: 0
+  real_llm_evidence_count: 99
+  per_case_real_llm_evidence_count: 9
+  implementation_sha256: ed9d26ca0e73f777ee419fbdc3683f803fd93edac7499c492265909371e12b4a
+  evaluation_config_sha256: 2ccc541797fc011ea665a80ac7f7cfb14f6d31301f361ca539816f502a892818
+  clinical_validation_required: true
+  provider_model_counts:
+    chat_completions::gpt-5.6-terra::www.dmxapi.cn: 77
+    chat_completions::claude-opus-4-8::www.dmxapi.cn: 11
+    chat_completions::gpt-5.6-sol::www.dmxapi.cn: 11
+  exploratory_metrics:
+    candidate_likert_mean: 3.5273
+    deterministic_alignment_error_count: 141
+    t5_retained_error_count: 133
+    t5_rejected_error_count: 8
+    consensus_material_error_count: 51
+    consensus_unresolved_error_count: 3
+  notes:
+    - Every case passed strict T1/T2/T5/T4/T6 real-LLM verification with zero fallback.
+    - The source generation benchmark is exploratory_fresh, single-model, and has only five unique reports; no formal model or clinical claim is permitted.
+    - On nine cases common to the prior run, T1 exact agreement was 11.1 percent and consensus material-error exact agreement was 22.2 percent; automatic metrics require repeated-run calibration before formal use.
+    - T5 deterministic alignment remains preserved; complete LLM adjudication filters unsupported error candidates before T4.
+  artifacts:
+    evaluation_manifest:
+      path: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/evaluation_dmx_ontology_v2_v2/attempt_001/benchmark_evaluation_manifest.json
+      sha256: 1104d55077e762e36d9794dac3a8a363c2f51c9789ee58a9267982e5c960ff6a
+    evaluation_results:
+      path: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/evaluation_dmx_ontology_v2_v2/attempt_001/benchmark_evaluation_results.jsonl
+      sha256: 68abc3a6731cee68aa6b56699200de3342770fc19e0a784484a85e15303f0b6b
+    evaluation_summary:
+      path: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/evaluation_dmx_ontology_v2_v2/attempt_001/benchmark_evaluation_summary.json
+      sha256: 45b6e4fcef3d65da8555c6c76083970b661961f05a32beb6c95ebc053e27254e
+    stability_summary:
+      path: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/evaluation_dmx_ontology_v2_v2/attempt_001/analysis_v1/stability_summary.json
+    figure_manifest:
+      path: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/evaluation_dmx_ontology_v2_v2/attempt_001/analysis_v1/figure_manifest.json
+attempts:
+  - attempt_id: attempt_001
+    status: succeeded
+    output_dir: outputs/benchmarks/cxr_chest_qwen3vl8b_11_v1_20260711/attempt_001

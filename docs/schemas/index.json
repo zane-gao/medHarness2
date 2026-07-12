@@ -1,0 +1,15 @@
+{
+  "schema_version": "2.0",
+  "schemas": {
+    "artifact_reference": "artifact_reference.schema.json",
+    "alignment_audit": "alignment_audit.schema.json",
+    "case_evaluation": "case_evaluation.schema.json",
+    "finding_graph": "finding_graph.schema.json",
+    "generated_report": "generated_report.schema.json",
+    "hazard_adjudication": "hazard_adjudication.schema.json",
+    "hazard_result": "hazard_result.schema.json",
+    "hazard_review": "hazard_review.schema.json",
+    "structure_audit": "structure_audit.schema.json",
+    "run_manifest": "run_manifest.schema.json"
+  }
+}

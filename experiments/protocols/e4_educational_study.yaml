@@ -1,0 +1,34 @@
+schema_version: "1.0"
+id: educational_study
+notion_section: Radiologist Educational Study
+research_question: Does evidence-grounded feedback improve report quality without introducing new clinical errors?
+implementation:
+  stage: workflow.education
+  method: randomized crossover reader study with evidence-grounded feedback
+  primary_tools: [workflow.education]
+model_policy:
+  general_model: DMX_gpt_5_5_candidate
+  medical_specialist_model: benchmark_candidate
+  local_model: template_fallback
+  api_model: deidentified_structured_only
+inputs: [evaluation evidence IDs, reader metrics, pre-study reports]
+outputs: [post-study reports, adoption, helpfulness, safety outcomes]
+cohort:
+  unit: reader_case_session
+  design: randomized_crossover
+primary_endpoints: [clinically_significant_error_change]
+secondary_endpoints: [completion_time, adoption_rate, helpfulness, actionability, style_preservation]
+statistics: [mixed_effects_model, period_and_sequence_effects, bootstrap_95ci]
+validation_gates:
+  - id: clinician_approved_protocol
+    description: Reader-study protocol and safety stopping rules are approved.
+  - id: randomized_reader_study
+    description: Randomized crossover study is complete.
+  - id: safety_endpoint_analysis
+    description: New-error and unsupported-suggestion analysis is complete.
+  - id: primary_endpoint_analysis
+    description: Pre-registered primary endpoint analysis is complete.
+limitations:
+  - Generated suggestions alone do not demonstrate educational benefit.
+next_steps:
+  - Complete pilot usability review before the randomized study.

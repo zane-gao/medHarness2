@@ -1,0 +1,43 @@
+{
+  "schema_version": "2.0",
+  "artifact_type": "clinical_annotation_case",
+  "pilot_case_id": "pilot-010",
+  "source_case_sha256": "dd21ba02f72f180a223f5018abc0888be648c4ad92bd33dd78e992dc0fee2e36",
+  "modality": "cxr",
+  "body_part": "abdomen",
+  "reference_report": "检查所见：\n双侧膈下未见游离气体；中下腹部见气液平面，肠管稍扩张，宽处约2.5cm。结肠未见明显扩张，其内散在气粪影。腰大肌及腹脂线尚清。腰椎居中，未见侧弯。\n诊断印象：\n小肠机械不全性肠梗阻可能，请结合临床随诊。",
+  "candidate_reports": [
+    {
+      "candidate_id": "candidate-01",
+      "blinded_model_id": "model-01",
+      "report_text": "**影像所见：**\n- 腹部立位片显示中下腹部存在气液平面，肠管轻度扩张，最宽处约2.5cm。\n- 结肠未见明显扩张，内可见散在气-粪影。\n- 腰大肌及腹脂线清晰，腰椎排列居中，无侧弯或明显畸形。\n- 双侧膈下未见游离气体，提示无急性穿孔或消化道破裂。\n- 腹部气体分布符合肠蠕动及肠内容物分布，无明显腹腔积液或巨大肿块影。\n---\n**诊断印象：**\n**小肠机械性不全性肠梗阻可能**，建议结合临床症状、实验室检查及必要时进一步影像学检查（如腹部超声或CT）进行综合评估与随诊。\n---"
+    }
+  ],
+  "annotations": {
+    "reader_a": {
+      "reader_slot": "reader_a",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    },
+    "reader_b": {
+      "reader_slot": "reader_b",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    },
+    "adjudication": {
+      "reader_slot": "adjudication",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    }
+  },
+  "instructions_version": "1.0"
+}

@@ -5,6 +5,19 @@ from typing import Any
 
 
 SECTION_WEIGHTS = {"findings": 0.55, "impression": 0.35, "clinical_history": 0.10}
+SECTION_ALIASES = {
+    "findings": ("findings", "finding", "检查所见", "影像所见", "所见"),
+    "impression": ("impression", "诊断意见", "印象", "结论"),
+    "clinical_history": ("clinical history", "history", "临床资料", "病史"),
+}
+_ALIAS_TO_SECTION = {
+    alias.casefold(): section
+    for section, aliases in SECTION_ALIASES.items()
+    for alias in aliases
+}
+_SECTION_HEADER_RE = re.compile(
+    rf"(?im)^\s*({'|'.join(re.escape(alias) for alias in sorted(_ALIAS_TO_SECTION, key=len, reverse=True))})\s*[:：]\s*"
+)
 
 
 def check_structure(report_text: str) -> dict[str, Any]:
@@ -33,20 +46,32 @@ def split_sections(report_text: str) -> dict[str, str]:
     sections = {"findings": "", "impression": "", "clinical_history": "", "other": ""}
     if not text:
         return sections
-    pattern = re.compile(r"(?im)^\s*(findings?|impression|clinical history|history)\s*:\s*")
-    matches = list(pattern.finditer(text))
+    matches = list(_SECTION_HEADER_RE.finditer(text))
     if not matches:
         sections["findings"] = text
         return sections
     for idx, match in enumerate(matches):
-        raw_name = match.group(1).lower()
         start = match.end()
         end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
-        name = "clinical_history" if "history" in raw_name else raw_name.rstrip("s")
-        if name == "finding":
-            name = "findings"
-        sections[name] = text[start:end].strip()
+        name = _ALIAS_TO_SECTION[match.group(1).casefold()]
+        content = text[start:end].strip()
+        if content:
+            sections[name] = "\n".join(part for part in (sections[name], content) if part)
     prefix = text[: matches[0].start()].strip()
     if prefix:
         sections["other"] = prefix
     return sections
+
+
+def section_order(report_text: str) -> list[str]:
+    order: list[str] = []
+    for match in _SECTION_HEADER_RE.finditer(report_text):
+        section = _ALIAS_TO_SECTION[match.group(1).casefold()]
+        if section not in order:
+            order.append(section)
+    if order:
+        return order
+    return [section for section, text in split_sections(report_text).items() if text.strip()]
+
+
+__all__ = ["check_structure", "section_order", "split_sections"]

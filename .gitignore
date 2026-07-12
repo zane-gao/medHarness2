@@ -7,6 +7,11 @@ __pycache__/
 venv/
 outputs/
 docs/pat.txt
+# Generated dashboards can embed run-derived clinical data.
+web/index.html
+web/control_panel.html
+web/legacy/index.html
+web/legacy/control_panel.html
 build/
 dist/
 *.egg-info/

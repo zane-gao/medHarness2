@@ -1,0 +1,97 @@
+# Explicit contingency profile validated on 2026-07-11.
+# DMX remains preferred. GPT-backed roles use the Codex proxy because the
+# current DMX account cannot reserve production token budgets; the independent
+# Claude reviewer uses Yunwu because the Codex Claude route is unavailable.
+# Runtime never fails over between these routes automatically.
+
+llm:
+  provider: mock
+  model: gpt-5.6-terra
+  max_retries: 3
+  timeout_sec: 60
+  retry_initial_sec: 0.5
+  temperature: 0.0
+  chat_max_tokens: 1024
+
+privacy:
+  enforce_external: false
+  block_external_images: false
+  allowed_external_classifications:
+    - raw_clinical_text
+    - deidentified_structured
+    - synthetic_test
+    - public_nonclinical
+
+model_roles:
+  general_judge: &gpt_role
+    provider: chat_completions
+    model: gpt-5.6-terra
+    api_key_env: CODEX_PROXY_GPT_API_KEY
+    base_url: https://codex.0u0o.com/v1
+    schema_max_attempts: 2
+    transport_max_retries: 2
+    timeout_sec: 180
+    temperature: 0.0
+    max_tokens: 2048
+  finding_extractor:
+    <<: *gpt_role
+    max_tokens: 4096
+  alignment_auditor:
+    <<: *gpt_role
+  hazard_primary:
+    <<: *gpt_role
+  structure_auditor:
+    <<: *gpt_role
+  education:
+    <<: *gpt_role
+    max_tokens: 4096
+  hazard_reviewer:
+    provider: chat_completions
+    model: claude-opus-4-8
+    api_key_env: YUNWU_API_KEY
+    base_url: https://yunwu.ai/v1
+    schema_max_attempts: 2
+    transport_max_retries: 2
+    timeout_sec: 180
+    omit_temperature: true
+    max_tokens: 2048
+  hazard_adjudicator:
+    provider: chat_completions
+    model: gpt-5.6-terra-ultra
+    api_key_env: YUNWU_API_KEY
+    base_url: https://yunwu.ai/v1
+    schema_max_attempts: 2
+    transport_max_retries: 2
+    timeout_sec: 180
+    temperature: 0.0
+    max_tokens: 2048
+
+extractor:
+  backend: auto
+  template_path: config/templates/default_finding_template.json
+
+generator:
+  cloud_fallback_enabled: false
+  reference_assisted_generation: false
+  include_legacy_ready_models: true
+  legacy_config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
+  default_models: []
+
+ranking:
+  top_n: 3
+  weights:
+    likert_mean: 0.4
+    structure_score: 0.3
+    finding_coverage: 0.3
+
+alignment:
+  tolerance_mm: 5.0
+
+modality_map:
+  DX: cxr
+  CR: cxr
+  XR: cxr
+  CT: ct
+  MR: mri
+  MRI: mri
+  pathology: pathology

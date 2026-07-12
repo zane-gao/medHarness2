@@ -1,0 +1,53 @@
+{
+  "schema_version": "2.0",
+  "artifact_type": "clinical_annotation_case",
+  "pilot_case_id": "pilot-005",
+  "source_case_sha256": "d59345a0fc681735de960de90fa4946f9f1d447ff90fb42d139486dc1a0e5f5d",
+  "modality": "cxr",
+  "body_part": "chest",
+  "reference_report": "检查所见：\n骨性胸廓双侧对称，气管及纵隔居中。双肺透光度尚可，纹理清晰，走行自然，未见异常密度影。双侧肺门未见增大、增浓。心影形态、大小未见异常，主动脉未见异常。双侧膈肌光整，肋膈角锐利。\n诊断印象:\n心肺未见明显异常。",
+  "candidate_reports": [
+    {
+      "candidate_id": "candidate-01",
+      "blinded_model_id": "model-01",
+      "report_text": "Findings: Frontal and lateral chest radiographs demonstrate a normal cardiomediastinal silhouette and well-aerated lungs which are clear. There is no pleural effusion or pneumothorax."
+    },
+    {
+      "candidate_id": "candidate-02",
+      "blinded_model_id": "model-02",
+      "report_text": "FINDINGS:\nLungs and Airways:\n- No focal consolidation.\n- No pneumothorax.\nPleura:\n- No pleural effusion.\nCardiovascular:\n- Normal cardiomediastinal silhouette.\nMusculoskeletal and Chest Wall:\n- No acute osseous abnormalities."
+    },
+    {
+      "candidate_id": "candidate-03",
+      "blinded_model_id": "model-03",
+      "report_text": "Findings: Lungs and Airways:\n- No evidence of consolidation or acute airspace disease.\nPleura:\n- No pleural effusion or pneumothorax identified.\nCardiovascular:\n- Normal cardiomediastinal silhouette.\nHila and Mediastinum:\n- Hilar structures appear normal.\nMusculoskeletal and Chest Wall:\n- No acute osseous abnormalities detected."
+    }
+  ],
+  "annotations": {
+    "reader_a": {
+      "reader_slot": "reader_a",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    },
+    "reader_b": {
+      "reader_slot": "reader_b",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    },
+    "adjudication": {
+      "reader_slot": "adjudication",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    }
+  },
+  "instructions_version": "1.0"
+}

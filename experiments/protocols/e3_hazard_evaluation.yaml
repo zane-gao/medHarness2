@@ -1,0 +1,34 @@
+schema_version: "1.0"
+id: hazard_evaluation
+notion_section: Radiologist Error Hazard Evaluation Study
+research_question: Can automated judges reproduce clinician hazard grades and recall high-risk report errors?
+implementation:
+  stage: experiments.run
+  method: blinded comparison of deterministic, DMX and local medical judges
+  primary_tools: [Tool 4, Tool 5]
+model_policy:
+  general_model: DMX_gpt_5_5_primary_candidate
+  medical_specialist_model: local_candidate
+  reviewer_model: DMX_claude_opus_4_6_candidate
+  api_model: deidentified_structured_only
+inputs: [aligned error candidates, clinician hazard labels]
+outputs: [agreement_metrics, calibration, critical_error_recall, disagreement_cases]
+cohort:
+  unit: error_candidate
+  strata: [modality, error_type, hazard_level]
+primary_endpoints: [weighted_kappa, macro_f1, hazard_4_5_recall]
+secondary_endpoints: [mae, calibration_error, schema_success_rate]
+statistics: [cluster_bootstrap_95ci, calibration_analysis, prompt_stability]
+validation_gates:
+  - id: clinician_hazard_gold
+    description: Dual-reader hazard labels and adjudication are complete.
+  - id: frozen_test_split
+    description: Error-level test set and hash are frozen.
+  - id: critical_recall_gate
+    description: Hazard 4-5 recall meets the pre-registered safety threshold.
+  - id: primary_endpoint_analysis
+    description: Pre-registered judge comparison is complete.
+limitations:
+  - Synthetic schema smoke is not clinical validation.
+next_steps:
+  - Run prompt stability and blinded gold-set calibration.

@@ -1,0 +1,213 @@
+{
+  "$defs": {
+    "GeneratedReportArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "2.0",
+          "default": "2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "artifact_type": {
+          "const": "generated_report",
+          "default": "generated_report",
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "report": {
+          "title": "Report",
+          "type": "string"
+        },
+        "modality": {
+          "minLength": 1,
+          "title": "Modality",
+          "type": "string"
+        },
+        "evidence_tier": {
+          "enum": [
+            "formal_fresh",
+            "exploratory_fresh",
+            "artifact",
+            "debug_fallback",
+            "mock"
+          ],
+          "title": "Evidence Tier",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "model",
+        "source",
+        "report",
+        "modality",
+        "evidence_tier"
+      ],
+      "title": "GeneratedReportArtifact",
+      "type": "object"
+    },
+    "ModelProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "implementation_type": {
+          "minLength": 1,
+          "title": "Implementation Type",
+          "type": "string"
+        },
+        "provider": {
+          "default": "",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "default": "",
+          "title": "Model",
+          "type": "string"
+        },
+        "version": {
+          "default": "",
+          "title": "Version",
+          "type": "string"
+        },
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        },
+        "prompt_version": {
+          "default": "",
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "fallback_used": {
+          "default": false,
+          "title": "Fallback Used",
+          "type": "boolean"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "implementation_type"
+      ],
+      "title": "ModelProvenance",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_type": {
+      "const": "case_evaluation",
+      "default": "case_evaluation",
+      "title": "Artifact Type",
+      "type": "string"
+    },
+    "case_id": {
+      "minLength": 1,
+      "title": "Case Id",
+      "type": "string"
+    },
+    "input": {
+      "additionalProperties": true,
+      "title": "Input",
+      "type": "object"
+    },
+    "human_evaluation": {
+      "additionalProperties": true,
+      "title": "Human Evaluation",
+      "type": "object"
+    },
+    "generated_reports": {
+      "items": {
+        "$ref": "#/$defs/GeneratedReportArtifact"
+      },
+      "title": "Generated Reports",
+      "type": "array"
+    },
+    "generated_evaluations": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Generated Evaluations",
+      "type": "array"
+    },
+    "rankings": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Rankings",
+      "type": "array"
+    },
+    "pairwise_comparisons": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Pairwise Comparisons",
+      "type": "array"
+    },
+    "migration_warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Migration Warnings",
+      "type": "array"
+    },
+    "legacy_extensions": {
+      "additionalProperties": true,
+      "title": "Legacy Extensions",
+      "type": "object"
+    }
+  },
+  "required": [
+    "case_id",
+    "input",
+    "human_evaluation"
+  ],
+  "title": "CaseEvaluationArtifact",
+  "type": "object"
+}

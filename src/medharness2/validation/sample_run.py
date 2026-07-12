@@ -1,9 +1,20 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
 from typing import Any
+
+from medharness2.contracts import (
+    AlignmentAuditArtifact,
+    CaseEvaluationArtifact,
+    FindingGraph,
+    GeneratedReportArtifact,
+    HazardResult,
+    HazardReviewArtifact,
+    StructureAuditArtifact,
+)
 
 
 def validate_sample_run(
@@ -58,6 +69,14 @@ def validate_sample_run(
     if workflow3 and int(workflow3.get("case_count", 0) or 0) != int(workflow2.get("case_count", workflow3.get("case_count", 0)) or 0):
         errors.append("workflow3_case_count_mismatch")
 
+    artifact_contracts = _validate_case_artifact_contracts(root, errors)
+    if artifact_contracts["checked"] and workflow2:
+        workflow_case_count = int(workflow2.get("case_count", 0) or 0)
+        if artifact_contracts["case_file_count"] != workflow_case_count:
+            errors.append(
+                f"case_artifact_count_mismatch:{artifact_contracts['case_file_count']}!={workflow_case_count}"
+            )
+
     if mock_ocr_count and not require_real_ocr:
         warnings.append("mock_ocr_used")
 
@@ -77,7 +96,183 @@ def validate_sample_run(
         "warnings": list(dict.fromkeys(warnings)),
         "summary": summary,
         "warning_counts": dict(sorted(warning_counts.items())),
+        "artifact_contracts": artifact_contracts,
     }
+
+
+def _validate_case_artifact_contracts(root: Path, errors: list[str]) -> dict[str, Any]:
+    paths = _case_artifact_paths(root)
+    audit_contracts = {
+        "alignment_audit": AlignmentAuditArtifact,
+        "hazard_review": HazardReviewArtifact,
+        "structure_audit": StructureAuditArtifact,
+    }
+    audit_counts = {field: 0 for field in audit_contracts}
+    if not paths:
+        return {
+            "checked": False,
+            "case_file_count": 0,
+            "valid_count": 0,
+            "invalid_count": 0,
+            "finding_graph_count": 0,
+            "generated_report_count": 0,
+            "hazard_result_count": 0,
+            **{f"{field}_count": count for field, count in audit_counts.items()},
+        }
+
+    valid_count = 0
+    invalid_count = 0
+    finding_graph_count = 0
+    generated_report_count = 0
+    hazard_result_count = 0
+    for path in paths:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            invalid_count += 1
+            errors.append(f"invalid_case_artifact_json:{path.name}:{type(exc).__name__}")
+            continue
+        if not isinstance(payload, dict):
+            invalid_count += 1
+            errors.append(f"invalid_case_artifact_json:{path.name}:not_object")
+            continue
+
+        file_errors: list[str] = []
+        _validate_contract(CaseEvaluationArtifact, payload, "case", file_errors)
+
+        graph_payloads: list[dict[str, Any]] = []
+        human_graph = _object_or_empty(payload.get("human_evaluation")).get(
+            "finding_graph"
+        )
+        if isinstance(human_graph, dict):
+            graph_payloads.append(human_graph)
+        for row_index, row in enumerate(payload.get("generated_evaluations") or []):
+            if not isinstance(row, dict):
+                continue
+            nested_evaluation = row.get("evaluation")
+            if nested_evaluation is not None and not isinstance(
+                nested_evaluation, dict
+            ):
+                file_errors.append(
+                    f"generated_evaluations[{row_index}].evaluation:not_object"
+                )
+            graph = row.get("finding_graph") or _object_or_empty(
+                nested_evaluation
+            ).get("finding_graph")
+            if isinstance(graph, dict):
+                graph_payloads.append(graph)
+        hazard_payloads: list[dict[str, Any]] = []
+        for row in payload.get("pairwise_comparisons") or []:
+            if not isinstance(row, dict):
+                continue
+            comparison = row.get("comparison") or {}
+            if not isinstance(comparison, dict):
+                continue
+            for key in ("graph_a", "graph_b"):
+                graph = comparison.get(key)
+                if isinstance(graph, dict):
+                    graph_payloads.append(graph)
+            hazard = comparison.get("hazards")
+            if isinstance(hazard, dict):
+                hazard_payloads.append(hazard)
+            for field, model in audit_contracts.items():
+                if field not in comparison or comparison[field] is None:
+                    continue
+                audit_counts[field] += 1
+                audit = comparison[field]
+                if not isinstance(audit, dict):
+                    file_errors.append(f"{field}:not_object")
+                    continue
+                _validate_contract(model, audit, field, file_errors)
+                _validate_audit_hash_binding(field, audit, comparison, file_errors)
+
+        for graph in graph_payloads:
+            finding_graph_count += 1
+            _validate_contract(FindingGraph, graph, "finding_graph", file_errors)
+        for report in payload.get("generated_reports") or []:
+            if isinstance(report, dict):
+                generated_report_count += 1
+                _validate_contract(GeneratedReportArtifact, report, "generated_report", file_errors)
+        for hazard in hazard_payloads:
+            hazard_result_count += 1
+            _validate_contract(HazardResult, hazard, "hazard_result", file_errors)
+
+        if file_errors:
+            invalid_count += 1
+            errors.extend(
+                f"invalid_case_artifact_contract:{path.name}:{label}"
+                for label in dict.fromkeys(file_errors)
+            )
+        else:
+            valid_count += 1
+    return {
+        "checked": True,
+        "case_file_count": len(paths),
+        "valid_count": valid_count,
+        "invalid_count": invalid_count,
+        "finding_graph_count": finding_graph_count,
+        "generated_report_count": generated_report_count,
+        "hazard_result_count": hazard_result_count,
+        **{f"{field}_count": count for field, count in audit_counts.items()},
+    }
+
+
+def _case_artifact_paths(root: Path) -> list[Path]:
+    for directory_name in ("workflow2_cases", "cases"):
+        case_dir = root / directory_name
+        if not case_dir.exists():
+            continue
+        paths = sorted(case_dir.glob("*.json"))
+        if paths:
+            return paths
+    return []
+
+
+def _object_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _validate_contract(model: Any, payload: dict[str, Any], label: str, errors: list[str]) -> None:
+    try:
+        model.model_validate(payload)
+    except Exception as exc:
+        errors.append(f"{label}:{type(exc).__name__}")
+
+
+def _validate_audit_hash_binding(
+    audit_field: str,
+    audit: dict[str, Any],
+    comparison: dict[str, Any],
+    errors: list[str],
+) -> None:
+    bindings = {
+        "alignment_audit": ("alignment", "alignment_sha256"),
+        "hazard_review": ("hazards", "primary_result_sha256"),
+        "structure_audit": ("structure_diff", "structure_diff_sha256"),
+    }
+    primary_field, hash_field = bindings[audit_field]
+    primary = comparison.get(primary_field)
+    if not isinstance(primary, dict):
+        errors.append(f"{audit_field}:missing_primary")
+        return
+    canonical_primary = primary
+    if audit_field == "hazard_review":
+        try:
+            canonical_primary = HazardResult.model_validate(primary).model_dump(mode="json")
+        except Exception:
+            pass
+    if str(audit.get(hash_field) or "") != _json_sha256(canonical_primary):
+        errors.append(f"{audit_field}:hash_mismatch")
+
+
+def _json_sha256(payload: dict[str, Any]) -> str:
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _read_json(path: Path, errors: list[str], label: str) -> dict[str, Any]:

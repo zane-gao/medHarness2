@@ -1,0 +1,48 @@
+{
+  "schema_version": "2.0",
+  "artifact_type": "clinical_annotation_case",
+  "pilot_case_id": "pilot-002",
+  "source_case_sha256": "184277229e99b3172f6096de3a23cb260fa561a65d607ca9c7bcdddcaa3bd806",
+  "modality": "ct",
+  "body_part": "chest",
+  "reference_report": "检查所见：\n骨性胸廓双侧对称，气管、纵隔居中，气管入胸廓处右后方见小囊袋影。左肺上叶下舌段见少许索条影及絮状影，部分呈软组织密度影。双肺多发结节，最大结节位于右肺下叶后基底段（SE202, IM194），为磨玻璃结节，大小约5mm×3mm。各叶段支气管通畅，未见狭窄受压征象。纵隔内未见肿大淋巴影。心脏形态自然，各房室不大。未见胸膜增厚及胸腔积液征象。胸椎椎体边缘骨皮质密度增高。\n诊断印象：\n左肺上叶下舌段少许间质性改变及不张。双肺结节，请结合临床随诊。气管憩室。胸椎骨质增生。较前片（[REDACTED_DATE]）新增肺内结节。",
+  "candidate_reports": [
+    {
+      "candidate_id": "candidate-01",
+      "blinded_model_id": "model-01",
+      "report_text": "Findings: Trachea and both main bronchi are open. No occlusive pathology was detected in the trachea and both main bronchi. There are millimetric nonspecific nodules in both lungs. No mass or infiltrative lesion was detected in both lungs. Mediastinal structures cannot be evaluated optimally because contrast material is not given. As far as can be observed: Heart contour and size are normal. No pleural or pericardial effusion was detected. The widths of the mediastinal main vascular structures are normal. No pathologically enlarged lymph nodes were detected in the mediastinum and hilar regions. No pathological wall thickness increase was observed in the esophagus within the sections. No upper abdominal free fluid-collection was detected in the sections. No enlarged lymph nodes in pathological dimensions were detected. In the upper abdominal organs within the sections, there is no mass with distinguishable borders as far as it can be observed within the borders of non-enhanced CT. Thoracic vertebral corpus heights, alignments and densities are normal. Intervertebral disc distances are"
+    },
+    {
+      "candidate_id": "candidate-02",
+      "blinded_model_id": "model-02",
+      "report_text": "Bilateral cerebral hemispheres are symmetrical. Multiple small low density shadows can be seen in the basal ganglia on both sides and near the lateral ventricles on both sides. Some are located inside the sulcus and cistern, with unclear boundaries. Some ventricles and gyri are enlarged, and the midline structure is in the middle. Thorax is symmetrical, no abnormality is found in rib and chest wall soft tissue. Bilateral lung markings increase significantly, and the light transmission is good. The lung field has multiple flocculent and strip like high-density shadows, and bilateral pulmonary hili are not large. The shape of heart shadow and large vessels is normal, and there are many small lymph nodes in the mediastinum. Bilateral pleural thickening and adhesion. Multiple nodular high-density shadows can be seen in the spleen."
+    }
+  ],
+  "annotations": {
+    "reader_a": {
+      "reader_slot": "reader_a",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    },
+    "reader_b": {
+      "reader_slot": "reader_b",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    },
+    "adjudication": {
+      "reader_slot": "adjudication",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    }
+  },
+  "instructions_version": "1.0"
+}

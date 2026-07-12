@@ -1,0 +1,10 @@
+{"pilot_case_id": "pilot-001", "modality": "ct", "body_part": "abdomen", "candidate_count": 1, "annotation_path": "cases/pilot-001.json", "status": "not_started"}
+{"pilot_case_id": "pilot-002", "modality": "ct", "body_part": "chest", "candidate_count": 2, "annotation_path": "cases/pilot-002.json", "status": "not_started"}
+{"pilot_case_id": "pilot-003", "modality": "ct", "body_part": "head", "candidate_count": 1, "annotation_path": "cases/pilot-003.json", "status": "not_started"}
+{"pilot_case_id": "pilot-004", "modality": "cxr", "body_part": "abdomen", "candidate_count": 1, "annotation_path": "cases/pilot-004.json", "status": "not_started"}
+{"pilot_case_id": "pilot-005", "modality": "cxr", "body_part": "chest", "candidate_count": 3, "annotation_path": "cases/pilot-005.json", "status": "not_started"}
+{"pilot_case_id": "pilot-006", "modality": "mri", "body_part": "brain", "candidate_count": 1, "annotation_path": "cases/pilot-006.json", "status": "not_started"}
+{"pilot_case_id": "pilot-007", "modality": "ct", "body_part": "abdomen", "candidate_count": 1, "annotation_path": "cases/pilot-007.json", "status": "not_started"}
+{"pilot_case_id": "pilot-008", "modality": "ct", "body_part": "chest", "candidate_count": 2, "annotation_path": "cases/pilot-008.json", "status": "not_started"}
+{"pilot_case_id": "pilot-009", "modality": "ct", "body_part": "head", "candidate_count": 1, "annotation_path": "cases/pilot-009.json", "status": "not_started"}
+{"pilot_case_id": "pilot-010", "modality": "cxr", "body_part": "abdomen", "candidate_count": 1, "annotation_path": "cases/pilot-010.json", "status": "not_started"}

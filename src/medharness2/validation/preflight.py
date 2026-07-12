@@ -7,7 +7,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from medharness2.config import AppConfig, load_config
+from medharness2.config import AppConfig, load_config, resolve_existing_path
 from medharness2.utils.io import write_json
 
 
@@ -132,7 +132,7 @@ def _check_ocr_provider(config: AppConfig) -> dict[str, Any]:
 
 
 def _run_local_vlm_dry_run(config: AppConfig) -> dict[str, Any]:
-    script = Path(config.llm.local_cli_script)
+    script = resolve_existing_path(config.llm.local_cli_script)
     if not script.exists():
         return {
             "status": "script_missing",
@@ -142,7 +142,7 @@ def _run_local_vlm_dry_run(config: AppConfig) -> dict[str, Any]:
         config.llm.local_cli_python_bin,
         str(script),
         "--config",
-        config.llm.local_cli_config_path,
+        str(resolve_existing_path(config.llm.local_cli_config_path)),
         "--model-key",
         config.llm.model,
         "--dry-run",

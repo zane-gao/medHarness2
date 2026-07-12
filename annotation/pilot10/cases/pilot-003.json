@@ -1,0 +1,43 @@
+{
+  "schema_version": "2.0",
+  "artifact_type": "clinical_annotation_case",
+  "pilot_case_id": "pilot-003",
+  "source_case_sha256": "4836f18d1ef4a7d9e8c2a137eb3bad6883024d4f2cbf793f4190238a00ce5f10",
+  "modality": "ct",
+  "body_part": "head",
+  "reference_report": "检查所见：\n左侧半卵圆中心见结节状稍低密度影，边缘模糊；双侧脑室旁脑实质内见斑片状略低密度影，呈基本对称性分布。脑室系统形态、大小未见异常。脑沟、脑裂稍加深加宽。中线结构居中。\n诊断印象：\n左侧半卵圆中心结节状稍低密度影，边缘模糊，腔隙性病灶？脑梗塞灶？其它？请结合临床，建议必要时进一步检查。脑白质脱髓鞘改变；轻度脑萎缩。",
+  "candidate_reports": [
+    {
+      "candidate_id": "candidate-01",
+      "blinded_model_id": "model-01",
+      "report_text": "**检查所见：**\n- 多个颅骨层面显示颅骨多处骨折，尤以左侧颞部及额部可见明显不规则骨质破坏与骨折线，部分区域伴骨片移位。\n- 颅内未见明显出血、脑水肿或占位性病变。\n- 脑室系统形态、大小未见异常，中线结构居中。\n- 脑沟、脑裂稍加深加宽，脑白质区见斑片状略低密度影，呈基本对称性分布，符合脑白质脱髓鞘改变。\n- 左侧半卵圆中心见结节状稍低密度影，边缘模糊，提示可能为腔隙性病灶或脑梗塞灶。\n- 未见明显脑积水或颅内压增高征象。\n---\n**诊断印象：**\n1. 颅骨多处骨折（左侧颞部、额部为主），伴局部骨片移位。\n2. 左侧半卵圆中心结节状稍低密度影，边缘模糊，考虑腔隙性病灶或脑梗塞灶，建议结合临床进一步评估。\n3. 脑白质脱髓鞘改变，轻度脑萎缩。\n4. 脑沟、脑裂稍加深加宽，符合年龄相关"
+    }
+  ],
+  "annotations": {
+    "reader_a": {
+      "reader_slot": "reader_a",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    },
+    "reader_b": {
+      "reader_slot": "reader_b",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    },
+    "adjudication": {
+      "reader_slot": "adjudication",
+      "status": "not_started",
+      "findings": [],
+      "hazards": [],
+      "overall_notes": "",
+      "confidence": null
+    }
+  },
+  "instructions_version": "1.0"
+}

@@ -1,0 +1,204 @@
+{
+  "$defs": {
+    "ModelProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "implementation_type": {
+          "minLength": 1,
+          "title": "Implementation Type",
+          "type": "string"
+        },
+        "provider": {
+          "default": "",
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "default": "",
+          "title": "Model",
+          "type": "string"
+        },
+        "version": {
+          "default": "",
+          "title": "Version",
+          "type": "string"
+        },
+        "role": {
+          "default": "",
+          "title": "Role",
+          "type": "string"
+        },
+        "prompt_version": {
+          "default": "",
+          "title": "Prompt Version",
+          "type": "string"
+        },
+        "fallback_used": {
+          "default": false,
+          "title": "Fallback Used",
+          "type": "boolean"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "implementation_type"
+      ],
+      "title": "ModelProvenance",
+      "type": "object"
+    },
+    "StructureAuditIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "issue_type": {
+          "enum": [
+            "missing_section",
+            "misordered_section",
+            "content_placement",
+            "redundancy",
+            "findings_impression_inconsistency",
+            "clarity",
+            "other"
+          ],
+          "title": "Issue Type",
+          "type": "string"
+        },
+        "report_role": {
+          "enum": [
+            "reference",
+            "candidate",
+            "comparison"
+          ],
+          "title": "Report Role",
+          "type": "string"
+        },
+        "section": {
+          "enum": [
+            "findings",
+            "impression",
+            "clinical_history",
+            "other",
+            "overall"
+          ],
+          "title": "Section",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "minor",
+            "moderate",
+            "major"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "explanation": {
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "recommended_action": {
+          "minLength": 1,
+          "title": "Recommended Action",
+          "type": "string"
+        }
+      },
+      "required": [
+        "issue_type",
+        "report_role",
+        "section",
+        "severity",
+        "explanation",
+        "recommended_action"
+      ],
+      "title": "StructureAuditIssue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_type": {
+      "const": "structure_audit",
+      "default": "structure_audit",
+      "title": "Artifact Type",
+      "type": "string"
+    },
+    "structure_diff_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Structure Diff Sha256",
+      "type": "string"
+    },
+    "assessor_provenance": {
+      "$ref": "#/$defs/ModelProvenance"
+    },
+    "verdict": {
+      "enum": [
+        "no_material_issue",
+        "minor_issue",
+        "major_issue",
+        "abstain"
+      ],
+      "title": "Verdict",
+      "type": "string"
+    },
+    "clinical_impact": {
+      "maximum": 5,
+      "minimum": 1,
+      "title": "Clinical Impact",
+      "type": "integer"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "summary": {
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "issues": {
+      "items": {
+        "$ref": "#/$defs/StructureAuditIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+    },
+    "primary_preserved": {
+      "const": true,
+      "default": true,
+      "title": "Primary Preserved",
+      "type": "boolean"
+    },
+    "requires_review": {
+      "default": false,
+      "title": "Requires Review",
+      "type": "boolean"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "title": "Metadata",
+      "type": "object"
+    }
+  },
+  "required": [
+    "structure_diff_sha256",
+    "assessor_provenance",
+    "verdict",
+    "clinical_impact",
+    "confidence",
+    "summary"
+  ],
+  "title": "StructureAuditArtifact",
+  "type": "object"
+}

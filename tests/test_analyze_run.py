@@ -17,6 +17,10 @@ def test_analyze_run_writes_csv_and_markdown_outputs(tmp_path: Path):
     assert result["case_count"] == 2
     assert result["generated_report_count"] == 3
     assert result["quality_gate_failed_count"] == 1
+    assert result["generated_report_evidence_tier_counts"] == {
+        "artifact": 1,
+        "debug_fallback": 2,
+    }
     assert (analysis_dir / "case_routes.csv").exists()
     assert (analysis_dir / "model_source_summary.csv").exists()
     assert (analysis_dir / "reader_summary.csv").exists()
@@ -29,6 +33,7 @@ def test_analyze_run_writes_csv_and_markdown_outputs(tmp_path: Path):
     model_rows = _read_csv(analysis_dir / "model_source_summary.csv")
     by_model = {(row["model"], row["source"]): row for row in model_rows}
     assert by_model[("dia_llama", "artifact_reuse")]["quality_failed"] == "1"
+    assert by_model[("dia_llama", "artifact_reuse")]["evidence_tier"] == "artifact"
     failure_rows = _read_csv(analysis_dir / "quality_gate_failures.csv")
     assert failure_rows[0]["case_id"] == "case2"
     assert "body_part_mismatch" in failure_rows[0]["warnings"]
@@ -47,6 +52,26 @@ def test_cli_analyze_run(tmp_path: Path):
     summary = json.loads((analysis_dir / "analysis_summary.json").read_text(encoding="utf-8"))
     assert summary["case_count"] == 2
     assert summary["generated_report_source_counts"]["local_vlm_fallback"] == 1
+    registry = json.loads((run_dir / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.analyze-run"
+    assert entry["outputs"]["analysis_summary_json"] == str(analysis_dir / "analysis_summary.json")
+    assert entry["metrics"]["generated_report_count"] == 3
+
+
+def test_cli_analyze_run_records_failed_registry_on_exception(tmp_path: Path):
+    run_dir = tmp_path / "missing_workflow_outputs"
+    run_dir.mkdir()
+
+    code = main(["workflow", "analyze-run", "--output-dir", str(run_dir)])
+
+    assert code == 1
+    registry = json.loads((run_dir / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.analyze-run"
+    assert entry["status"] == "failed"
+    assert entry["metrics"]["exception_type"] == "FileNotFoundError"
+    assert "workflow2.json" in entry["warnings"][0]
 
 
 def _write_run(root: Path) -> Path:

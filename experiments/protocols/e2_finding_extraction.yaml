@@ -1,0 +1,34 @@
+schema_version: "1.0"
+id: finding_extraction
+notion_section: Radiologist Finding Extraction Study
+research_question: Do modality-specific extractors recover findings, anatomy, negation, severity, measurements and relations accurately?
+implementation:
+  stage: experiments.run
+  method: modality-stratified gold-set evaluation
+  primary_tools: [Tool 2]
+model_policy:
+  general_model: DMX_candidate
+  medical_specialist_model: preferred_candidate
+  local_model: preferred_for_private_text
+  api_model: structured_deidentified_only
+inputs: [annotation finding gold labels, extractor outputs]
+outputs: [entity_metrics, relation_metrics, modality_error_taxonomy]
+cohort:
+  unit: report
+  strata: [cxr, ct, mri]
+primary_endpoints: [entity_micro_f1, relation_micro_f1, negation_f1, laterality_accuracy]
+secondary_endpoints: [measurement_accuracy, unmapped_concept_rate]
+statistics: [stratified_bootstrap_95ci, per_modality_analysis]
+validation_gates:
+  - id: clinician_finding_gold
+    description: Dual-reader finding gold labels and adjudication are complete.
+  - id: frozen_test_split
+    description: Patient-level test split and hash are frozen.
+  - id: extractor_version_frozen
+    description: Extractor backend and ontology versions are frozen.
+  - id: primary_endpoint_analysis
+    description: Pre-registered extraction analysis is complete.
+limitations:
+  - Rule baselines do not establish clinical validity without gold labels.
+next_steps:
+  - Compare CXR, CT and MRI plugin candidates on the gold set.

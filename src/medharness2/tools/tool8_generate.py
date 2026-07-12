@@ -22,6 +22,7 @@ def generate_reports(
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
     registry = ReportGeneratorRegistry(cfg)
+    generation_reference = reference_report if cfg.generator.reference_assisted_generation else None
     reports: list[GeneratedReport] = []
     selected_entries = registry.select(
         modality,
@@ -31,7 +32,13 @@ def generate_reports(
     )
     failed_attempts: list[dict[str, object]] = []
     for entry in selected_entries:
-        generated = registry.generate(entry, image_path, modality, reference_report=reference_report, body_part=body_part)
+        generated = registry.generate(
+            entry,
+            image_path,
+            modality,
+            reference_report=generation_reference,
+            body_part=body_part,
+        )
         if generated.report:
             reports.append(generated)
         else:
@@ -45,9 +52,13 @@ def generate_reports(
             )
     if not reports and cfg.generator.cloud_fallback_enabled:
         prompt = f"Generate a concise radiology report for modality={modality}, body_part={body_part or 'unknown'}."
-        if reference_report:
-            prompt += f"\nReference report for context:\n{reference_report}"
-        text = client.call(prompt, image_path=fallback_image_path or image_path)
+        if generation_reference:
+            prompt += f"\nReference report for context:\n{generation_reference}"
+        text = client.call(
+            prompt,
+            image_path=fallback_image_path or image_path,
+            payload_classification="raw_medical_image",
+        )
         fallback_source = _fallback_source(cfg.llm.provider)
         reports.append(
             GeneratedReport(
@@ -61,6 +72,7 @@ def generate_reports(
                 ],
                 metadata={
                     "body_part": body_part,
+                    "reference_report_used": bool(generation_reference),
                     "fallback_provider": cfg.llm.provider,
                     "fallback_source": fallback_source,
                     "requested_models": model_keys or cfg.generator.default_models,
