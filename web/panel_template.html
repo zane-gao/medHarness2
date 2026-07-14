@@ -442,12 +442,12 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
 "use strict";
 const DATA = JSON.parse(document.getElementById("panel-data").textContent);
 const H = DATA.honesty || {};
-const SOURCE_COUNTS = SOURCE_COUNTS || {};
-const MODALITY_COUNTS = MODALITY_COUNTS || {};
-const WARNING_COUNTS = WARNING_COUNTS || {};
-const MODEL_COUNTS = MODEL_COUNTS || {};
-const TIER_COUNTS = TIER_COUNTS || {};
-const BODY_PART_COUNTS = BODY_PART_COUNTS || {};
+const SOURCE_COUNTS = DATA.source_counts || {};
+const MODALITY_COUNTS = DATA.modality_counts || {};
+const WARNING_COUNTS = DATA.warning_counts || {};
+const MODEL_COUNTS = DATA.model_counts || {};
+const TIER_COUNTS = DATA.tier_counts || {};
+const BODY_PART_COUNTS = DATA.body_part_counts || {};
 const EX = DATA.example || {};
 const K = DATA.kpi || {};
 const READERS = Array.isArray(DATA.readers) ? DATA.readers : [];
