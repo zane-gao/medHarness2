@@ -320,7 +320,7 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
 <section id="arch">
   <div class="sec-head">
     <div class="sec-kicker">03 · PHILOSOPHY</div>
-    <h2>四层设计哲学：像医院一样分层</h2>
+    <h2>分层设计哲学：从数据契约到研究证据</h2>
     <p class="sec-lead">
       整个代码库只有一个组织原则：<b>上层管流程，下层干专活，层与层之间只传带契约的数据</b>。
       这不是为了工程好看——是为了科研：契约、迁移、评估、审计和图表可以分别替换、单测和做消融。
@@ -329,7 +329,7 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
   <div class="layers">
     <div class="layer">
       <div class="tag" style="background:var(--c1)">工作流<br>Workflow</div>
-      <div class="desc"><b>相当于门诊流程单。</b>决定先做什么后做什么、结果存到哪。全系统<b>只有这一层被允许写文件</b>——所以任何产物都能追溯到是哪条流程写的。共 4 条（见下节）。</div>
+      <div class="desc"><b>相当于门诊流程单。</b>决定先做什么后做什么、结果存到哪。全系统<b>只有这一层被允许写文件</b>——所以任何产物都能追溯到是哪条流程写的。工作流只负责编排和落盘，模块负责业务组合，工具负责单一判断，基础设施负责模型、配置与审计。</div>
     </div>
     <div class="layer">
       <div class="tag" style="background:var(--c5)">模块<br>Module</div>
@@ -350,10 +350,20 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
 <section id="wf">
   <div class="sec-head">
     <div class="sec-kicker">04 · WORKFLOWS</div>
-    <h2>四条工作流：从一个人到一个科室</h2>
+    <h2>核心工作流与研究闭环</h2>
     <p class="sec-lead">规模逐级放大：单病例评估 → 批量读者评估 → 科室聚合 → 教学建议；正式研究结论还要经过临床标注与实验门禁。</p>
   </div>
   <div class="wf-grid" id="wf-grid"></div>
+  <div class="card" style="margin-top:14px">
+    <h3 style="margin-top:0">五阶段闭环：从输入到可治理结论</h3>
+    <div class="flow">
+      <div class="step"><div class="no">1</div><div class="body"><h4>契约与迁移</h4><p>冻结 case、finding、report、hazard 和 run schema，旧产物先迁移、再验证。</p></div></div>
+      <div class="step"><div class="no">2</div><div class="body"><h4>生成与评估基准</h4><p>按模态/部位生成候选，区分 formal_fresh、exploratory_fresh、artifact 和 debug_fallback。</p></div></div>
+      <div class="step"><div class="no">3</div><div class="body"><h4>重评估与实验</h4><p>确定性主结果与 LLM 审计分开保存，重测稳定性、临床标注和六项实验门禁同步推进。</p></div></div>
+      <div class="step"><div class="no">4</div><div class="body"><h4>图表与控制面板</h4><p>只从真实产物构建页面，显示 Git、来源健康、证据等级和未通过门禁。</p></div></div>
+      <div class="step"><div class="no">5</div><div class="body"><h4>临床与治理</h4><p>双读者/仲裁、隐私和凭据治理完成后，才把探索性工程证据升级为正式研究结论。</p></div></div>
+    </div>
+  </div>
 </section>
 
 <!-- ═══════════════════════════ ⑤ 工具箱 ═══════════════════════════ -->
@@ -432,6 +442,12 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
 "use strict";
 const DATA = JSON.parse(document.getElementById("panel-data").textContent);
 const H = DATA.honesty || {};
+const SOURCE_COUNTS = SOURCE_COUNTS || {};
+const MODALITY_COUNTS = MODALITY_COUNTS || {};
+const WARNING_COUNTS = WARNING_COUNTS || {};
+const MODEL_COUNTS = MODEL_COUNTS || {};
+const TIER_COUNTS = TIER_COUNTS || {};
+const BODY_PART_COUNTS = BODY_PART_COUNTS || {};
 const EX = DATA.example || {};
 const K = DATA.kpi || {};
 const READERS = Array.isArray(DATA.readers) ? DATA.readers : [];
@@ -475,7 +491,7 @@ function honestyBadge(kind) {
     return B("h-good", "✓", "本次真跑（LLM 法官）");
   }
   if (kind === "t8") {
-    const s = DATA.source_counts, total = Object.values(s).reduce((a,b)=>a+b,0) || 1;
+    const s = SOURCE_COUNTS, total = Object.values(s).reduce((a,b)=>a+b,0) || 1;
     const weak = (s.local_vlm_fallback||0) + (s.artifact_reuse||0);
     if (weak/total > 0.3) return B("h-warn", "⚠", `${pct(weak/total)} 是兜底/复用，非正规医学模型现推理`);
     return B("h-good", "✓", "以正规医学模型为主");
@@ -601,7 +617,7 @@ const TOOLS = [
   input:"报告文本", output:"分好段的 sections + 结构分（0–1）",
   example:`<div class="lab">真实例子 · 病例 ${esc(EX.case_id)}</div>
     <div>识别出的段落：${(EX.structure_sections||[]).map(s=>`<code>${esc(s)}</code>`).join(" ")}　结构分：<b>${esc(EX.structure_score ?? "—")}</b></div>`,
-  how:`<p>按中英文段落标题关键词（检查所见/Findings、诊断印象/Impression…）切分，按段落齐全度加权计分。纯代码、确定性、快。AI 陪练的报告经常缺「诊断印象」段，就是它查出来的（本次 ${DATA.warning_counts.missing_impression_section||0} 份中招）。</p>` },
+  how:`<p>按中英文段落标题关键词（检查所见/Findings、诊断印象/Impression…）切分，按段落齐全度加权计分。纯代码、确定性、快。AI 陪练的报告经常缺「诊断印象」段，就是它查出来的（本次 ${WARNING_COUNTS.missing_impression_section||0} 份中招）。</p>` },
 
 { id:"tool4", no:"T4", name:"危害判级", impl:IMPL.mix("设计=LLM 法官；失败退回规则表"), honesty:honestyBadge("t4"),
   say:"给「对答案」找出的每处错误定 1–5 级危害并说明理由：漏了骨折是重罪，多写一句废话是轻罪。",
@@ -637,7 +653,7 @@ const TOOLS = [
   meta:"进医院先分诊：挂哪个科决定后面见哪个医生。",
   input:"图像文件路径", output:"模态标签（cxr / ct / mri / …）",
   example:`<div class="lab">本次运行的真实分布</div>
-    <div>${Object.entries(DATA.modality_counts).map(([k,v])=>`<code>${esc(k)}</code> ${v} 例`).join(" · ")}，全部由规则识别，未动用 VLM 兜底。</div>`,
+    <div>${Object.entries(MODALITY_COUNTS).map(([k,v])=>`<code>${esc(k)}</code> ${v} 例`).join(" · ")}，全部由规则识别，未动用 VLM 兜底。</div>`,
   how:`<p><b>三级瀑布：</b>① 读 DICOM 头（医学影像自带的"身份证"，里面直接写着设备类型）→ ② 认不出再看文件后缀和路径关键词 → ③ 还认不出才问视觉大模型"这是什么片子"。便宜的手段优先，贵的手段兜底——这个瀑布式设计在整个项目里反复出现。</p>` },
 
 { id:"tool8", no:"T8", name:"报告生成（AI 陪练团）", impl:IMPL.mix("本地医学模型优先；通用 VLM 兜底"), honesty:honestyBadge("t8"),
@@ -646,7 +662,7 @@ const TOOLS = [
   input:"图像 + 模态 + 部位", output:"多份候选报告（每份带 模型名 / 来源 / 证据等级 / 警告）",
   example:`<div class="lab">真实例子 · ${esc(EX.case_id)} 由 ${esc(gen0.model)} 生成（来源 ${esc(gen0.source)}，证据等级 ${esc(gen0.evidence_tier)}）</div>
     <div class="snip">"${esc(gen0.snippet)}…"</div>
-    <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 本次 ${K.generated_report_count} 份候选的来源：专科模型 CLI 生成 ${DATA.source_counts.medharness_cli||0} 份 / 通用 VLM 顶班 ${DATA.source_counts.local_vlm_fallback||0} 份 / 复用旧产物 ${DATA.source_counts.artifact_reuse||0} 份。<b>更扎心的是：连那 ${DATA.source_counts.medharness_cli||0} 份专科模型报告都被打上了 <code>${DATA.warning_counts.legacy_reference_assisted_generation_assumed||0}</code> 个「疑似参考辅助生成」警告</b>（担心生成时偷看了医生报告答案），证据等级因此降到 debug_fallback。所以本次<b>没有一份候选是干净的 formal_fresh</b>；因此这些候选只能用于工程检查或探索性分析，不能进入正式模型比较。</div>`,
+    <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 本次 ${K.generated_report_count} 份候选的来源：专科模型 CLI 生成 ${SOURCE_COUNTS.medharness_cli||0} 份 / 通用 VLM 顶班 ${SOURCE_COUNTS.local_vlm_fallback||0} 份 / 复用旧产物 ${SOURCE_COUNTS.artifact_reuse||0} 份。<b>更扎心的是：连那 ${SOURCE_COUNTS.medharness_cli||0} 份专科模型报告都被打上了 <code>${WARNING_COUNTS.legacy_reference_assisted_generation_assumed||0}</code> 个「疑似参考辅助生成」警告</b>（担心生成时偷看了医生报告答案），证据等级因此降到 debug_fallback。所以本次<b>没有一份候选是干净的 formal_fresh</b>；因此这些候选只能用于工程检查或探索性分析，不能进入正式模型比较。</div>`,
   how:`<p><b>怎么实现的：</b>一个「模型花名册」（Registry）登记了每个本地模型擅长的模态和部位。来了病例先查花名册路由；对口模型都不在（如 CT-head 目前无专科模型）就落到通用 VLM 兜底，并在产物上打警告标签。所有模型权重在本地 8×A40 上推理，不出网。</p>
     <p><b>意义：</b>陪练团的专业度直接决定「对答案」有没有意义——拿实习生的报告、或偷看过答案的报告当参照，对齐结果都说明不了医生的真实水平。补齐空缺路由 + 确保「盲写」（不喂医生报告）是数据可信度的关键。</p>` },
 
@@ -680,7 +696,7 @@ const TOOLS = [
   meta:"仓库验货员：货不对板就贴红条，所有货都要标产地——后面的人一看标签就知道这批货能信几分。",
   input:"一份候选报告 + 期望的模态/部位", output:"通过/失败 + 警告标签 + 证据等级（formal_fresh / exploratory_fresh / artifact / debug_fallback / mock）",
   example:`<div class="lab">本次运行的真实战果</div>
-    <div>${K.generated_report_count} 份候选中 <b>${K.quality_passed}</b> 份过检、<b style="color:#a32e2e">${K.quality_failed}</b> 份被拦下。最典型的翻车：给胸部 CT 配的模型 dia_llama 在报告里写出了「脾脏」——部位不匹配，直接盖不合格章（见第 ⑥ 节失败清单）。本次证据等级分布：${esc(JSON.stringify(DATA.tier_counts))}——没有一份是 formal_fresh，全是旧产物复用或兜底。</div>`,
+    <div>${K.generated_report_count} 份候选中 <b>${K.quality_passed}</b> 份过检、<b style="color:#a32e2e">${K.quality_failed}</b> 份被拦下。最典型的翻车：给胸部 CT 配的模型 dia_llama 在报告里写出了「脾脏」——部位不匹配，直接盖不合格章（见第 ⑥ 节失败清单）。本次证据等级分布：${esc(JSON.stringify(TIER_COUNTS))}——没有一份是 formal_fresh，全是旧产物复用或兜底。</div>`,
   how:`<p><b>怎么实现的：</b>一串确定性检查规则 + 一套「证据等级」标签体系。等级从高到低：<code>formal_fresh</code>=正规模型正式新鲜推理、<code>exploratory_fresh</code>=探索性新鲜推理、<code>artifact</code>=复用以前跑好的旧产物、<code>debug_fallback</code>=兜底/调试性质、<code>mock</code>=假数据。<b>科研诚实性就是靠它机械保证的</b>：任何一个数字都能顺着标签查出它的成色，本页的「诚实度徽章」正是读这些标签算出来的。</p>` },
 ];
 
@@ -708,9 +724,9 @@ document.getElementById("run-lead").innerHTML =
   `以下全部数字由构建脚本从 <code>${esc(DATA.run_dir)}</code> 的真实产物读取注入，非手填。`;
 
 const KPIS = [
-  [K.case_count, "个病例", `CT ${DATA.modality_counts.ct||0} / 胸片 ${DATA.modality_counts.cxr||0} / MRI ${DATA.modality_counts.mri||0}`],
+  [K.case_count, "个病例", `CT ${MODALITY_COUNTS.ct||0} / 胸片 ${MODALITY_COUNTS.cxr||0} / MRI ${MODALITY_COUNTS.mri||0}`],
   [K.reader_count, "位医生", "真实报告作者"],
-  [K.generated_report_count, "份 AI 候选报告", `${Object.keys(DATA.model_counts).length} 个模型参与`],
+  [K.generated_report_count, "份 AI 候选报告", `${Object.keys(MODEL_COUNTS).length} 个模型参与`],
   [K.quality_passed, "份过质检", `另有 ${K.quality_failed} 份被门禁拦下`],
   [K.real_ocr_count, "例真实 OCR", "报告文字非人工转录"],
 ];
@@ -730,11 +746,11 @@ function barChart(el, title, note, entries, colorMap, labelMap, total) {
     }).join("");
 }
 const CAT = ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948"];
-const modEntries = Object.entries(DATA.modality_counts).sort((a,b)=>b[1]-a[1]);
+const modEntries = Object.entries(MODALITY_COUNTS).sort((a,b)=>b[1]-a[1]);
 barChart("chart-modality", "病例模态分布", "这批 52 例覆盖三种模态、四个部位。",
   modEntries, { colors: CAT, names: {ct:"CT", cxr:"胸片 CXR", mri:"MRI"} }, null, K.case_count);
 
-const srcEntries = Object.entries(DATA.source_counts).sort((a,b)=>b[1]-a[1]);
+const srcEntries = Object.entries(SOURCE_COUNTS).sort((a,b)=>b[1]-a[1]);
 barChart("chart-source", "AI 候选报告的「成色」", "同样是 81 份报告，来源成色完全不同——这是解读一切结果前必须先看的图。",
   srcEntries, { colors: CAT, names: {
     medharness_cli: "专科模型 CLI",
@@ -1051,8 +1067,8 @@ document.getElementById("gate-table").innerHTML = `
 /* ============================================================
    ⑦ 问题清单（数字动态注入）
    ============================================================ */
-const wc = DATA.warning_counts;
-const weakGen = (DATA.source_counts.local_vlm_fallback||0) + (DATA.source_counts.artifact_reuse||0);
+const wc = WARNING_COUNTS;
+const weakGen = (SOURCE_COUNTS.local_vlm_fallback||0) + (SOURCE_COUNTS.artifact_reuse||0);
 const smokeOK = !!DATA.smoke;
 const O = DATA.ocr_audit;
 const ISSUES = [
