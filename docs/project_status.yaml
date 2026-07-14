@@ -1,13 +1,13 @@
 schema_version: "1.0"
-updated_at: "2026-07-11"
+updated_at: "2026-07-14"
 current_phase: production_research_foundations
 release_readiness: pilot_only
 
 baseline:
-  branch: feat/production-foundations-20260710
-  git_sha: fdd89900f6f2d5510dce3fcedb00992f5830b55c
-  dirty_worktree: true
-  pytest_passed: 330
+  branch: main
+  git_sha: 80672806e16c7bafb94951ff90be2162d33dde45
+  dirty_worktree: false
+  pytest_passed: 332
   pytest_warnings: 17
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -125,10 +125,13 @@ workstreams:
       - config/privacy/default.yaml
     next_gate: Re-enable strict data-governance review before any external clinical-data run.
   control_panel:
-    status: deferred
-    summary: Frontend and control-panel work are outside the current scope by user direction.
-    evidence_paths: []
-    next_gate: Resume only after explicit user reprioritization.
+    status: in_progress
+    summary: The internal project-status dashboard is being refreshed against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction.
+    evidence_paths:
+      - web/build_panel.py
+      - web/panel_template.html
+      - tests/test_project_metadata.py
+    next_gate: Rebuild both maintained dashboards, pass desktop/mobile browser checks, and verify the published HTML matches the latest local evidence sources.
 
 api_verification:
   preferred_profile: config/dmx_strong.yaml

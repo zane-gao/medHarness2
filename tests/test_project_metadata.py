@@ -11,7 +11,12 @@ def test_project_status_has_current_release_evidence():
     payload = yaml.safe_load(Path("docs/project_status.yaml").read_text(encoding="utf-8"))
 
     assert payload["schema_version"] == "1.0"
+    assert payload["updated_at"] == "2026-07-14"
     assert payload["current_phase"]
+    assert payload["release_readiness"] == "pilot_only"
+    assert payload["baseline"]["branch"] == "main"
+    assert payload["baseline"]["dirty_worktree"] is False
+    assert payload["baseline"]["pytest_passed"] >= 332
     assert payload["baseline"]["pytest_passed"] >= 210
     assert Path(payload["baseline"]["current_run"]).exists()
     assert set(payload["workstreams"]) >= {
@@ -22,6 +27,7 @@ def test_project_status_has_current_release_evidence():
         "experiments",
         "figures",
     }
+    assert payload["workstreams"]["control_panel"]["status"] == "in_progress"
 
     allowed = {"not_started", "in_progress", "validated", "deferred"}
     for workstream in payload["workstreams"].values():
@@ -31,27 +37,18 @@ def test_project_status_has_current_release_evidence():
             assert Path(evidence_path).exists(), evidence_path
 
 
-def test_generated_web_pages_are_ignored_but_templates_are_trackable():
-    generated_pages = [
+def test_generated_web_pages_and_templates_are_trackable():
+    web_artifacts = [
         "web/index.html",
         "web/control_panel.html",
         "web/legacy/index.html",
         "web/legacy/control_panel.html",
-    ]
-    templates = [
         "web/panel_template.html",
         "web/legacy/template.html",
         "src/medharness2/templates/control_panel_template.html",
     ]
 
-    for path in generated_pages:
-        result = subprocess.run(
-            ["git", "check-ignore", "--no-index", "--quiet", path],
-            check=False,
-        )
-        assert result.returncode == 0, path
-
-    for path in templates:
+    for path in web_artifacts:
         result = subprocess.run(
             ["git", "check-ignore", "--no-index", "--quiet", path],
             check=False,
