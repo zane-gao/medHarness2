@@ -13,6 +13,7 @@
 - 页面继续使用本地真实运行产物，不新增外部 API 调用。
 - 生成页面与运行数据允许原样提交到远程仓库，无需脱敏。
 - `web/index.html`、`web/control_panel.html`、`web/legacy/index.html` 和 `web/legacy/control_panel.html` 不再被 `.gitignore` 排除；实际存在的页面随本次更新提交。
+- `web/index.html` 是本次完整更新的主状态面板；`web/control_panel.html` 是按最新运行产物重建的次级工程控制面板；`web/legacy/` 下的页面只作为历史快照保留并上传，不继续扩展其旧版实现。
 - 上述授权不包括 API 密钥、访问令牌、私钥或密码；凭据仍不得进入仓库。
 - 直接更新主分支，不创建 PR。
 
@@ -105,6 +106,8 @@
 - 标注：pilot10 manifest。
 
 构建结果仍为自包含静态 HTML。模板只包含占位符和渲染逻辑；生成页包含完整注入数据，并根据用户授权纳入 Git。
+
+主状态页由 `web/build_panel.py` 和 `web/panel_template.html` 维护。次级控制面板继续由 `medharness2 dashboard build` 及包内模板生成。legacy 构建脚本和模板保持可运行或可查阅，但不承担最新项目状态表达。
 
 ## 6. 错误处理
 
