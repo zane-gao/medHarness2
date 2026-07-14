@@ -12,7 +12,7 @@
 - OCR 完整性审计（outputs/ocr_quality_audit_*/summary.json）
 
 以及"工程进度地图"一节的数据（同样存在才注入）：
-- 九条战线状态（docs/project_status.yaml，内置极简解析器，不依赖 PyYAML）
+- 九条战线状态（docs/project_status.yaml，使用 PyYAML 解析真实嵌套结构）
 - 六实验 × 验证门禁矩阵（outputs/experiments/<run>/results.json）
 - pilot10 临床标注进度（annotation/pilot10/manifest.jsonl）
 
@@ -72,7 +72,8 @@ def extract_git_state(repo: Path = REPO) -> dict:
     return {
         "branch": run("branch", "--show-current"),
         "sha": run("rev-parse", "HEAD"),
-        "dirty": bool(run("status", "--porcelain")),
+        "short_sha": run("rev-parse", "--short=12", "HEAD"),
+        "dirty": bool(run("status", "--porcelain", "--untracked-files=no")),
     }
 
 
@@ -85,18 +86,22 @@ def extract_project_status(path: Path = STATUS_YAML) -> dict | None:
 
 
 def require_core_run(run_dir: Path) -> None:
-    """Require the core run summary before generating a panel."""
-    summary = run_dir / "run_summary.json"
-    if not summary.exists():
-        raise FileNotFoundError(f"核心运行产物缺失: {summary}")
+    """Require all core run inputs before generating a panel."""
+    required = [run_dir / "run_summary.json", run_dir / "analysis" / "analysis_summary.json", run_dir / "workflow2_cases"]
+    missing = [p for p in required if not p.exists()]
+    if missing:
+        raise FileNotFoundError(f"核心运行产物缺失: {missing[0]}")
 
 
-def source_health(run_dir: Path, optional_paths: list[Path] | None = None) -> dict:
+def source_health(paths: dict[str, Path], root: Path = REPO) -> dict:
     """Expose presence/absence of core and optional evidence instead of silently skipping it."""
-    require_core_run(run_dir)
-    result = {"core_run": {"path": str(run_dir / "run_summary.json"), "status": "present"}}
-    for path in optional_paths or []:
-        result[path.name] = {"path": str(path), "status": "present" if path.exists() else "missing"}
+    result = {}
+    for key, path in paths.items():
+        try:
+            rel = str(path.resolve().relative_to(root.resolve()))
+        except ValueError:
+            rel = str(path)
+        result[key] = {"path": rel, "available": path.exists()}
     return result
 
 
@@ -452,44 +457,16 @@ def extract_formal_plan(run_dir: Path) -> dict | None:
 
 # ---------------------------------------------------------------- 工程进度地图
 
-def _parse_status_yaml(path: Path) -> dict | None:
-    """极简 YAML 子集解析：只取 project_status.yaml 里 workstreams 各战线的
-    status/summary/next_gate 三个标量字段（本机无 PyYAML，且该文件结构稳定）。"""
-    if not path.exists():
-        return None
-    workstreams: dict[str, dict] = {}
-    current: dict | None = None
-    in_ws = False
-    updated_at = phase = None
-    for raw in path.read_text(encoding="utf-8").splitlines():
-        if raw.startswith("updated_at:"):
-            updated_at = raw.split(":", 1)[1].strip().strip('"')
-        elif raw.startswith("current_phase:"):
-            phase = raw.split(":", 1)[1].strip()
-        if raw.startswith("workstreams:"):
-            in_ws = True
-            continue
-        if in_ws and raw and not raw.startswith(" "):
-            in_ws = False  # workstreams 块结束
-        if not in_ws:
-            continue
-        indent = len(raw) - len(raw.lstrip(" "))
-        line = raw.strip()
-        if indent == 2 and line.endswith(":"):
-            current = {}
-            workstreams[line[:-1]] = current
-        elif indent == 4 and current is not None and ":" in line:
-            key, _, val = line.partition(":")
-            if key in ("status", "summary", "next_gate") and val.strip():
-                current[key] = val.strip()
-    if not workstreams:
-        return None
-    return {"updated_at": updated_at, "phase": phase, "workstreams": workstreams}
-
-
 def extract_workstreams(path: Path) -> dict | None:
-    """九条战线进度：直接读项目状态账本，前端渲染进度地图。"""
-    return _parse_status_yaml(path)
+    """九条战线进度：直接读取真实项目状态 YAML。"""
+    status = extract_project_status(path)
+    if not status:
+        return None
+    return {
+        "updated_at": status.get("updated_at"),
+        "phase": status.get("current_phase"),
+        "workstreams": status.get("workstreams") or {},
+    }
 
 
 def extract_experiment_gates(path: Path) -> dict | None:
@@ -596,14 +573,14 @@ def build_data(run_dir: Path) -> dict:
     readers = read_csv_rows(analysis / "reader_summary.csv")
     gate_failures = read_csv_rows(analysis / "quality_gate_failures.csv")
 
-    optional_sources = [
-        SMOKE_EVAL_DIR / "benchmark_evaluation_summary.json",
-        BENCH_DIR / "benchmark_summary.json",
-        OCR_AUDIT_DIR / "summary.json",
-        STATUS_YAML,
-        EXPERIMENTS_RESULTS,
-        PILOT10_MANIFEST,
-    ]
+    source_paths = {
+        "core_run": run_dir / "run_summary.json",
+        "dmx_evaluation": SMOKE_EVAL_DIR / "benchmark_evaluation_summary.json",
+        "generation_benchmark": BENCH_DIR / "attempt_001" / "benchmark_summary.json",
+        "ocr_audit": OCR_AUDIT_DIR / "summary.json",
+        "experiment_results": EXPERIMENTS_RESULTS,
+        "pilot10_manifest": PILOT10_MANIFEST,
+    }
     project_status = extract_project_status(STATUS_YAML)
     try:
         display_run_dir = str(run_dir.relative_to(REPO))
@@ -613,11 +590,9 @@ def build_data(run_dir: Path) -> dict:
         "run_dir": display_run_dir,
         "project_meta": {
             "git": extract_git_state(REPO),
-            "updated_at": (project_status or {}).get("updated_at"),
-            "current_phase": (project_status or {}).get("current_phase"),
-            "release_readiness": (project_status or {}).get("release_readiness"),
+            "status": project_status or {},
         },
-        "source_health": source_health(run_dir, optional_sources),
+        "source_health": source_health(source_paths, root=REPO),
         "kpi": {
             "case_count": analysis_summary.get("case_count"),
             "reader_count": analysis_summary.get("reader_count"),
