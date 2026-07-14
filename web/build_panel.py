@@ -26,7 +26,10 @@ import argparse
 import csv
 import json
 import re
+import subprocess
 from pathlib import Path
+
+import yaml
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_RUN = REPO / "outputs" / "sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710"
@@ -56,6 +59,45 @@ def read_csv_rows(path: Path) -> list[dict]:
         return []
     with path.open(encoding="utf-8") as f:
         return list(csv.DictReader(f))
+
+
+def extract_git_state(repo: Path = REPO) -> dict:
+    """Return reproducibility metadata without failing builds outside a git checkout."""
+    def run(*args: str) -> str | None:
+        try:
+            return subprocess.check_output(["git", "-C", str(repo), *args], text=True, stderr=subprocess.DEVNULL).strip()
+        except (OSError, subprocess.CalledProcessError):
+            return None
+
+    return {
+        "branch": run("branch", "--show-current"),
+        "sha": run("rev-parse", "HEAD"),
+        "dirty": bool(run("status", "--porcelain")),
+    }
+
+
+def extract_project_status(path: Path = STATUS_YAML) -> dict | None:
+    """Load the project ledger with a real YAML parser, preserving nested evidence."""
+    if not path.exists():
+        return None
+    with path.open(encoding="utf-8") as f:
+        return yaml.safe_load(f) or {}
+
+
+def require_core_run(run_dir: Path) -> None:
+    """Require the core run summary before generating a panel."""
+    summary = run_dir / "run_summary.json"
+    if not summary.exists():
+        raise FileNotFoundError(f"核心运行产物缺失: {summary}")
+
+
+def source_health(run_dir: Path, optional_paths: list[Path] | None = None) -> dict:
+    """Expose presence/absence of core and optional evidence instead of silently skipping it."""
+    require_core_run(run_dir)
+    result = {"core_run": {"path": str(run_dir / "run_summary.json"), "status": "present"}}
+    for path in optional_paths or []:
+        result[path.name] = {"path": str(path), "status": "present" if path.exists() else "missing"}
+    return result
 
 
 # ---------------------------------------------------------------- 诚实度核验
@@ -525,6 +567,8 @@ def extract_pilot10(path: Path) -> dict | None:
 # ---------------------------------------------------------------- 汇总组装
 
 def build_data(run_dir: Path) -> dict:
+    run_dir = run_dir.resolve()
+    require_core_run(run_dir)
     analysis = run_dir / "analysis"
     run_summary = read_json(run_dir / "run_summary.json")
     analysis_summary = read_json(analysis / "analysis_summary.json")
@@ -552,8 +596,28 @@ def build_data(run_dir: Path) -> dict:
     readers = read_csv_rows(analysis / "reader_summary.csv")
     gate_failures = read_csv_rows(analysis / "quality_gate_failures.csv")
 
+    optional_sources = [
+        SMOKE_EVAL_DIR / "benchmark_evaluation_summary.json",
+        BENCH_DIR / "benchmark_summary.json",
+        OCR_AUDIT_DIR / "summary.json",
+        STATUS_YAML,
+        EXPERIMENTS_RESULTS,
+        PILOT10_MANIFEST,
+    ]
+    project_status = extract_project_status(STATUS_YAML)
+    try:
+        display_run_dir = str(run_dir.relative_to(REPO))
+    except ValueError:
+        display_run_dir = str(run_dir)
     return {
-        "run_dir": str(run_dir.relative_to(REPO)),
+        "run_dir": display_run_dir,
+        "project_meta": {
+            "git": extract_git_state(REPO),
+            "updated_at": (project_status or {}).get("updated_at"),
+            "current_phase": (project_status or {}).get("current_phase"),
+            "release_readiness": (project_status or {}).get("release_readiness"),
+        },
+        "source_health": source_health(run_dir, optional_sources),
         "kpi": {
             "case_count": analysis_summary.get("case_count"),
             "reader_count": analysis_summary.get("reader_count"),
