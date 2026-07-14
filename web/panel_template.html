@@ -77,6 +77,12 @@ section { margin-bottom: 72px; }
 .metaphor b { color: var(--ink); }
 .hero-note { font-size: 13.5px; color: var(--ink-3); }
 .hero-note .nb { color: var(--good-text); font-weight: 600; }
+.meta-strip { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 24px; }
+.meta-strip .meta-item { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:8px 12px; font-size:12.5px; color:var(--ink-2); }
+.meta-strip .meta-item b { color:var(--ink); }
+.source-health { margin:14px 0 0; padding:12px 16px; border:1px dashed var(--hair); border-radius:10px; background:#f5f5f1; font-size:12.5px; color:var(--ink-2); }
+.source-health .source-row { display:inline-flex; align-items:center; gap:5px; margin:3px 12px 3px 0; }
+.source-health .ok { color:var(--good-text); } .source-health .missing { color:#a32e2e; }
 
 /* ---------- 徽章 ---------- */
 .badge {
@@ -273,6 +279,8 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
 
 <main>
 
+<div id="project-meta-strip" class="meta-strip" aria-label="项目元数据"></div>
+
 <!-- ═══════════════════════════ ① 这是什么 ═══════════════════════════ -->
 <section id="what" class="hero">
   <div class="sec-kicker">01 · WHAT</div>
@@ -289,10 +297,11 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
     最后汇总成<b>排名、画像和错题本式的教学建议</b>。
   </div>
   <p class="hero-note">
-    <span class="nb">注意边界：</span>本系统做的是<b>评估与教学</b>，不做报告生成——生成模型在隔壁
-    <code>medHarness</code> 仓库，这里只是"借"它们来当陪练。
-    本页所有运行数字来自真实 run 产物（构建时注入），页面会<b>诚实标注</b>哪些环节是真跑的、哪些目前还是占位的。
+    <span class="nb">注意边界：</span>这是一个<b>pilot-only 的内部研究面板</b>：当前 52 例是工程基线，另有 11 例纯 DMX 链路作为探索性证据。
+    它可以评估报告、比较候选并生成教学草稿，但还不是临床决策工具，也不代表正式验证结论。
+    本页所有数字来自真实 run 产物（构建时注入），页面会<b>区分证据等级</b>，不把探索性结果写成临床结论。
   </p>
+  <div id="source-health" class="source-health" aria-label="数据源健康状态"></div>
 </section>
 
 <!-- ═══════════════════════════ ② 整体流程 ═══════════════════════════ -->
@@ -313,8 +322,8 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
     <div class="sec-kicker">03 · PHILOSOPHY</div>
     <h2>四层设计哲学：像医院一样分层</h2>
     <p class="sec-lead">
-      整个代码库只有一个组织原则：<b>上层管流程，下层干专活，层与层之间只传数据</b>。
-      这不是为了工程好看——是为了科研：任何一个零件都能单独替换、单独测、单独做消融实验。
+      整个代码库只有一个组织原则：<b>上层管流程，下层干专活，层与层之间只传带契约的数据</b>。
+      这不是为了工程好看——是为了科研：契约、迁移、评估、审计和图表可以分别替换、单测和做消融。
     </p>
   </div>
   <div class="layers">
@@ -342,7 +351,7 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
   <div class="sec-head">
     <div class="sec-kicker">04 · WORKFLOWS</div>
     <h2>四条工作流：从一个人到一个科室</h2>
-    <p class="sec-lead">规模逐级放大：单场考试 → 全年级统考 → 年级排名表 → 个人错题本。</p>
+    <p class="sec-lead">规模逐级放大：单病例评估 → 批量读者评估 → 科室聚合 → 教学建议；正式研究结论还要经过临床标注与实验门禁。</p>
   </div>
   <div class="wf-grid" id="wf-grid"></div>
 </section>
@@ -355,7 +364,7 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
     <p class="sec-lead">
       每张卡：它是干嘛的（人话+比喻）→ 吃什么吐什么（用本次运行的<b>真实数据</b>举例）→
       怎么实现的（可展开）。右上角两个徽章：<b>实现方式</b>（调 API / 本地模型 / 纯规则）和
-      <b>本次运行的诚实度</b>（✓ 真跑 / ⚠ 部分真 / ✕ 本次为假）。
+      <b>本次运行的证据状态</b>（✓ 真跑 / ⚠ 部分真 / ✕ 不能作为正式证据）。
     </p>
   </div>
   <div id="tool-cards"></div>
@@ -409,7 +418,7 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
     <div class="sec-kicker">07 · NEXT</div>
     <h2>现在的问题在哪，下一步做什么</h2>
     <p class="sec-lead">
-      这一节是整个面板的落脚点。按"地基 → 承重墙 → 装修"的顺序排：越靠前的问题越是<b>其它一切数字的前提</b>。
+      这一节是整个面板的落脚点。按影响研究可信度的顺序排：先处理 pilot10、OCR 与 LLM 稳定性，再把 52 例基线升级为可正式比较的数据。
     </p>
   </div>
   <div id="issue-list"></div>
@@ -425,6 +434,17 @@ const DATA = JSON.parse(document.getElementById("panel-data").textContent);
 const H = DATA.honesty, EX = DATA.example, K = DATA.kpi;
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const pct = x => (x*100).toFixed(0) + "%";
+const PROJECT_META = DATA.project_meta || {};
+const PROJECT_STATUS = PROJECT_META.status || {};
+const GIT_META = PROJECT_META.git || {};
+const sourceHealth = Object.entries(DATA.source_health || {});
+document.getElementById("project-meta-strip").innerHTML = [
+  `<span class="meta-item"><b>阶段</b> ${esc(PROJECT_STATUS.current_phase || PROJECT_STATUS.phase || "—")}</span>`,
+  `<span class="meta-item"><b>发布边界</b> ${esc(PROJECT_STATUS.release_readiness || "pilot_only")}</span>`,
+  `<span class="meta-item"><b>基线</b> ${esc(PROJECT_STATUS.baseline?.case_count || K.case_count || "—")} 例 · ${esc(PROJECT_STATUS.baseline?.generated_report_count || K.generated_report_count || "—")} 份候选</span>`,
+  `<span class="meta-item"><b>Git</b> <code>${esc(GIT_META.branch || "—")}@${esc(GIT_META.short_sha || GIT_META.sha || "—")}</code>${GIT_META.dirty ? " · dirty" : ""}</span>`
+].join("");
+document.getElementById("source-health").innerHTML = `<b>构建来源：</b>${sourceHealth.length ? sourceHealth.map(([key, item]) => `<span class="source-row ${item.available ? "ok" : "missing"}">${item.available ? "✓" : "✕"} ${esc(key)}</span>`).join("") : "未提供来源清单"}`;
 
 /* ============================================================
    诚实度判定：全部由 run 产物元数据推导，不硬编码结论。
@@ -1032,6 +1052,9 @@ const weakGen = (DATA.source_counts.local_vlm_fallback||0) + (DATA.source_counts
 const smokeOK = !!DATA.smoke;
 const O = DATA.ocr_audit;
 const ISSUES = [
+  { sev:"critical", icon:"🚨", title:"临床门槛：pilot10 仍为 0/10，尚无医生金标准",
+    why:`pilot10 只完成病例打包，reader A、reader B 和 adjudication 尚未完成；因此当前自动评估即使有真实 LLM 证据，也只能用于工程/探索性检查，不能校准临床准确性。`,
+    next:`<b>下一步：</b>完成 10 例双读者盲标与仲裁，冻结标注 schema 和一致性指标，再把结果接入六项实验门禁。` },
   { sev:"critical", icon:"🚨", title:"地基⓪（新发现）：OCR 源头截断，最底层的裂缝",
     why: O ? `52 例的「医生报告原文」全部来自旧 ${O.model} OCR（输出上限仅 ${O.legacy_max_new_tokens} token）：${O.definite_truncation} 例明确截断、${O.suspected_truncation} 例疑似（全在长文 CT），${O.missing_impression_count} 例丢了诊断印象。这比「打分是假的」还靠前——<b>连被评估的原文都是残卷</b>，残卷上的一切评估（含刚打通的真 LLM 评估）都要打问号。` : "（本次构建未找到 OCR 审计产物）",
     next:`<b>下一步：</b>按已立项的 OCR 盲测基准设计（10 例冻结集、豆包/qwen-vl-ocr/放开上限的本地基线同台、按字错率+数字/否定准确率+幻觉率选路由）选定新 OCR 路由，重跑 52 例文本再谈评估。` },
