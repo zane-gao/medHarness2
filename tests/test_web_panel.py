@@ -13,7 +13,7 @@ def test_extract_git_state_reports_branch_sha_and_dirty(tmp_path):
     assert set(state) >= {"branch", "sha", "short_sha", "dirty"}
     assert state["branch"]
     assert len(state["sha"]) == 40
-    assert state["short_sha"] == state["sha"][:12]
+    assert state["short_sha"] == state["sha"][:7]
     assert isinstance(state["dirty"], bool)
 
 
@@ -24,6 +24,31 @@ def test_extract_project_status_uses_real_yaml():
     assert status["release_readiness"] == "pilot_only"
     assert status["baseline"]["case_count"] == 52
     assert "control_panel" in status["workstreams"]
+
+
+def test_extract_project_status_rejects_missing_or_invalid_ledgers(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        build_panel.extract_project_status(tmp_path / "missing.yaml")
+
+    scalar = tmp_path / "scalar.yaml"
+    scalar.write_text("pilot_only\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="mapping"):
+        build_panel.extract_project_status(scalar)
+
+    missing = tmp_path / "missing_workstreams.yaml"
+    missing.write_text("release_readiness: pilot_only\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="workstreams"):
+        build_panel.extract_project_status(missing)
+
+
+def test_extract_workstreams_includes_release_readiness(tmp_path):
+    path = tmp_path / "project_status.yaml"
+    path.write_text(
+        "release_readiness: pilot_only\nworkstreams: {}\n",
+        encoding="utf-8",
+    )
+
+    assert build_panel.extract_workstreams(path)["release_readiness"] == "pilot_only"
 
 
 def test_extract_workstreams_preserves_nested_yaml_values(tmp_path):

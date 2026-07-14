@@ -72,17 +72,24 @@ def extract_git_state(repo: Path = REPO) -> dict:
     return {
         "branch": run("branch", "--show-current"),
         "sha": run("rev-parse", "HEAD"),
-        "short_sha": run("rev-parse", "--short=12", "HEAD"),
+        "short_sha": run("rev-parse", "--short=7", "HEAD"),
         "dirty": bool(run("status", "--porcelain", "--untracked-files=no")),
     }
 
 
-def extract_project_status(path: Path = STATUS_YAML) -> dict | None:
-    """Load the project ledger with a real YAML parser, preserving nested evidence."""
+def extract_project_status(path: Path = STATUS_YAML) -> dict:
+    """Load and validate the project ledger with a real YAML parser."""
     if not path.exists():
-        return None
+        raise FileNotFoundError(f"项目状态账本缺失: {path}")
     with path.open(encoding="utf-8") as f:
-        return yaml.safe_load(f) or {}
+        status = yaml.safe_load(f)
+    if not isinstance(status, dict):
+        raise ValueError(f"项目状态账本必须是 YAML mapping: {path}")
+    if "workstreams" not in status:
+        raise ValueError(f"项目状态账本缺少 workstreams: {path}")
+    if not isinstance(status["workstreams"], dict):
+        raise ValueError(f"项目状态账本的 workstreams 必须是 mapping: {path}")
+    return status
 
 
 def require_core_run(run_dir: Path) -> None:
@@ -460,11 +467,10 @@ def extract_formal_plan(run_dir: Path) -> dict | None:
 def extract_workstreams(path: Path) -> dict | None:
     """九条战线进度：直接读取真实项目状态 YAML。"""
     status = extract_project_status(path)
-    if not status:
-        return None
     return {
         "updated_at": status.get("updated_at"),
         "phase": status.get("current_phase"),
+        "release_readiness": status.get("release_readiness"),
         "workstreams": status.get("workstreams") or {},
     }
 
