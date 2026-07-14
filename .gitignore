@@ -11,3 +11,5 @@ docs/pat.txt
 build/
 dist/
 *.egg-info/
+node_modules/
+test-results/

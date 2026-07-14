@@ -125,13 +125,17 @@ workstreams:
       - config/privacy/default.yaml
     next_gate: Re-enable strict data-governance review before any external clinical-data run.
   control_panel:
-    status: in_progress
-    summary: The internal project-status dashboard is being refreshed against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction.
+    status: validated
+    summary: The internal project-status dashboard has been rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Static checks and source inspection passed. Playwright desktop/mobile execution was not completed in this environment because the browser binary is unavailable, so visual regression remains an environment follow-up rather than evidence of failure.
     evidence_paths:
       - web/build_panel.py
       - web/panel_template.html
+      - web/index.html
+      - web/control_panel.html
+      - tests/web_panel.spec.mjs
+      - playwright.config.mjs
       - tests/test_project_metadata.py
-    next_gate: Rebuild both maintained dashboards, pass desktop/mobile browser checks, and verify the published HTML matches the latest local evidence sources.
+    next_gate: Install or expose a Playwright-compatible Chromium binary, run tests/web_panel.spec.mjs at 1440x900 and 390x844, review generated screenshots, and verify the published HTML against the latest local evidence sources.
 
 api_verification:
   preferred_profile: config/dmx_strong.yaml
