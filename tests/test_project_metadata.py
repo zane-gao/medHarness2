@@ -27,7 +27,7 @@ def test_project_status_has_current_release_evidence():
         "experiments",
         "figures",
     }
-    assert payload["workstreams"]["control_panel"]["status"] == "in_progress"
+    assert payload["workstreams"]["control_panel"]["status"] == "validated"
 
     allowed = {"not_started", "in_progress", "validated", "deferred"}
     for workstream in payload["workstreams"].values():
