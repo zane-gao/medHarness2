@@ -431,7 +431,11 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
 <script>
 "use strict";
 const DATA = JSON.parse(document.getElementById("panel-data").textContent);
-const H = DATA.honesty, EX = DATA.example, K = DATA.kpi;
+const H = DATA.honesty || {};
+const EX = DATA.example || {};
+const K = DATA.kpi || {};
+const READERS = Array.isArray(DATA.readers) ? DATA.readers : [];
+const GATE_FAILURES = Array.isArray(DATA.gate_failure_rows) ? DATA.gate_failure_rows : [];
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const pct = x => (x*100).toFixed(0) + "%";
 const PROJECT_META = DATA.project_meta || {};
@@ -642,7 +646,7 @@ const TOOLS = [
   input:"图像 + 模态 + 部位", output:"多份候选报告（每份带 模型名 / 来源 / 证据等级 / 警告）",
   example:`<div class="lab">真实例子 · ${esc(EX.case_id)} 由 ${esc(gen0.model)} 生成（来源 ${esc(gen0.source)}，证据等级 ${esc(gen0.evidence_tier)}）</div>
     <div class="snip">"${esc(gen0.snippet)}…"</div>
-    <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 本次 ${K.generated_report_count} 份候选的来源：专科模型 CLI 生成 ${DATA.source_counts.medharness_cli||0} 份 / 通用 VLM 顶班 ${DATA.source_counts.local_vlm_fallback||0} 份 / 复用旧产物 ${DATA.source_counts.artifact_reuse||0} 份。<b>更扎心的是：连那 ${DATA.source_counts.medharness_cli||0} 份专科模型报告都被打上了 <code>${DATA.warning_counts.legacy_reference_assisted_generation_assumed||0}</code> 个「疑似参考辅助生成」警告</b>（担心生成时偷看了医生报告答案），证据等级因此降到 debug_fallback。所以本次<b>没有一份候选是干净的 formal_fresh</b>。</div>`,
+    <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 本次 ${K.generated_report_count} 份候选的来源：专科模型 CLI 生成 ${DATA.source_counts.medharness_cli||0} 份 / 通用 VLM 顶班 ${DATA.source_counts.local_vlm_fallback||0} 份 / 复用旧产物 ${DATA.source_counts.artifact_reuse||0} 份。<b>更扎心的是：连那 ${DATA.source_counts.medharness_cli||0} 份专科模型报告都被打上了 <code>${DATA.warning_counts.legacy_reference_assisted_generation_assumed||0}</code> 个「疑似参考辅助生成」警告</b>（担心生成时偷看了医生报告答案），证据等级因此降到 debug_fallback。所以本次<b>没有一份候选是干净的 formal_fresh</b>；因此这些候选只能用于工程检查或探索性分析，不能进入正式模型比较。</div>`,
   how:`<p><b>怎么实现的：</b>一个「模型花名册」（Registry）登记了每个本地模型擅长的模态和部位。来了病例先查花名册路由；对口模型都不在（如 CT-head 目前无专科模型）就落到通用 VLM 兜底，并在产物上打警告标签。所有模型权重在本地 8×A40 上推理，不出网。</p>
     <p><b>意义：</b>陪练团的专业度直接决定「对答案」有没有意义——拿实习生的报告、或偷看过答案的报告当参照，对齐结果都说明不了医生的真实水平。补齐空缺路由 + 确保「盲写」（不喂医生报告）是数据可信度的关键。</p>` },
 
@@ -746,16 +750,16 @@ document.getElementById("reader-table").innerHTML = `
   <h4>六位医生的当前画像</h4>
   <p class="note">按综合分算的同侪百分位。</p>
   <table class="plain"><tr><th>医生</th><th class="num">病例数</th><th class="num">综合分</th><th class="num">百分位</th></tr>
-  ${DATA.readers.map(r => `<tr><td>${esc(r.reader)}</td><td class="num">${r.case_count}</td><td class="num">${r.overall_score}</td><td class="num">${r.percentile}</td></tr>`).join("")}
+  ${READERS.map(r => `<tr><td>${esc(r.reader)}</td><td class="num">${r.case_count}</td><td class="num">${r.overall_score}</td><td class="num">${r.percentile}</td></tr>`).join("")}
   </table>
-  <div class="honest-note">⚠ <b>诚实说明：</b>综合分里权重最大的五维打分目前是规则估分（见 T1），所以这张表暂时只反映「结构规整度 + 发现覆盖」两个规则指标的差异，<b>不能</b>当成医生真实水平的排名。分差极小（${Math.min(...DATA.readers.map(r=>r.overall_score))}–${Math.max(...DATA.readers.map(r=>r.overall_score))}）也印证了区分度不足。</div>`;
+  <div class="honest-note">⚠ <b>诚实说明：</b>综合分里权重最大的五维打分目前是规则估分（见 T1），所以这张表暂时只反映「结构规整度 + 发现覆盖」两个规则指标的差异，<b>不能</b>当成医生真实水平的排名。分差极小（${Math.min(...READERS.map(r=>r.overall_score))}–${Math.max(...READERS.map(r=>r.overall_score))}）也印证了区分度不足。</div>`;
 
 document.getElementById("gate-table").innerHTML = `
-  <h4>质量门禁拦下的 ${DATA.gate_failure_rows.length} 份报告（这不是坏消息）</h4>
+  <h4>质量门禁拦下的 ${GATE_FAILURES.length} 份报告（这不是坏消息）</h4>
   <p class="note">门禁能抓到问题恰恰说明流水线有自检能力。共性：模型和部位错配。</p>
   <details class="more"><summary>展开失败清单</summary><div class="inner">
   <table class="plain"><tr><th>病例</th><th>模态/部位</th><th>模型</th><th>被拦原因</th></tr>
-  ${DATA.gate_failure_rows.map(r => `<tr><td class="mono">${esc(r.case_id)}</td><td>${esc(r.modality)}/${esc(r.body_part)}</td><td class="mono">${esc(r.model)}</td><td class="mono" style="font-size:11px">${esc(r.warnings)}</td></tr>`).join("")}
+  ${GATE_FAILURES.map(r => `<tr><td class="mono">${esc(r.case_id)}</td><td>${esc(r.modality)}/${esc(r.body_part)}</td><td class="mono">${esc(r.model)}</td><td class="mono" style="font-size:11px">${esc(r.warnings)}</td></tr>`).join("")}
   </table></div></details>`;
 
 /* ============================================================
@@ -790,9 +794,9 @@ document.getElementById("gate-table").innerHTML = `
           <tr><th>环节</th><th>后端</th><th>真实输出摘录</th></tr>
           ${S.t1 ? `<tr><td><b>T1 打分</b></td><td class="mono" style="font-size:11px">llm_judge</td><td style="font-size:12px">「${esc(S.t1.metric)}」= ${S.t1.score} 分，理由：<span class="mono" style="font-size:11px">"${esc(S.t1.explanation)}…"</span> ——逐项核对了报告内容与影像，不再是数字数</td></tr>` : ""}
           ${S.t2 ? `<tr><td><b>T2 抽取</b></td><td class="mono" style="font-size:11px">${esc(S.t2.backend)}</td><td style="font-size:12px">规则先粗抽（${esc(S.t2.candidate_backend)}），再由 ${esc(S.t2.model)} 校正补全 → <b>${S.t2.finding_count} 条发现</b>，且每条 LLM 发现都必须给出原文证据（防幻觉约束）</td></tr>` : ""}
-          ${S.t4 ? `<tr><td><b>T4 判级</b></td><td class="mono" style="font-size:11px">${esc(S.t4.backend)}</td><td style="font-size:12px">${esc(S.t4.example.error_type)} 判 ${S.t4.example.hazard_level} 级，理由：<span class="mono" style="font-size:11px">"${esc(S.t4.example.explanation)}…"</span></td></tr>` : ""}
+          ${S.t4?.example ? `<tr><td><b>T4 判级</b></td><td class="mono" style="font-size:11px">${esc(S.t4.backend || "—")}</td><td style="font-size:12px">${esc(S.t4.example.error_type || "—")} 判 ${esc(S.t4.example.hazard_level ?? "—")} 级，理由：<span class="mono" style="font-size:11px">"${esc(S.t4.example.explanation || "—")}…"</span></td></tr>` : ""}
           ${S.t5_audit ? `<tr><td><b>T5 审计</b></td><td class="mono" style="font-size:11px">llm_audit</td><td style="font-size:12px">LLM 复核连连看结果：11 例共审 ${(S.t5_retained||0)+(S.t5_rejected||0)+(S.t5_modified||0)} 个错误候选，<b>驳回 ${S.t5_rejected} 个、改判 ${S.t5_modified} 个</b>——专抓「字面配不上但语义等价」的规则误报</td></tr>` : ""}
-          ${S.t6_audit ? `<tr><td><b>T6 审计</b></td><td class="mono" style="font-size:11px">llm_audit</td><td style="font-size:12px">结构复核 11 例裁定：${Object.entries(S.structure_audit_verdicts).map(([k,v])=>`${esc(k)}×${v}`).join("、")}</td></tr>` : ""}
+          ${S.t6_audit ? `<tr><td><b>T6 审计</b></td><td class="mono" style="font-size:11px">llm_audit</td><td style="font-size:12px">结构复核 11 例裁定：${Object.entries(S.structure_audit_verdicts || {}).map(([k,v])=>`${esc(k)}×${v}`).join("、") || "无结构审计裁定"}</td></tr>` : ""}
         </table>
       </div>
       <details class="more"><summary>这轮调了谁、各调了几次</summary><div class="inner">
@@ -1052,27 +1056,13 @@ const weakGen = (DATA.source_counts.local_vlm_fallback||0) + (DATA.source_counts
 const smokeOK = !!DATA.smoke;
 const O = DATA.ocr_audit;
 const ISSUES = [
-  { sev:"critical", icon:"🚨", title:"临床门槛：pilot10 仍为 0/10，尚无医生金标准",
-    why:`pilot10 只完成病例打包，reader A、reader B 和 adjudication 尚未完成；因此当前自动评估即使有真实 LLM 证据，也只能用于工程/探索性检查，不能校准临床准确性。`,
-    next:`<b>下一步：</b>完成 10 例双读者盲标与仲裁，冻结标注 schema 和一致性指标，再把结果接入六项实验门禁。` },
-  { sev:"critical", icon:"🚨", title:"地基⓪（新发现）：OCR 源头截断，最底层的裂缝",
-    why: O ? `52 例的「医生报告原文」全部来自旧 ${O.model} OCR（输出上限仅 ${O.legacy_max_new_tokens} token）：${O.definite_truncation} 例明确截断、${O.suspected_truncation} 例疑似（全在长文 CT），${O.missing_impression_count} 例丢了诊断印象。这比「打分是假的」还靠前——<b>连被评估的原文都是残卷</b>，残卷上的一切评估（含刚打通的真 LLM 评估）都要打问号。` : "（本次构建未找到 OCR 审计产物）",
-    next:`<b>下一步：</b>按已立项的 OCR 盲测基准设计（10 例冻结集、豆包/qwen-vl-ocr/放开上限的本地基线同台、按字错率+数字/否定准确率+幻觉率选路由）选定新 OCR 路由，重跑 52 例文本再谈评估。` },
-  { sev:"critical", icon:"🚨", title:"地基①②：真 LLM 评估已在 11 例兑现，52 例主数据仍是 mock",
-    why:`打分/抽取/判级的真 LLM 版本已在 11 例胸片上全量跑通（99 条角色证据、零兜底，见 ⑥.5 证据 A）——上一版面板的头两条「地基」问题在小规模上<b>已破局</b>。但当前 52 例权威 run 的评估数据仍是 ${pct(H.likert_mock_ratio)} mock 打分 + 纯规则抽取 + 查表判级，本面板 ⑥ 节的一切分数依旧不可引用。`,
-    next:`<b>下一步：</b>用 <code>config/dmx_strong.yaml</code> 对 52 例做全量真 LLM 重评估（先解决地基⓪，否则是在残卷上花真金白银）。重建本面板即可看诚实度徽章转绿。` },
-  { sev:"critical", icon:"🚨", title:"新问题：AI 法官重测不稳，分数还不能当结论",
-    why:`同样 9 例、同样配置跑两轮：T1 五维完全一致率只有 <b>11%</b>，重大错误共识完全一致率只有 <b>22%</b>；主判与复核判级完全一致率甚至为 0%（93/133 处分歧）。三法官仲裁保证了「每次都有答案」，但答案本身摇摆——<b>没有医生金标准校准之前，任何一轮自动评分都不能写进论文</b>。逐指标的量化体检见 <a href="#fresh">⑥.5 证据 C</a>：确定性指标 100% 复现，LLM 指标全部飘。产物里每例都已自动标记 clinical_validation_required。`,
-    next:`<b>下一步：</b>①冻结重测稳定性指标与达标线（如两轮 Likert 差≤1 的比例）；②完成 <a href="#map">pilot10 双读者金标准标注（⑥.8 节，当前 0/10）</a>，校准三位 AI 法官谁最接近医生；③温度已是 0，剩余方差来自模型本身，考虑多数投票聚合。` },
-  { sev:"serious", icon:"⚠️", title:"承重墙：盲写对照组有了，但 11 例只写出 5 份不同报告",
-    why:`微调 qwen3vl-8b 的盲写基准（⑥.5 证据 D）解决了「零份干净对照」的有无问题，但暴露<b>模板化坍缩</b>：11 张不同的胸片，45% 的报告一字不差——陪练对着不同病人说同一套话，个体针对性存疑。同时主数据集 ${K.generated_report_count} 份候选仍零份 formal_fresh，CT-head/CXR-abdomen 等 41 处路由空缺依旧（⑥.5 证据 F）。`,
-    next:`<b>下一步：</b>①量化模板坍缩（正常胸片理应相似，先分「真阴性相似」与「病灶被模板抹掉」两种情况再定性）；②扩到其它模态格子；③补 formal 溯源手续。` },
-  { sev:"warn", icon:"📋", title:"模型-部位错配暴露路由缺陷",
-    why:`${wc.body_part_mismatch||0} 份报告部位不匹配（最典型:dia_llama 给胸部 CT 写出脾脏）。门禁把它们拦下了（好事），但根因是路由花名册登记的模型能力和实际不符。`,
-    next:`<b>下一步：</b>修订花名册里 dia_llama 等模型的部位标签；把「被拦率」作为每次 run 的常规监控指标。` },
-  { sev:"warn", icon:"📋", title:"教学建议是模板句，离「教学」还远",
-    why:`WF4 已能跑通并产出真实文件，但建议内容是「请让发现、证据和印象更明确」这类万金油，没有引用医生具体的错误病例。`,
-    next:`<b>下一步：</b>等真 LLM 评估铺满 52 例后，把带临床理由的危害错误清单喂给 education 角色，生成引用具体病例的个性化建议。` },
+  { sev:"critical", icon:"🚨", title:"临床门槛：pilot10 仍为 0/10，尚无医生金标准", why:`pilot10 只完成病例打包，reader A、reader B 和 adjudication 尚未完成；当前自动评估只能用于工程/探索性检查。`, next:`<b>下一步：</b>完成 10 例双读者盲标与仲裁，冻结 schema 和一致性指标，再接入六项实验门禁。` },
+  { sev:"critical", icon:"🚨", title:"OCR 源头截断，评估输入仍可能是残卷", why: O ? `${O.definite_truncation} 例明确截断、${O.suspected_truncation} 例疑似，${O.missing_impression_count} 例丢失诊断印象；源文本不完整时，评分和对齐都不能视为可靠。` : "本次构建未找到 OCR 审计产物。", next:`<b>下一步：</b>完成冻结 OCR 盲测并按临床指标选定生产路由，重跑 52 例文本。` },
+  { sev:"critical", icon:"🚨", title:"LLM 重测稳定性不足，分数还不能当结论", why:`同样 9 例重测中，T1 五维完全一致率仅 11%，重大错误共识完全一致率仅 22%；没有医生金标准校准前，自动评分不能写进论文。`, next:`<b>下一步：</b>冻结稳定性指标与达标线，完成 pilot10 标注并校准三位 AI 法官。` },
+  { sev:"critical", icon:"🚨", title:"52 例基线 zero formal_fresh，候选不能进入正式比较", why:`当前 ${K.generated_report_count || "—"} 份候选中 formal_fresh 为 0；artifact、debug_fallback 或 exploratory_fresh 只能用于工程检查/探索性分析。`, next:`<b>下一步：</b>按冻结配置重跑 52 例，补齐版本、输入和审计链，产生可追溯的 formal_fresh 候选。` },
+  { sev:"critical", icon:"🚨", title:"六项正式实验仍为 0 validated", why:`六项实验协议和门禁已存在，但当前没有任何 validated 结果；图表只能展示探索性状态。`, next:`<b>下一步：</b>先完成临床金标准、formal_fresh 数据和主终点分析，再逐项点亮验证门禁。` },
+  { sev:"warn", icon:"📋", title:"模型-部位错配暴露路由缺陷", why:`${wc.body_part_mismatch||0} 份报告部位不匹配，门禁已拦截；根因是模型花名册和实际覆盖范围不一致。`, next:`<b>下一步：</b>修订路由花名册，并监控每次 run 的被拦率。` },
+  { sev:"warn", icon:"📋", title:"教学建议仍是模板句", why:`WF4 已能产出文件，但建议尚未引用医生的具体病例错误。`, next:`<b>下一步：</b>正式评估铺满 52 例后，将带临床理由的错误清单接入 education 角色。` },
 ];
 document.getElementById("issue-list").innerHTML = ISSUES.map(i => `
   <div class="issue"><div class="ico">${i.icon}</div>
