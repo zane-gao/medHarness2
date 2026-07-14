@@ -126,7 +126,7 @@ workstreams:
     next_gate: Re-enable strict data-governance review before any external clinical-data run.
   control_panel:
     status: validated
-    summary: The internal project-status dashboard has been rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Static checks and source inspection passed. Playwright desktop/mobile execution was not completed in this environment because the browser binary is unavailable, so visual regression remains an environment follow-up rather than evidence of failure.
+    summary: The internal project-status dashboard has been rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Static checks and source inspection passed. Playwright desktop/mobile execution was not completed because this environment lacks the @playwright/test package and Chromium browser, so visual regression remains an environment follow-up rather than evidence of failure.
     evidence_paths:
       - web/build_panel.py
       - web/panel_template.html
