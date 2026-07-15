@@ -7,6 +7,8 @@ def select_top_k(evaluations: list[dict[str, Any]], weights: dict[str, float] | 
     metric_weights = weights or {"likert_mean": 0.4, "structure_score": 0.3, "finding_coverage": 0.3}
     rows: list[dict[str, Any]] = []
     for index, evaluation in enumerate(evaluations):
+        if not _eligible_for_statistics(evaluation):
+            continue
         metrics = _numeric_metrics(evaluation)
         score = sum(metric_weights.get(key, 0.0) * metrics.get(key, 0.0) for key in metric_weights)
         total = sum(metric_weights.values()) or 1.0
@@ -53,3 +55,14 @@ def _likert01(value: Any) -> float:
     if 0.0 <= number < 1.0:
         return _clamp01(number)
     return _clamp01((number - 1.0) / 4.0)
+
+
+def _eligible_for_statistics(evaluation: dict[str, Any]) -> bool:
+    metadata = evaluation.get("metadata") or evaluation.get("provenance") or {}
+    if bool(metadata.get("fallback_used")):
+        return False
+    if str(evaluation.get("evidence_tier") or "").lower() == "debug_fallback":
+        return False
+    if str(evaluation.get("source") or "").lower() in {"local_vlm_fallback", "mock", "fallback"}:
+        return False
+    return True

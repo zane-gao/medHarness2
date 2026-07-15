@@ -203,6 +203,7 @@ def llm_route_fingerprint(client: Any, options: dict[str, Any]) -> dict[str, Any
                 "api_key_env",
                 "base_url",
                 "temperature",
+                "seed",
                 "chat_max_tokens",
             )
             if hasattr(llm, key)

@@ -40,7 +40,8 @@ model_roles:
     model: claude-opus-4-8
     api_key_env: DMX_API_KEY
     base_url: https://www.DMXAPI.cn/v1
-    omit_temperature: true
+    temperature: 0.0
+    seed: 0
 """,
         encoding="utf-8",
     )
@@ -51,8 +52,11 @@ model_roles:
     assert cfg.model_roles["hazard_primary"].max_retries == 4
     assert cfg.model_roles["hazard_primary"].timeout_sec == 120
     assert cfg.model_roles["hazard_reviewer"].model == "claude-opus-4-8"
-    assert cfg.model_roles["hazard_reviewer"].omit_temperature is True
-    assert cfg.model_roles["hazard_reviewer"].as_call_options()["omit_temperature"] is True
+    assert cfg.model_roles["hazard_reviewer"].omit_temperature is False
+    assert cfg.model_roles["hazard_reviewer"].temperature == 0.0
+    assert cfg.model_roles["hazard_reviewer"].seed == 0
+    assert cfg.model_roles["hazard_reviewer"].as_call_options()["temperature"] == 0.0
+    assert cfg.model_roles["hazard_reviewer"].seed == 0
     assert cfg.model_roles["hazard_primary"].api_key_env == "DMX_API_KEY"
 
 
@@ -109,7 +113,9 @@ def test_dmx_strong_profile_routes_every_llm_backed_tool_to_verified_strong_mode
         assert cfg.model_roles[role].api_key_env == "DMX_API_KEY"
     assert cfg.model_roles["finding_extractor"].max_tokens == 2048
     assert cfg.model_roles["hazard_reviewer"].model == "claude-opus-4-8"
-    assert cfg.model_roles["hazard_reviewer"].omit_temperature is True
+    assert cfg.model_roles["hazard_reviewer"].omit_temperature is False
+    assert cfg.model_roles["hazard_reviewer"].temperature == 0.0
+    assert cfg.model_roles["hazard_reviewer"].seed == 0
     assert cfg.privacy.enforce_external is False
     assert cfg.generator.cloud_fallback_enabled is False
 
@@ -151,7 +157,9 @@ def test_codex_proxy_profile_uses_separate_gpt_and_claude_credentials():
     assert reviewer.base_url == "https://codex.0u0o.com/v1"
     assert reviewer.model == "claude-opus-4-8"
     assert reviewer.api_key_env == "CODEX_PROXY_CLAUDE_API_KEY"
-    assert reviewer.omit_temperature is True
+    assert reviewer.omit_temperature is False
+    assert reviewer.temperature == 0.0
+    assert reviewer.seed == 0
 
 
 def test_codex_dmx_hybrid_profile_routes_only_reviewer_through_dmx():
@@ -173,7 +181,9 @@ def test_codex_dmx_hybrid_profile_routes_only_reviewer_through_dmx():
     assert reviewer.base_url == "https://www.DMXAPI.cn/v1"
     assert reviewer.model == "claude-opus-4-8"
     assert reviewer.api_key_env == "DMX_API_KEY"
-    assert reviewer.omit_temperature is True
+    assert reviewer.omit_temperature is False
+    assert reviewer.temperature == 0.0
+    assert reviewer.seed == 0
 
 
 def test_codex_yunwu_hybrid_profile_uses_independent_working_reviewer_route():
@@ -195,7 +205,9 @@ def test_codex_yunwu_hybrid_profile_uses_independent_working_reviewer_route():
     assert reviewer.base_url == "https://yunwu.ai/v1"
     assert reviewer.model == "claude-opus-4-8"
     assert reviewer.api_key_env == "YUNWU_API_KEY"
-    assert reviewer.omit_temperature is True
+    assert reviewer.omit_temperature is False
+    assert reviewer.temperature == 0.0
+    assert reviewer.seed == 0
     adjudicator = cfg.model_roles["hazard_adjudicator"]
     assert adjudicator.base_url == "https://yunwu.ai/v1"
     assert adjudicator.model == "gpt-5.6-terra-ultra"
@@ -219,7 +231,9 @@ def test_yunwu_codex_profile_routes_by_verified_workload_strength():
     assert reviewer.base_url == "https://yunwu.ai/v1"
     assert reviewer.model == "claude-opus-4-8"
     assert reviewer.api_key_env == "YUNWU_API_KEY"
-    assert reviewer.omit_temperature is True
+    assert reviewer.omit_temperature is False
+    assert reviewer.temperature == 0.0
+    assert reviewer.seed == 0
     adjudicator = cfg.model_roles["hazard_adjudicator"]
     assert adjudicator.base_url == "https://yunwu.ai/v1"
     assert adjudicator.model == "gpt-5.6-terra-ultra"

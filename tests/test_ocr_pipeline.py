@@ -69,3 +69,34 @@ def test_truncated_page_response_is_marked_in_metadata(tmp_path: Path):
     meta = json.loads((tmp_path / "ocr" / "case-truncated.ocr.json").read_text(encoding="utf-8"))
     assert "ocr_possible_truncation" in meta["warnings"]
 
+
+def test_ocr_verifier_is_audit_only_and_cannot_change_primary_text(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    doc.new_page(width=200, height=200)
+    doc.save(pdf)
+    primary = PageOCRClient()
+
+    class Verifier:
+        def __init__(self):
+            self.calls = 0
+
+        def call(self, prompt, image_path=None, **kwargs):
+            self.calls += 1
+            return '{"status":"disagreement","spans":["audit only"]}'
+
+    verifier = Verifier()
+    result = extract_report_text(
+        pdf,
+        case_id="case-verifier",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=primary,
+        verifier_client=verifier,
+        force=True,
+    )
+    assert result.text.startswith("FINDINGS: page 1")
+    assert verifier.calls == 1
+    meta = json.loads((tmp_path / "ocr" / "case-verifier.ocr.json").read_text(encoding="utf-8"))
+    assert meta["quality_audit"]["status"] == "disagreement"
+    assert meta["quality_audit"]["spans"] == ["audit only"]

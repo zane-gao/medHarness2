@@ -78,6 +78,7 @@ def test_call_can_override_provider_endpoint_and_runtime_options(monkeypatch):
         timeout_sec=123,
         max_retries=1,
         max_tokens=321,
+        seed=17,
         response_format="json",
         payload_classification="synthetic_test",
     )
@@ -86,6 +87,7 @@ def test_call_can_override_provider_endpoint_and_runtime_options(monkeypatch):
     assert captured["url"] == "https://www.DMXAPI.cn/v1/chat/completions"
     assert captured["payload"]["model"] == "gpt-5.5"
     assert captured["payload"]["max_tokens"] == 321
+    assert captured["payload"]["seed"] == 17
     assert captured["timeout"] == 123
     assert "test-only-secret" not in json.dumps(captured["payload"])
 
@@ -120,6 +122,35 @@ def test_chat_completions_can_omit_temperature_for_models_that_reject_it(monkeyp
     )
 
     assert "temperature" not in captured["payload"]
+
+
+def test_chat_completions_honors_retry_after_for_rate_limits(monkeypatch):
+    monkeypatch.setenv("DMX_API_KEY", "test-only-secret")
+    calls = 0
+    sleeps = []
+
+    class Response:
+        status_code = 429
+        headers = {"Retry-After": "7"}
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"error": {"message": "rate limited"}}
+
+    def fake_post(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return Response()
+
+    monkeypatch.setattr("requests.post", fake_post)
+    monkeypatch.setattr("time.sleep", lambda value: sleeps.append(value))
+    client = LLMClient(AppConfig(llm=LLMConfig(provider="mock", max_retries=2)))
+    with pytest.raises(LLMClientError):
+        client.call("hello", provider="chat_completions", api_key_env="DMX_API_KEY", max_retries=2, payload_classification="synthetic_test")
+    assert calls == 2
+    assert sleeps == [7.0]
 
 
 def test_chat_completions_preserves_structured_provider_error_details(monkeypatch):

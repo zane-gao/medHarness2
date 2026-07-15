@@ -75,6 +75,9 @@ class LLMClient:
         }
         if not kwargs.get("omit_temperature"):
             payload["temperature"] = kwargs.get("temperature", llm.temperature)
+        seed = kwargs.get("seed", llm.seed)
+        if seed is not None:
+            payload["seed"] = int(seed)
         if kwargs.get("response_format") == "json":
             payload["text"] = {"format": {"type": "json_object"}}
         data = json.dumps(payload).encode("utf-8")
@@ -100,7 +103,8 @@ class LLMClient:
                 last_error = exc
                 if attempt + 1 >= max_retries:
                     break
-                time.sleep(llm.retry_initial_sec * (2**attempt))
+                delay = _retry_after_seconds(response) if getattr(response, "status_code", 0) == 429 else None
+                time.sleep(delay if delay is not None else llm.retry_initial_sec * (2**attempt))
         raise LLMClientError(f"OpenAI Responses API call failed: {last_error}")
 
     def _call_chat_completions(self, prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
@@ -119,6 +123,9 @@ class LLMClient:
         }
         if not kwargs.get("omit_temperature"):
             payload["temperature"] = kwargs.get("temperature", llm.temperature)
+        seed = kwargs.get("seed", llm.seed)
+        if seed is not None:
+            payload["seed"] = int(seed)
         max_tokens = kwargs.get("max_tokens") or llm.chat_max_tokens
         if max_tokens:
             payload["max_tokens"] = int(max_tokens)
@@ -149,7 +156,8 @@ class LLMClient:
                 last_error = exc
                 if attempt + 1 >= max_retries:
                     break
-                time.sleep(llm.retry_initial_sec * (2**attempt))
+                delay = _retry_after_seconds(response) if getattr(response, "status_code", 0) == 429 else None
+                time.sleep(delay if delay is not None else llm.retry_initial_sec * (2**attempt))
         raise LLMClientError(f"Chat Completions API call failed: {last_error}")
 
     @staticmethod
@@ -418,6 +426,18 @@ def build_mock_client(response_json: dict[str, Any] | None = None) -> LLMClient:
 
         client.call = call  # type: ignore[method-assign]
     return client
+
+
+def _retry_after_seconds(response: Any) -> float | None:
+    try:
+        value = response.headers.get("Retry-After")
+    except AttributeError:
+        return None
+    try:
+        delay = float(value)
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, min(delay, 300.0))
 
 
 def _file_data_url(path: Path) -> str:

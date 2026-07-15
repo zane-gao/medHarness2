@@ -153,6 +153,36 @@ def test_tool2_cxr_rule_extracts_chinese_cxr_findings():
     assert graph["coverage"] > 0
 
 
+def test_tool2_non_cxr_observation_codes_are_stable_canonical_slugs():
+    response = {
+        "findings": [
+            {
+                "observation_code": "Mass lesion",
+                "observation_text": "Mass lesion in left kidney",
+                "anatomy_code": "left kidney",
+                "location_text": "left kidney",
+                "laterality": "left",
+                "certainty": "present",
+                "severity": None,
+                "measurements": [],
+                "evidence": "Mass lesion in left kidney",
+                "attributes": {},
+            }
+        ],
+        "relations": [],
+    }
+    graph = extract_findings(
+        "FINDINGS: Mass lesion in left kidney.",
+        modality="ct",
+        backend="auto",
+        llm_client=_RecordingClient(response),
+        extractor_options={"provider": "chat_completions", "model": "test"},
+        require_llm=True,
+        allow_fallback=False,
+    )
+    assert graph["findings"][0]["observation_code"] == "mass_lesion"
+
+
 def test_tool2_hybrid_corrects_template_candidate_with_grounded_llm_output():
     report = "FINDINGS: A 6 mm spiculated nodule is present in the right upper lobe."
     response = {
@@ -1487,6 +1517,17 @@ def test_tool9_selects_top_k():
 def test_tool9_normalizes_likert_five_point_scale_to_zero_one():
     ranked = select_top_k([{"model": "a", "composite_inputs": {"likert_mean": 1}}], top_k=1)
     assert ranked[0]["metrics"]["likert_mean"] == 0.0
+
+
+def test_tool9_excludes_fallback_rows_from_ranking():
+    ranked = select_top_k(
+        [
+            {"model": "real", "composite_inputs": {"likert_mean": 4}, "metadata": {"fallback_used": False}},
+            {"model": "fallback", "composite_inputs": {"likert_mean": 5}, "metadata": {"fallback_used": True}},
+        ],
+        top_k=2,
+    )
+    assert [row["model"] for row in ranked] == ["real"]
 
 
 class _SequenceClient:

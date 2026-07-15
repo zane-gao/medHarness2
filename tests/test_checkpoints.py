@@ -82,6 +82,14 @@ def test_stage_checkpoint_input_change_creates_a_new_entry(tmp_path: Path):
     assert len(list((tmp_path / "checkpoints").rglob("*.json"))) == 2
 
 
+def test_llm_route_fingerprint_changes_when_seed_changes():
+    from medharness2.checkpoints import llm_route_fingerprint
+
+    first = llm_route_fingerprint(object(), {"model": "m", "seed": 1})
+    second = llm_route_fingerprint(object(), {"model": "m", "seed": 2})
+    assert first != second
+
+
 def test_stage_checkpoint_rejects_tampered_output_before_recompute(tmp_path: Path):
     store = StageCheckpointStore(tmp_path / "checkpoints")
     store.get_or_compute(

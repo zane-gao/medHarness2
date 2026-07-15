@@ -36,6 +36,17 @@ def test_tool10_modelwise_weighted_uses_named_weights():
     assert "model_count" not in result
 
 
+def test_tool10_excludes_fallback_rows_from_weighted_metrics():
+    rows = [
+        {"model": "real", "metrics": {"precision": 1.0}, "metadata": {"fallback_used": False}},
+        {"model": "fallback", "metrics": {"precision": 0.0}, "metadata": {"fallback_used": True}},
+    ]
+    result = modelwise_weighted(rows)
+    assert result["precision"] == pytest.approx(1.0)
+    assert result["_provenance"]["eligible_count"] == 1
+    assert result["_provenance"]["fallback_count"] == 1
+
+
 def test_tool11_applies_hazard_weights_to_numeric_metrics():
     rows = [
         {"error_type": "false_finding", "hazard_level": 3, "metrics": {"error_rate": 0.2}},

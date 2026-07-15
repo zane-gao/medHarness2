@@ -86,6 +86,9 @@ def reevaluate_run(
             {
                 "model": item.get("model"),
                 "metrics": item.get("composite_inputs") or {},
+                "metadata": _evaluation_metadata(item),
+                "source": item.get("source"),
+                "evidence_tier": item.get("evidence_tier"),
             }
             for item in reevaluated.get("generated_evaluations") or []
         ]
@@ -267,3 +270,16 @@ def _mean_score(rows: list[dict[str, Any]]) -> float:
         if "finding_coverage" in row:
             values.append(float(row["finding_coverage"]))
     return round(sum(values) / len(values), 6) if values else 0.0
+
+
+def _evaluation_metadata(evaluation: dict[str, Any]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    for key in ("likert", "finding_graph"):
+        value = evaluation.get(key)
+        if isinstance(value, dict):
+            nested = value.get("_metadata") or value.get("metadata") or value.get("provenance")
+            if isinstance(nested, dict):
+                metadata.update(nested)
+    if isinstance(evaluation.get("metadata"), dict):
+        metadata.update(evaluation["metadata"])
+    return metadata

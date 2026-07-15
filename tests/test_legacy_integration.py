@@ -661,6 +661,26 @@ def test_registry_star_selects_all_compatible_local_generators():
     assert "brain_gemma3d" not in selected
 
 
+def test_single_case_candidate_coverage_is_reference_recall(tmp_path: Path):
+    from medharness2.workflows.single_case import run_single_case
+
+    report = tmp_path / "reference.txt"
+    report.write_text("FINDINGS: Mild right lung opacity. IMPRESSION: Opacity.", encoding="utf-8")
+    image = tmp_path / "image.png"
+    image.write_bytes(b"fake")
+    result = run_single_case(
+        report_path=report,
+        report_text=report.read_text(encoding="utf-8"),
+        image_path=image,
+        output_path=tmp_path / "case.json",
+        modality="cxr",
+        body_part="chest",
+        model_keys=[],
+    )
+    assert result["generated_evaluations"]
+    assert result["generated_evaluations"][0]["composite_inputs"]["finding_coverage"] == 0.0
+
+
 def test_registry_filters_all_compatible_by_source():
     registry = ReportGeneratorRegistry(AppConfig())
     selected = {entry.key: entry.source for entry in registry.select("cxr", requested=["*"], body_part="chest", sources={"artifact_reuse"})}

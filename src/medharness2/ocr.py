@@ -18,6 +18,8 @@ def extract_report_text(
     output_dir: str | Path,
     config: AppConfig | None = None,
     llm_client: Any | None = None,
+    verifier_client: Any | None = None,
+    verifier_options: dict[str, Any] | None = None,
     min_direct_chars: int = 20,
     require_real: bool = False,
     force: bool = False,
@@ -42,6 +44,7 @@ def extract_report_text(
             )
 
     warnings: list[str] = []
+    quality_audit: dict[str, Any] | None = None
     direct_text = _extract_pdf_text(pdf)
     if len(direct_text.strip()) >= min_direct_chars:
         text = direct_text
@@ -56,7 +59,8 @@ def extract_report_text(
         page_results: list[str] = []
         page_meta: list[dict[str, Any]] = []
         with tempfile.TemporaryDirectory(prefix=f"{case_id}-ocr-") as tmp_dir:
-            for page_index, image_path in enumerate(_render_pdf_pages(pdf, Path(tmp_dir)), start=1):
+            rendered_pages = _render_pdf_pages(pdf, Path(tmp_dir))
+            for page_index, image_path in enumerate(rendered_pages, start=1):
                 page_text = str(
                     client.call(
                         prompt,
@@ -76,9 +80,26 @@ def extract_report_text(
                 )
                 if _looks_truncated(page_text):
                     warnings.append(f"ocr_possible_truncation:page_{page_index}")
-        text = "\n\n".join(item for item in page_results if item).strip()
-        if any(item.startswith("ocr_possible_truncation:") for item in warnings):
-            warnings.append("ocr_possible_truncation")
+            text = "\n\n".join(item for item in page_results if item).strip()
+            if any(item.startswith("ocr_possible_truncation:") for item in warnings):
+                warnings.append("ocr_possible_truncation")
+            if verifier_client is not None and page_results:
+                audit_prompt = (
+                    "Audit this OCR transcription against the supplied report page. "
+                    "Return JSON only with status (agree/disagreement), evidence spans, and short reason. "
+                    "Do not rewrite or provide a replacement transcription.\n\nOCR:\n" + text
+                )
+                raw_audit = verifier_client.call(
+                    audit_prompt,
+                    image_path=rendered_pages[0],
+                    response_format="json",
+                    payload_classification="raw_medical_document",
+                    **dict(verifier_options or {}),
+                )
+                try:
+                    quality_audit = json.loads(str(raw_audit))
+                except json.JSONDecodeError:
+                    quality_audit = {"status": "invalid_verifier_response", "raw": str(raw_audit)[:500]}
         method = "vlm_ocr"
         provider = cfg.llm.provider
         if not text:
@@ -101,6 +122,7 @@ def extract_report_text(
                 "pages": page_meta,
                 "source_pdf_sha256": _sha256(pdf),
                 "prompt_version": "ocr-page-v2",
+                "quality_audit": quality_audit,
             },
             ensure_ascii=False,
             indent=2,

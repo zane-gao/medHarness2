@@ -51,7 +51,8 @@ model_roles:
     schema_max_attempts: 2
     transport_max_retries: 2
     timeout_sec: 180
-    omit_temperature: true
+    temperature: 0.0
+    seed: 0
     max_tokens: 2048
   hazard_adjudicator:
     <<: *gpt_role

@@ -23,6 +23,7 @@ class LLMConfig:
     max_retries: int = 3
     retry_initial_sec: float = 0.25
     temperature: float = 0.0
+    seed: int | None = 0
     chat_max_tokens: int = 1024
     local_cli_python_bin: str = "python"
     local_cli_script: str = "/data/isbi/gzp/medHarness/scripts/run_report_generation.py"
@@ -50,6 +51,7 @@ class ModelRoleConfig:
     transport_max_retries: int | None = None
     timeout_sec: int | None = None
     temperature: float | None = None
+    seed: int | None = 0
     max_tokens: int | None = None
     omit_temperature: bool = False
 
@@ -75,6 +77,7 @@ class ModelRoleConfig:
             "max_retries": transport_retries,
             "timeout_sec": self.timeout_sec,
             "temperature": self.temperature,
+            "seed": self.seed,
             "max_tokens": self.max_tokens,
         }
         if self.omit_temperature:

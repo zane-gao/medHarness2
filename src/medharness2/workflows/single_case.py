@@ -13,6 +13,7 @@ from medharness2.tools.quality_gate import apply_generation_quality_gate
 from medharness2.tools.tool7_modality import recognize_modality
 from medharness2.tools.tool8_generate import generate_reports
 from medharness2.tools.tool9_rank import select_top_k
+from medharness2.tools.tool5_align import align_graphs
 from medharness2.utils.io import read_text, write_json
 
 
@@ -87,6 +88,15 @@ def run_single_case(
         evaluation["evidence_tier"] = report.evidence_tier
         evaluation["warnings"] = report.warnings
         evaluation["quality_gate"] = report.metadata.get("quality_gate", {"passed": True})
+        alignment = align_graphs(
+            evaluation.get("finding_graph") or {},
+            human_evaluation.get("finding_graph") or {},
+            tolerance_mm=cfg.alignment.tolerance_mm,
+        )
+        evaluation["finding_alignment"] = alignment
+        composite = dict(evaluation.get("composite_inputs") or {})
+        composite["finding_coverage"] = float((alignment.get("metrics") or {}).get("recall", 0.0))
+        evaluation["composite_inputs"] = composite
         generated_evaluations.append(evaluation)
     ranking_inputs = [
         evaluation

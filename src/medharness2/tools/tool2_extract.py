@@ -505,9 +505,16 @@ def _normalize_extracted_finding(
             attributes=finding.attributes,
         )
     return {
-        "observation_code": finding.observation_code.strip(),
+        "observation_code": _canonical_observation_code(finding.observation_code, finding.observation_text),
         "anatomy_code": _strip_optional(finding.anatomy_code),
         "location_text": _strip_optional(finding.location_text),
         "certainty": finding.certainty,
         "attributes": finding.attributes,
     }
+
+
+def _canonical_observation_code(code: str, text: str) -> str:
+    value = str(code or text or "").strip().lower()
+    value = re.sub(r"[^\w\s-]", " ", value, flags=re.UNICODE)
+    value = re.sub(r"[-\s]+", "_", value, flags=re.UNICODE).strip("_")
+    return value or "reported_finding"
