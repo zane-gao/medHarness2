@@ -5,7 +5,7 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: pending-local-scientific-remediation
+  git_sha: f7e8d34
   dirty_worktree: true
   pytest_passed: 356
   pytest_warnings: 17
