@@ -75,6 +75,7 @@ def generate_reports(
                     "reference_report_used": bool(generation_reference),
                     "fallback_provider": cfg.llm.provider,
                     "fallback_source": fallback_source,
+                    "fallback_used": True,
                     "requested_models": model_keys or cfg.generator.default_models,
                     "requested_sources": model_sources or [],
                     "local_attempts": failed_attempts,

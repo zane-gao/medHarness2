@@ -1500,6 +1500,7 @@ def test_tool8_openai_fallback_is_marked_as_cloud():
     assert reports[0].source == "cloud_fallback"
     assert "cloud_fallback_used" in reports[0].warnings
     assert reports[0].metadata["fallback_provider"] == "openai"
+    assert reports[0].metadata["fallback_used"] is True
 
 
 def test_quality_gate_allows_followup_ct_recommendation_for_cxr():

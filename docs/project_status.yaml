@@ -5,7 +5,7 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: 33a364c
+  git_sha: pending-local-final-remediation
   dirty_worktree: true
   pytest_passed: 361
   pytest_warnings: 17
@@ -97,7 +97,7 @@ workstreams:
     next_gate: 在冻结三模态清单上跑真实资产路由 smoke，确认每例至少有一个兼容候选且部位缺失不产生空路由。
   scientific_metrics:
     status: in_progress
-    summary: 已修复 Likert 归一化、统计字段污染、并列百分位、小样本 t 区间、散文 JSON、fallback/mock 过滤、参考图 recall、seed/cache、非 CXR slug、Retry-After、Tool2 宽泛异常、评委 prompt 数据边界、education fallback provenance、失败病例分母、Tool1 重测一致性记录、placeholder provenance、迁移失败原因和 hazard canonical 字段优先级。仍需真实北川冻结集验证临床 CER、正式多重比较和临床标签一致性。
+    summary: 已修复 Likert 归一化、统计字段污染、并列百分位、小样本 t 区间、散文 JSON、fallback/mock 过滤、参考图 recall、seed/cache、非 CXR slug、Retry-After、Tool2 宽泛异常、评委 prompt 数据边界、education fallback provenance、失败病例分母、Tool1 重测一致性记录、placeholder provenance、迁移失败原因、hazard canonical 字段优先级、DMX 顶层 mock 路由和生成 fallback 标记。仍需真实北川冻结集验证临床 CER、正式多重比较和临床标签一致性。
     evidence_paths:
       - src/medharness2/tools/tool9_rank.py
       - src/medharness2/tools/tool10_modelwise.py

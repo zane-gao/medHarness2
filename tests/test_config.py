@@ -91,6 +91,8 @@ def test_dmx_strong_profile_routes_every_llm_backed_tool_to_verified_strong_mode
     cfg = load_config(Path("config/dmx_strong.yaml"))
 
     assert cfg.llm.retry_initial_sec == 5.0
+    assert cfg.llm.provider == "chat_completions"
+    assert cfg.llm.api_key_env == "DMX_API_KEY"
     assert set(cfg.model_roles) >= {
         "general_judge",
         "finding_extractor",
