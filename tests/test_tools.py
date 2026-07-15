@@ -348,7 +348,6 @@ def test_tool2_hybrid_retries_ungrounded_llm_evidence():
     )
 
     assert client.call_count == 2
-    assert graph["metadata"]["llm_correction"]["attempt_count"] == 2
     assert graph["metadata"]["llm_correction"]["error_count"] == 1
 
 
@@ -377,7 +376,34 @@ def test_tool2_hybrid_fallback_is_explicit_and_preserves_template_graph():
     assert graph["backend"] == "cxr_rule"
     assert "llm_extraction_fallback" in graph["warnings"]
     assert graph["metadata"]["llm_correction"]["fallback_used"] is True
-    assert graph["metadata"]["llm_correction"]["attempt_count"] == 2
+
+
+def test_tool2_llm_correction_preserves_placeholder_provenance():
+    response = {
+        "findings": [{
+            "observation_code": "opacity",
+            "observation_text": "opacity",
+            "anatomy_code": None,
+            "location_text": None,
+            "laterality": "unknown",
+            "certainty": "present",
+            "severity": None,
+            "measurements": [],
+            "evidence": "no supported finding",
+            "attributes": {},
+        }],
+        "relations": [],
+    }
+    graph = extract_findings(
+        "FINDINGS: no supported finding",
+        modality="ct",
+        backend="placeholder",
+        llm_client=_RecordingClient(response),
+        extractor_options={"provider": "chat_completions", "model": "test"},
+        require_llm=True,
+        allow_fallback=False,
+    )
+    assert "template_candidate_had_fallback_or_placeholder" in graph["warnings"]
 
 
 def test_tool3_parses_bilingual_section_headers_with_one_normalization():

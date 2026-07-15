@@ -300,11 +300,14 @@ def _build_graph(
             "coverage_rate": round(coverage, 4),
         }
     )
+    original_warnings = list(candidate.get("warnings") or [])
     warnings = [
         warning
-        for warning in candidate.get("warnings") or []
+        for warning in original_warnings
         if warning not in {"no_supported_finding_detected", "reported_finding_fallback", "placeholder_extractor"}
     ]
+    if any("placeholder" in str(warning) or "fallback" in str(warning) for warning in original_warnings):
+        warnings.append("template_candidate_had_fallback_or_placeholder")
     warnings.append("template_llm_correction")
     metadata = dict(candidate.get("metadata") or {})
     if modality.lower() in {"cxr", "xray", "xr"}:

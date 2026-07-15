@@ -227,10 +227,11 @@ def _migrate_evaluation(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 
 
 def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
+    validation_error = ""
     try:
         return FindingGraph.model_validate(payload).model_dump(mode="json")
-    except Exception:
-        pass
+    except Exception as exc:
+        validation_error = f"{type(exc).__name__}: {exc}"
 
     findings: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
@@ -263,6 +264,11 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
             legacy_fields["measurement"] = deepcopy(unparsed_measurement)
         if legacy_fields:
             attributes["legacy_fields"] = legacy_fields
+        if validation_error:
+            attributes["migration_metadata"] = {
+                "v2_validation_failed": True,
+                "v2_validation_error": validation_error[:500],
+            }
         findings.append(
             {
                 "finding_id": finding_id,
