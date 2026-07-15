@@ -108,7 +108,7 @@ def extract_findings(
                 attempt_count=attempt + 1,
                 errors=errors,
             )
-        except Exception as exc:
+        except (LLMClientError, ValueError, TypeError, json.JSONDecodeError) as exc:
             errors.append(f"{type(exc).__name__}: {exc}")
 
     if not allow_fallback:

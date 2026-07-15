@@ -115,9 +115,17 @@ def _try_llm_json(client: LLMClient, prompt: str, default: dict[str, Any]) -> di
             payload_classification="deidentified_structured",
         )
         parsed = parse_json_object(raw, context="Workflow 4 education")
-    except (ValueError, LLMClientError):
-        return default
-    return _merge_required(default, parsed)
+    except (ValueError, LLMClientError, RuntimeError):
+        fallback = dict(default)
+        metadata = dict(fallback.get("metadata") or {})
+        metadata.update({"source": "deterministic_fallback", "fallback_used": True})
+        fallback["metadata"] = metadata
+        return fallback
+    merged = _merge_required(default, parsed)
+    metadata = dict(merged.get("metadata") or {})
+    metadata.update({"source": "llm_judge", "fallback_used": False})
+    merged["metadata"] = metadata
+    return merged
 
 
 def _merge_required(default: dict[str, Any], parsed: dict[str, Any]) -> dict[str, Any]:

@@ -9,7 +9,7 @@ import pytest
 from medharness2.config import AppConfig, GeneratorConfig, LLMConfig
 from medharness2.tools.tool10_modelwise import modelwise_weighted
 from medharness2.tools.tool11_hazardwise import hazardwise_weighted
-from medharness2.tools.tool12_statistics import calculate_statistics, percentile_rank
+from medharness2.tools.tool12_statistics import calculate_statistics, percentile_rank, correct_pvalues_holm, compare_metric_groups
 from medharness2.tools.tool6_structure_diff import compare_structure
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
@@ -69,6 +69,15 @@ def test_tool12_statistics_and_percentile_rank():
 def test_statistics_ignore_bookkeeping_fields():
     stats = calculate_statistics([{"score": 0.5, "model_count": 2}, {"score": 0.7, "model_count": 3}])
     assert set(stats) == {"score"}
+
+
+def test_statistics_exposes_group_test_and_holm_correction():
+    comparison = compare_metric_groups([0.9, 0.8, 0.85], [0.4, 0.5, 0.45])
+    assert comparison["n_a"] == 3
+    assert comparison["n_b"] == 3
+    assert 0.0 <= comparison["p_value"] <= 1.0
+    corrected = correct_pvalues_holm({"a": 0.01, "b": 0.04, "c": 0.2})
+    assert corrected["a"] <= corrected["b"] <= corrected["c"]
 
 
 def test_batch_readers_and_department_workflows(tmp_path: Path):

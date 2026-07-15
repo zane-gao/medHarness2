@@ -110,6 +110,12 @@ def run_batch_readers(
         "failed_case_count": len(failed_cases),
         "cases": case_results,
         "failed_cases": failed_cases,
+        "denominator": {
+            "manifest_case_count": len(rows),
+            "successful_case_count": len(case_results),
+            "failed_case_count": len(failed_cases),
+            "success_rate": round(len(case_results) / max(len(rows), 1), 4),
+        },
         "per_reader": per_reader,
         "statistics": calculate_statistics([case["human_metrics"] for case in case_results]),
     }

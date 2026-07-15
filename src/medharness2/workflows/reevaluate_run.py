@@ -36,6 +36,7 @@ def reevaluate_run(
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
     workflow2 = read_json(source / "workflow2.json")
+    source_case_count = len(workflow2.get("cases") or [])
     _copy_optional_source_files(source, out)
 
     case_results: list[dict[str, Any]] = []
@@ -123,6 +124,12 @@ def reevaluate_run(
         "failed_case_count": len(failed_cases),
         "cases": case_results,
         "failed_cases": failed_cases,
+        "denominator": {
+                "source_case_count": source_case_count,
+            "successful_case_count": len(case_results),
+            "failed_case_count": len(failed_cases),
+                "success_rate": round(len(case_results) / max(source_case_count, 1), 4),
+        },
         "per_reader": per_reader,
         "statistics": calculate_statistics([case["human_metrics"] for case in case_results]),
         "reevaluation": {

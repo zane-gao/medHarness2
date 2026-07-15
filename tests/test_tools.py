@@ -30,6 +30,19 @@ from medharness2.tools.tool8_generate import generate_reports
 from medharness2.tools.tool9_rank import select_top_k
 
 
+def _valid_likert_payload():
+    return {
+        metric: {"score": 4, "explanation": "Evidence-based score."}
+        for metric in (
+            "Completeness and Accuracy",
+            "Conciseness and Clarity",
+            "Terminological Accuracy",
+            "Structure and Style",
+            "Overall Writing Quality",
+        )
+    }
+
+
 def test_tool1_likert_normalizes_scores():
     client = build_mock_client({"Completeness and Accuracy": {"score": 9, "explanation": "x"}})
     result = evaluate_likert("short report", llm_client=client)
@@ -181,6 +194,23 @@ def test_tool2_non_cxr_observation_codes_are_stable_canonical_slugs():
         allow_fallback=False,
     )
     assert graph["findings"][0]["observation_code"] == "mass_lesion"
+
+
+def test_tool2_does_not_hide_unexpected_programming_errors():
+    class BuggyClient:
+        def call(self, *args, **kwargs):
+            raise AssertionError("programming bug")
+
+    with pytest.raises(AssertionError, match="programming bug"):
+        extract_findings(
+            "FINDINGS: opacity",
+            modality="ct",
+            backend="auto",
+            llm_client=BuggyClient(),
+            extractor_options={"provider": "chat_completions", "model": "test"},
+            require_llm=True,
+            allow_fallback=False,
+        )
 
 
 def test_tool2_hybrid_corrects_template_candidate_with_grounded_llm_output():
@@ -1528,6 +1558,28 @@ def test_tool9_excludes_fallback_rows_from_ranking():
         top_k=2,
     )
     assert [row["model"] for row in ranked] == ["real"]
+
+
+def test_tool1_can_record_retest_consistency_without_replacing_primary_score():
+    class StableClient:
+        def __init__(self):
+            self.calls = 0
+
+        def call(self, *args, **kwargs):
+            self.calls += 1
+            return json.dumps(_valid_likert_payload(), ensure_ascii=False)
+
+    client = StableClient()
+    result = evaluate_likert(
+        "FINDINGS: stable. IMPRESSION: stable.",
+        llm_client=client,
+        require_llm=True,
+        allow_fallback=False,
+        consistency_runs=2,
+    )
+    assert client.calls == 2
+    assert result["_metadata"]["consistency_runs"] == 2
+    assert result["_metadata"]["consistency_exact"] is True
 
 
 class _SequenceClient:

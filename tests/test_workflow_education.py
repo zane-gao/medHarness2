@@ -12,10 +12,15 @@ def test_run_education_suggestions_from_workflow1(tmp_path: Path):
     workflow1 = tmp_path / "workflow1.json"
     output = tmp_path / "education.json"
     workflow1.write_text(json.dumps(_workflow1_payload(), ensure_ascii=False), encoding="utf-8")
+    class FailingClient:
+        def call(self, *args, **kwargs):
+            raise RuntimeError("judge unavailable")
+
     result = run_education_suggestions(
         eval_report=workflow1,
         output_path=output,
         config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        llm_client=FailingClient(),
     )
     assert output.exists()
     assert result["mode"] == "eval_report"
@@ -49,6 +54,22 @@ def test_run_education_requires_exactly_one_input(tmp_path: Path):
         assert "exactly one" in str(exc)
     else:
         raise AssertionError("expected ValueError")
+
+
+def test_education_fallback_is_explicitly_marked(tmp_path: Path):
+    output = tmp_path / "education.json"
+    (tmp_path / "workflow2.json").write_text(json.dumps(_workflow2_payload()), encoding="utf-8")
+    class FailingClient:
+        def call(self, *args, **kwargs):
+            raise RuntimeError("judge unavailable")
+
+    result = run_education_suggestions(
+        eval_radiologist=tmp_path / "workflow2.json",
+        output_path=output,
+        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        llm_client=FailingClient(),
+    )
+    assert result["metadata"]["fallback_used"] is True
 
 
 def test_cli_workflow_education_eval_report(tmp_path: Path):
