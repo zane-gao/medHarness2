@@ -5,7 +5,7 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: pending-local-ocr-router-remediation
+  git_sha: bfa5059
   dirty_worktree: true
   pytest_passed: 349
   pytest_warnings: 16
