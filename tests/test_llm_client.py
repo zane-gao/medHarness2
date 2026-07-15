@@ -35,6 +35,10 @@ def test_parse_json_object_accepts_a_full_markdown_json_fence():
     assert result == {"ok": True}
 
 
+def test_parse_json_object_extracts_json_object_from_surrounding_prose():
+    assert parse_json_object("Result follows: {\"ok\": true} end.", context="test") == {"ok": True}
+
+
 def test_openai_provider_requires_api_key(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     client = LLMClient(AppConfig(llm=LLMConfig(provider="openai", max_retries=1)))

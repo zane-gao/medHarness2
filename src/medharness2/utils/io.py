@@ -38,7 +38,15 @@ def parse_json_object(raw: str, *, context: str) -> dict[str, Any]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:
-        raise ValueError(f"{context} did not return valid JSON: {exc}") from exc
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                data = json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                raise ValueError(f"{context} did not return valid JSON: {exc}") from exc
+        else:
+            raise ValueError(f"{context} did not return valid JSON: {exc}") from exc
     if not isinstance(data, dict):
         raise ValueError(f"{context} must return a JSON object")
     return data

@@ -1,14 +1,14 @@
 schema_version: "1.0"
-updated_at: "2026-07-14"
+updated_at: "2026-07-15"
 current_phase: production_research_foundations
 release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: 80672806e16c7bafb94951ff90be2162d33dde45
-  dirty_worktree: false
-  pytest_passed: 332
-  pytest_warnings: 17
+  git_sha: pending-local-ocr-router-remediation
+  dirty_worktree: true
+  pytest_passed: 349
+  pytest_warnings: 16
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
   generated_report_count: 81
@@ -81,12 +81,31 @@ workstreams:
     next_gate: Freeze repeated-run reliability targets, complete dual-reader gold labels, and benchmark every model role before a formal case run.
   ocr:
     status: in_progress
-    summary: DMX model discovery and image-only nonce probes confirm that doubao-seed-2-1-pro-260628, doubao-seed-1-6-vision-250815, and qwen-vl-ocr-latest all accept real image input. Doubao Seed 2.1 Pro exactly transcribed one real CXR clinical section and returned complete findings/impression for one dense CT report. The legacy local Qwen3-VL 4B cache has six definite and seven suspected truncations, all among 25 CT reports, because max_new_tokens was 384.
+    summary: OCR 现已升级为逐页 300 DPI 图像管线，记录页级 hash、provider/model、页序和疑似截断；保留文本层快速路径。豆包 Seed 视觉、PaddleOCR-VL-1.6、PP-OCRv6、本地 Qwen 仍是候选，尚未凭宣传或单例样本指定生产 winner；必须在冻结集上按 clinical CER、数字/否定词、截断率和重测一致性实测。独立多模态模型只允许产出差异审计，不静默改写主 OCR。
     evidence_paths:
       - docs/superpowers/specs/2026-07-11-dmx-doubao-ocr-benchmark-design.md
       - outputs/ocr_quality_audit_qwen3vl4b_20260711/summary.json
       - outputs/ocr_quality_audit_qwen3vl4b_20260711/ocr_completeness_audit.png
-    next_gate: Approve the frozen 10-case OCR benchmark design, rerun every candidate with non-truncating output budgets, produce visual gold text, and select the production OCR route by clinical CER and material-error rate.
+    next_gate: 冻结 10 例（CR4/CT4/MRI2）视觉核验文本，接入豆包/PaddleOCR/Qwen 候选并做双次重复调用；按 clinical CER 和 material-error rate 选择 primary，verifier 仅输出 disagreement artifact。
+  routing:
+    status: validated
+    summary: 路由器已改为三种主要模态（cxr/ct/mri）硬约束；body_part 不再阻塞兼容模型，只作为候选排序信号。VLM 模态识别补充 MRI/CT/X-ray 常见句式归一化，并覆盖 DICOM、图片扩展名和 unknown 路径测试。
+    evidence_paths:
+      - src/medharness2/generators/registry.py
+      - src/medharness2/tools/tool7_modality.py
+      - tests/test_modality_routing.py
+    next_gate: 在冻结三模态清单上跑真实资产路由 smoke，确认每例至少有一个兼容候选且部位缺失不产生空路由。
+  scientific_metrics:
+    status: in_progress
+    summary: 已修复 Likert 1–5 到 0–1 的归一化、统计字段白名单、model_count 污染、并列百分位中点法、小样本 t 区间和散文包裹 JSON 解析。finding_coverage 的参考召回语义、provenance/fallback 过滤、seed/cache 复现和非 CXR finding 对齐仍待下一轮。
+    evidence_paths:
+      - src/medharness2/tools/tool9_rank.py
+      - src/medharness2/tools/tool10_modelwise.py
+      - src/medharness2/tools/tool12_statistics.py
+      - src/medharness2/utils/io.py
+      - tests/test_full_design.py
+      - tests/test_llm_client.py
+    next_gate: 完成 H9-H13/H17 的 provenance、seed/cache 和非 CXR 对齐修复，并重新验证正式 benchmark 门禁。
   generation:
     status: in_progress
     summary: Every report has an evidence tier. Benchmark planning separates eligible/rejected models, formal candidate coverage, and modality-aware image/volume assets. Eleven frozen CXR chest cases completed true Qwen3-VL 8B fresh inference with do_sample=false and seed 20260710. The reports remain exploratory_fresh, contain only five unique outputs, and the 52-case legacy run contains no formal_fresh report.

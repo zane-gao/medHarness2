@@ -33,7 +33,7 @@ def test_tool10_modelwise_weighted_uses_named_weights():
     result = modelwise_weighted(rows, weights={"a": 1.0, "b": 3.0})
     assert result["precision"] == pytest.approx(0.875)
     assert result["recall"] == pytest.approx(0.25)
-    assert result["model_count"] == 2
+    assert "model_count" not in result
 
 
 def test_tool11_applies_hazard_weights_to_numeric_metrics():
@@ -52,7 +52,12 @@ def test_tool12_statistics_and_percentile_rank():
     stats = calculate_statistics([{"score": 0.5}, {"score": 0.7}, {"score": 0.9}])
     assert stats["score"]["mean"] == pytest.approx(0.7)
     assert stats["score"]["n"] == 3
-    assert percentile_rank(0.7, [0.5, 0.7, 0.9]) == pytest.approx(66.666, rel=1e-3)
+    assert percentile_rank(0.7, [0.5, 0.7, 0.9]) == pytest.approx(50.0)
+
+
+def test_statistics_ignore_bookkeeping_fields():
+    stats = calculate_statistics([{"score": 0.5, "model_count": 2}, {"score": 0.7, "model_count": 3}])
+    assert set(stats) == {"score"}
 
 
 def test_batch_readers_and_department_workflows(tmp_path: Path):

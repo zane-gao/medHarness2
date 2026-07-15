@@ -14,7 +14,6 @@ def modelwise_weighted(rows: list[dict[str, Any]], weights: dict[str, float] | N
             weighted[key] = weighted.get(key, 0.0) + value * weight
             totals[key] = totals.get(key, 0.0) + weight
     result = {key: round(value / totals[key], 6) for key, value in weighted.items() if totals.get(key, 0.0) > 0}
-    result["model_count"] = len(rows)
     return result
 
 

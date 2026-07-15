@@ -1484,6 +1484,11 @@ def test_tool9_selects_top_k():
     assert ranked[0]["rank"] == 1
 
 
+def test_tool9_normalizes_likert_five_point_scale_to_zero_one():
+    ranked = select_top_k([{"model": "a", "composite_inputs": {"likert_mean": 1}}], top_k=1)
+    assert ranked[0]["metrics"]["likert_mean"] == 0.0
+
+
 class _SequenceClient:
     def __init__(self, responses):
         self.responses = responses

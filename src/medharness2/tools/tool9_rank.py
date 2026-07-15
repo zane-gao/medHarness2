@@ -31,7 +31,7 @@ def _numeric_metrics(evaluation: dict[str, Any]) -> dict[str, float]:
     else:
         values = dict(evaluation)
     return {
-        "likert_mean": _clamp01(float(values.get("likert_mean", 0.0)) / 5.0 if values.get("likert_mean", 0.0) > 1 else values.get("likert_mean", 0.0)),
+        "likert_mean": _likert01(values.get("likert_mean", 0.0)),
         "structure_score": _clamp01(float(values.get("structure_score", 0.0))),
         "finding_coverage": _clamp01(float(values.get("finding_coverage", 0.0))),
     }
@@ -43,3 +43,13 @@ def _clamp01(value: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
     return max(0.0, min(1.0, number))
+
+
+def _likert01(value: Any) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if 0.0 <= number < 1.0:
+        return _clamp01(number)
+    return _clamp01((number - 1.0) / 4.0)

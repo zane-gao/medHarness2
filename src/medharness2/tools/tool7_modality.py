@@ -22,9 +22,20 @@ def recognize_modality(image_path: str, config: AppConfig | None = None, llm_cli
             image_path=image_path,
             payload_classification="raw_medical_image",
         )
-        token = text.strip().split()[0].upper() if text.strip() else ""
+        token = _normalize_modality_token(text)
         return cfg.modality_map.get(token, token.lower() or "unknown")
     return "unknown"
+
+
+def _normalize_modality_token(text: str) -> str:
+    raw = str(text or "").strip().upper()
+    if not raw:
+        return ""
+    compact = raw.replace("-", "").replace("_", "")
+    for token in ("MRI", "MRA", "MR", "CT", "XRAY", "X RAY", "X-RAY", "DX", "CR", "XR"):
+        if token.replace("-", "").replace(" ", "") in compact:
+            return "MR" if token in {"MRI", "MRA", "MR"} else ("DX" if token in {"XRAY", "X RAY", "X-RAY", "DX", "CR", "XR"} else "CT")
+    return raw.split()[0]
 
 
 def _detect_dicom_modality(path: Path) -> str | None:

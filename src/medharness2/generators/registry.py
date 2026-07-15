@@ -141,8 +141,7 @@ class ReportGeneratorRegistry:
             supported = {m.lower() for m in entry.supported_modalities}
             body_supported = {part.lower() for part in entry.supported_body_parts}
             modality_ok = "unknown" in supported or modality.lower() in supported
-            body_ok = _body_part_ok(body_part, body_supported)
-            if modality_ok and body_ok:
+            if modality_ok:
                 selected.append(entry)
         return selected
 
@@ -159,10 +158,16 @@ class ReportGeneratorRegistry:
             supported = {m.lower() for m in entry.supported_modalities}
             body_supported = {part.lower() for part in entry.supported_body_parts}
             modality_ok = "unknown" in supported or modality.lower() in supported
-            body_ok = _body_part_ok(body_part, body_supported)
-            if modality_ok and body_ok:
+            if modality_ok:
                 result.append(entry)
-        return sorted(result, key=lambda item: (item.source != "medharness_cli", item.key))
+        return sorted(
+            result,
+            key=lambda item: (
+                item.source != "medharness_cli",
+                not _body_part_ok(body_part, {part.lower() for part in item.supported_body_parts}),
+                item.key,
+            ),
+        )
 
     def generate(
         self,

@@ -260,6 +260,75 @@ table.plain td.num, table.plain th.num { text-align: right; font-variant-numeric
 .stab-val { font-family: var(--mono); font-size: 12px; font-weight: 700; }
 
 footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30px 0; border-top: 1px solid var(--hair); }
+
+/* ---------- 盲区扫描样式 ---------- */
+.audit-summary {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;
+  margin-bottom: 20px;
+}
+.audit-kpi {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px; text-align: center;
+}
+.audit-kpi .num { font-size: 32px; font-weight: 700; font-family: var(--mono); margin: 4px 0; }
+.audit-kpi .num.critical { color: var(--s-critical); }
+.audit-kpi .num.high { color: var(--s-serious); }
+.audit-kpi .num.medium { color: var(--s-warn); }
+.audit-kpi .lab { font-size: 12px; color: var(--ink-3); letter-spacing: 0.5px; }
+
+.issue-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 18px; margin-bottom: 12px;
+}
+.issue-card.critical { border-left: 4px solid var(--s-critical); }
+.issue-card.high { border-left: 4px solid var(--s-serious); }
+.issue-card.medium { border-left: 4px solid var(--s-warn); }
+.issue-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.issue-id {
+  font-family: var(--mono); font-weight: 700; font-size: 13px;
+  padding: 2px 8px; border-radius: 6px; background: #f4f4f1; color: var(--ink);
+}
+.issue-title { flex: 1; font-size: 15px; font-weight: 600; color: var(--ink); }
+.issue-location {
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-3);
+  background: #f8f8f5; padding: 2px 8px; border-radius: 6px;
+}
+.issue-body { font-size: 13.5px; color: var(--ink-2); line-height: 1.6; }
+
+.tier-section {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 18px; margin-bottom: 14px;
+}
+.tier-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+}
+.tier-badge {
+  font-family: var(--mono); font-weight: 700; font-size: 12px;
+  padding: 3px 10px; border-radius: 6px; background: var(--c1); color: #fff;
+}
+.tier-title { font-size: 16px; font-weight: 600; }
+.tier-items { display: flex; flex-direction: column; gap: 8px; }
+.tier-item {
+  display: flex; gap: 10px; align-items: start; padding: 8px 12px;
+  background: #f8f8f5; border-radius: 8px; font-size: 13px;
+}
+.tier-item-id {
+  font-family: var(--mono); font-weight: 700; color: var(--c1);
+  flex: none; min-width: 36px;
+}
+.tier-item-desc { color: var(--ink-2); line-height: 1.5; }
+
+.conclusion-box {
+  background: #eef8ee; border: 1px solid #cfe6cf; border-radius: 12px;
+  padding: 14px 18px; margin-bottom: 16px;
+}
+.conclusion-box h4 {
+  margin: 0 0 8px; font-size: 15px; color: var(--good-text);
+  display: flex; align-items: center; gap: 8px;
+}
+.conclusion-box p { margin: 0; font-size: 13.5px; color: #2c4a1e; line-height: 1.65; }
 </style>
 </head>
 <body>
@@ -273,6 +342,7 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
   <a href="#tools">工具箱</a>
   <a href="#run">运行证据</a>
   <a href="#fresh">最新进展</a>
+  <a href="#audit">代码审计</a>
   <a href="#map">进度地图</a>
   <a href="#issues">问题与下一步</a>
 </nav>
@@ -404,6 +474,88 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
     <p class="sec-lead" id="fresh-lead"></p>
   </div>
   <div id="fresh-cards"></div>
+</section>
+
+<!-- ═══════════════════════════ ⑥.7 代码审计与盲区扫描 ═══════════════════════════ -->
+<section id="audit">
+  <div class="sec-head">
+    <div class="sec-kicker">06.7 · CODE AUDIT</div>
+    <h2>代码审计与盲区扫描（2026-07-14）</h2>
+    <p class="sec-lead">
+      8 维度并行代码审计（62 个 agent）+ 对抗性验证：每条发现派独立"怀疑者"读真实代码反驳。
+      原始 54 条发现 → 验证后 37 条留存（1 CRITICAL / 17 HIGH / 13 MEDIUM / 6 LOW）。
+      <b>关键结论：权威 benchmark 那次跑是干净的</b>（双重硬门禁把所有 mock/fallback 泄漏路径都挡住），
+      但其他工作流没有门禁，能让伪造分数冒充真评委。
+    </p>
+  </div>
+
+  <div id="audit-summary" class="audit-summary"></div>
+  <div id="audit-conclusion" class="conclusion-box" style="display:none"></div>
+
+  <div class="card" style="margin-bottom: 16px;">
+    <h3 style="margin:0 0 12px">🔴 CRITICAL 级别问题（安全红线）</h3>
+    <div id="critical-issues"></div>
+  </div>
+
+  <div class="card" style="margin-bottom: 16px;">
+    <h3 style="margin:0 0 12px">🟠 HIGH 级别问题（17 条）</h3>
+    <p style="margin:0 0 12px;font-size:13px;color:var(--ink-2)">
+      分布：安全/隐私 4 条、统计有效性 4 条、mock/fallback 泄漏 2 条、科学有效性 1 条、
+      复现性 2 条、LLM 集成 2 条、测试覆盖 1 条、数据一致性 1 条
+    </p>
+    <details open>
+      <summary style="cursor:pointer;font-weight:600;margin-bottom:12px;color:var(--c1)">▸ 安全与隐私（4 条）</summary>
+      <div id="high-security-issues"></div>
+    </details>
+    <details open style="margin-top:12px">
+      <summary style="cursor:pointer;font-weight:600;margin-bottom:12px;color:var(--c1)">▸ 统计有效性（4 条）</summary>
+      <div id="high-stats-issues"></div>
+    </details>
+    <details open style="margin-top:12px">
+      <summary style="cursor:pointer;font-weight:600;margin-bottom:12px;color:var(--c1)">▸ 数据质量与 Mock 泄漏（3 条）</summary>
+      <div id="high-mock-issues"></div>
+    </details>
+    <details open style="margin-top:12px">
+      <summary style="cursor:pointer;font-weight:600;margin-bottom:12px;color:var(--c1)">▸ 复现性与测试（4 条）</summary>
+      <div id="high-reproduce-issues"></div>
+    </details>
+    <details style="margin-top:12px">
+      <summary style="cursor:pointer;font-weight:600;margin-bottom:12px;color:var(--c1)">▸ LLM 集成（2 条）</summary>
+      <div id="high-llm-issues"></div>
+    </details>
+  </div>
+
+  <div class="card" style="margin-bottom: 16px;">
+    <h3 style="margin:0 0 12px">🟡 MEDIUM 级别问题（13 条）</h3>
+    <details>
+      <summary style="cursor:pointer;font-weight:600;color:var(--c1)">▸ 展开查看全部 MEDIUM 问题</summary>
+      <div id="medium-issues" style="margin-top:12px"></div>
+    </details>
+  </div>
+
+  <div class="card" style="margin-bottom: 16px;">
+    <h3 style="margin:0 0 12px">📋 修复优先级与路线图</h3>
+    <p style="margin:0 0 16px;font-size:13px;color:var(--ink-2)">
+      三梯队修复建议：梯队 1 是数字可信度地基（改动小、验证简单），梯队 2 是合规红线（动真实病人数据前必须），
+      梯队 3 是评委可靠性与工程健壮性。
+    </p>
+    <div id="fix-priority-tier1" class="tier-section"></div>
+    <div id="fix-priority-tier2" class="tier-section"></div>
+    <div id="fix-priority-tier3" class="tier-section"></div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 8px">✅ 已验证的正面结论</h3>
+    <p style="margin:0 0 12px;font-size:13px;color:var(--ink-2)">
+      对抗性验证不仅找出问题，也确认了以下 4 条曾被怀疑的内容<b>不是问题</b>：
+    </p>
+    <ul style="margin:0;padding-left:20px;font-size:13.5px;color:var(--ink-2);line-height:1.8">
+      <li>权威 benchmark 路径<b>未被 mock/fallback 污染</b>，硬门禁完备（_validate_role_routes + verify_real_llm_case_evaluation）</li>
+      <li>LLMClient chat_completions <b>完整实现且有单测</b>，无静默 mock</li>
+      <li>tool12 除零/空组<b>安全</b>，无崩溃</li>
+      <li>GPT 角色 temperature=0 <b>确实生效</b></li>
+    </ul>
+  </div>
 </section>
 
 <!-- ═══════════════════════════ ⑥.8 进度地图 ═══════════════════════════ -->
@@ -1061,6 +1213,133 @@ document.getElementById("gate-table").innerHTML = `
       <div style="font-size:12.5px;color:var(--ink-2)">${Object.entries(P10.status_counts).map(([k,c])=>`${stName[k]||k} <b>${c}</b> 例`).join("　·　")}　<span class="bar-sub">任务包：annotation/pilot10/（manifest + 逐例标注文件 + schema）</span></div>`;
   } else {
     document.getElementById("pilot10-card").style.display = "none";
+  }
+
+  /* --- 盲区扫描审计 --- */
+  const BA = DATA.blindspot_audit;
+  if (BA) {
+    const stats = BA.stats;
+    // 渲染统计摘要
+    document.getElementById("audit-summary").innerHTML = `
+      <div class="audit-kpi">
+        <div class="lab">原始发现</div>
+        <div class="num">${stats.original_findings}</div>
+        <div class="lab" style="font-size:11px">→ 验证后 ${stats.critical_count + stats.high_count + stats.medium_count + stats.low_count} 条</div>
+      </div>
+      <div class="audit-kpi">
+        <div class="lab">CRITICAL</div>
+        <div class="num critical">${stats.critical_count}</div>
+        <div class="lab">安全红线</div>
+      </div>
+      <div class="audit-kpi">
+        <div class="lab">HIGH</div>
+        <div class="num high">${stats.high_count}</div>
+        <div class="lab">需优先修复</div>
+      </div>
+      <div class="audit-kpi">
+        <div class="lab">MEDIUM</div>
+        <div class="num medium">${stats.medium_count}</div>
+        <div class="lab">工程健壮性</div>
+      </div>
+      <div class="audit-kpi">
+        <div class="lab">已核实非缺陷</div>
+        <div class="num" style="color:var(--s-good)">${stats.non_defects}</div>
+        <div class="lab">对抗性验证</div>
+      </div>
+    `;
+
+    // 渲染核心结论
+    if (BA.core_conclusion) {
+      document.getElementById("audit-conclusion").style.display = "block";
+      document.getElementById("audit-conclusion").innerHTML = `
+        <h4>✓ 核心结论</h4>
+        <p>${esc(BA.core_conclusion).replace(/\n/g, '<br>')}</p>
+      `;
+    }
+
+    // 渲染 CRITICAL 问题
+    if (BA.critical_issues && BA.critical_issues.length > 0) {
+      document.getElementById("critical-issues").innerHTML = BA.critical_issues.map(issue => `
+        <div class="issue-card critical">
+          <div class="issue-header">
+            <span class="issue-id">${esc(issue.id)}</span>
+            <span class="issue-title">${esc(issue.title)}</span>
+            ${issue.location ? `<span class="issue-location">${esc(issue.location)}</span>` : ""}
+          </div>
+          <div class="issue-body">${esc(issue.full_text).replace(/\|/g, '<br>•')}</div>
+        </div>
+      `).join("");
+    }
+
+    // 渲染 HIGH 问题（分类）
+    const highIssues = BA.high_issues || [];
+    const securityIssues = highIssues.slice(0, 4);  // H1-H4
+    const statsIssues = highIssues.slice(4, 8);     // H5-H8
+    const mockIssues = highIssues.slice(8, 11);     // H9-H11
+    const reproduceIssues = [...highIssues.slice(11, 13), highIssues[15], highIssues[16]]; // H12-H13, H16-H17
+    const llmIssues = highIssues.slice(13, 15);     // H14-H15
+
+    const renderIssues = (issues, containerId) => {
+      document.getElementById(containerId).innerHTML = issues.map(issue => `
+        <div class="issue-card high">
+          <div class="issue-header">
+            <span class="issue-id">${esc(issue.id)}</span>
+            <span class="issue-title">${esc(issue.title)}</span>
+            ${issue.location ? `<span class="issue-location">${esc(issue.location)}</span>` : ""}
+          </div>
+          <div class="issue-body">${esc(issue.full_text.substring(0, 400)).replace(/\|/g, '<br>•')}</div>
+        </div>
+      `).join("");
+    };
+
+    renderIssues(securityIssues, "high-security-issues");
+    renderIssues(statsIssues, "high-stats-issues");
+    renderIssues(mockIssues, "high-mock-issues");
+    renderIssues(reproduceIssues, "high-reproduce-issues");
+    renderIssues(llmIssues, "high-llm-issues");
+
+    // 渲染 MEDIUM 问题
+    if (BA.medium_issues && BA.medium_issues.length > 0) {
+      document.getElementById("medium-issues").innerHTML = BA.medium_issues.map(issue => `
+        <div class="issue-card medium">
+          <div class="issue-header">
+            <span class="issue-id">${esc(issue.id)}</span>
+            <span class="issue-title">${esc(issue.title)}</span>
+            ${issue.location ? `<span class="issue-location">${esc(issue.location)}</span>` : ""}
+          </div>
+          <div class="issue-body">${esc(issue.full_text)}</div>
+        </div>
+      `).join("");
+    }
+
+    // 渲染修复优先级
+    const renderTier = (tier, containerId, tierNum, tierTitle) => {
+      if (tier && tier.length > 0) {
+        document.getElementById(containerId).innerHTML = `
+          <div class="tier-header">
+            <span class="tier-badge">梯队 ${tierNum}</span>
+            <span class="tier-title">${tierTitle}</span>
+          </div>
+          <div class="tier-items">
+            ${tier.map(item => `
+              <div class="tier-item">
+                <span class="tier-item-id">${esc(item.id)}</span>
+                <span class="tier-item-desc">${esc(item.desc)}</span>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      } else {
+        document.getElementById(containerId).style.display = "none";
+      }
+    };
+
+    const fp = BA.fix_priority || {};
+    renderTier(fp.tier1, "fix-priority-tier1", 1, "数字可信度地基（改动小、验证简单）");
+    renderTier(fp.tier2, "fix-priority-tier2", 2, "合规红线（动真实病人数据前必须）");
+    renderTier(fp.tier3, "fix-priority-tier3", 3, "评委可靠性与工程健壮性");
+  } else {
+    document.getElementById("audit").style.display = "none";
   }
 })();
 

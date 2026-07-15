@@ -11,13 +11,12 @@ def test_project_status_has_current_release_evidence():
     payload = yaml.safe_load(Path("docs/project_status.yaml").read_text(encoding="utf-8"))
 
     assert payload["schema_version"] == "1.0"
-    assert payload["updated_at"] == "2026-07-14"
+    assert payload["updated_at"] == "2026-07-15"
     assert payload["current_phase"]
     assert payload["release_readiness"] == "pilot_only"
     assert payload["baseline"]["branch"] == "main"
-    assert payload["baseline"]["dirty_worktree"] is False
-    assert payload["baseline"]["pytest_passed"] >= 332
-    assert payload["baseline"]["pytest_passed"] >= 210
+    assert payload["baseline"]["dirty_worktree"] is True
+    assert payload["baseline"]["pytest_passed"] >= 348
     assert Path(payload["baseline"]["current_run"]).exists()
     assert set(payload["workstreams"]) >= {
         "contracts",

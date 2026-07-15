@@ -23,7 +23,7 @@ class StaticOCRClient:
 
     def call(self, prompt: str, image_path: str | None = None, **kwargs):
         self.calls += 1
-        assert image_path and image_path.endswith(".pdf")
+        assert image_path and Path(image_path).suffix.lower() in {".pdf", ".png"}
         return "FINDINGS: OCR text.\nIMPRESSION: OCR impression."
 
 
