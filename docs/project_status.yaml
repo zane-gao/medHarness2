@@ -5,7 +5,7 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: pending-local-traceability-remediation
+  git_sha: 33a364c
   dirty_worktree: true
   pytest_passed: 361
   pytest_warnings: 17
