@@ -110,11 +110,11 @@ def summarize_dashboard_payload(payload: dict[str, Any]) -> dict[str, int]:
         len(figures.get("figures") or []),
     )
     return {
-        "case_count": int(case_count),
+        "case_count": _count_or_zero(case_count, "case_count"),
         "tool_count": len(catalog.get("tools") or []),
         "model_count": len(catalog.get("models") or []),
-        "experiment_count": int(experiments.get("experiment_count", 0)),
-        "figure_count": int(figure_count),
+        "experiment_count": _count_or_zero(experiments.get("experiment_count", 0), "experiment_count"),
+        "figure_count": _count_or_zero(figure_count, "figure_count"),
         "registry_entry_count": len(registry.get("entries") or []),
     }
 

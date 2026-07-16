@@ -50,6 +50,22 @@ def test_dashboard_summary_preserves_explicit_zero_counts():
     assert summary["figure_count"] == 0
 
 
+@pytest.mark.parametrize("field_path,label", [
+    (("run_summary", "summary", "case_count"), "case_count"),
+    (("experiments", "experiment_count"), "experiment_count"),
+    (("figures", "figure_count"), "figure_count"),
+])
+@pytest.mark.parametrize("bad", [True, 1.5, "2", -1])
+def test_dashboard_summary_rejects_invalid_external_counts(field_path, label, bad):
+    payload = {"run_summary": {"summary": {"case_count": 0}}, "experiments": {"experiment_count": 0}, "figures": {"figure_count": 0}}
+    target = payload
+    for key in field_path[:-1]:
+        target = target[key]
+    target[field_path[-1]] = bad
+    with pytest.raises(ValueError, match=label):
+        summarize_dashboard_payload(payload)
+
+
 def test_dashboard_kpis_preserve_explicit_zero_counts():
     html = _render_kpis(
         {"case_count": 0, "reader_count": 0},
