@@ -37,12 +37,14 @@ def validate_sample_run(
     manifest_rows = _read_manifest(root / "manifest.jsonl", errors)
     if not summary and manifest_rows:
         summary = _summary_from_manifest(manifest_rows)
-    workflow2 = _read_json(root / "workflow2.json", errors, "workflow2") if require_workflows else {}
-    workflow3 = _read_json(root / "workflow3.json", errors, "workflow3") if require_workflows else {}
-    if workflow2:
-        _validate_contract(Workflow2Aggregate, workflow2, "workflow2_aggregate", errors)
-    if workflow3:
-        _validate_contract(Workflow3Aggregate, workflow3, "workflow3_aggregate", errors)
+    workflow2_path = root / "workflow2.json"
+    workflow3_path = root / "workflow3.json"
+    workflow2 = _read_json(workflow2_path, errors, "workflow2") if require_workflows else {}
+    workflow3 = _read_json(workflow3_path, errors, "workflow3") if require_workflows else {}
+    if require_workflows and workflow2_path.exists():
+        _validate_aggregate_contract(Workflow2Aggregate, workflow2, "workflow2_aggregate", errors)
+    if require_workflows and workflow3_path.exists():
+        _validate_aggregate_contract(Workflow3Aggregate, workflow3, "workflow3_aggregate", errors)
 
     case_count = int(summary.get("case_count") or len(manifest_rows) or 0)
     if expected_cases is not None and case_count != expected_cases:
@@ -247,6 +249,14 @@ def _validate_contract(model: Any, payload: dict[str, Any], label: str, errors: 
         model.model_validate(payload)
     except Exception as exc:
         errors.append(f"{label}:{type(exc).__name__}")
+
+
+def _validate_aggregate_contract(model: Any, payload: dict[str, Any], label: str, errors: list[str]) -> None:
+    """Reject an empty existing aggregate instead of treating it as defaults."""
+    if not payload:
+        errors.append(f"{label}:ValidationError")
+        return
+    _validate_contract(model, payload, label, errors)
 
 
 def _validate_audit_hash_binding(
