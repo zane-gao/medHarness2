@@ -21,8 +21,17 @@ def hazardwise_weighted(
         if not _eligible(row):
             continue
         item = dict(row)
-        error_type = str(item.get("error_type") or "unknown")
-        level = str(int(float(item.get("hazard_level") or 1)))
+        error_type = str(item.get("error_type") or "").strip()
+        level_value = item.get("hazard_level")
+        if not error_type or level_value is None or isinstance(level_value, bool):
+            continue
+        try:
+            level_number = int(float(level_value))
+        except (TypeError, ValueError):
+            continue
+        if level_number < 1 or level_number > 5:
+            continue
+        level = str(level_number)
         weight = float(weights.get(error_type, {}).get(level, 1.0))
         metrics = dict(item.get("metrics") or {})
         if metrics:

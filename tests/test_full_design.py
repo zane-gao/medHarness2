@@ -63,6 +63,19 @@ def test_tool11_applies_hazard_weights_to_numeric_metrics():
     assert result[1]["hazard_weight"] == 1.0
 
 
+def test_tool11_excludes_incomplete_hazard_rows_instead_of_defaulting_to_lowest_risk():
+    result = hazardwise_weighted(
+        [
+            {"error_type": "false_finding", "metrics": {"error_rate": 0.2}},
+            {"hazard_level": 1, "metrics": {"error_rate": 0.2}},
+            {"error_type": "false_finding", "hazard_level": 4, "metrics": {"error_rate": 0.2}},
+        ]
+    )
+
+    assert len(result) == 1
+    assert result[0]["hazard_level"] == 4
+
+
 def test_tool11_excludes_fallback_hazard_rows():
     rows = [
         {
