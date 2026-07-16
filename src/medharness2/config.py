@@ -54,6 +54,7 @@ class ModelRoleConfig:
     seed: int | None = 0
     max_tokens: int | None = None
     omit_temperature: bool = False
+    consistency_runs: int = 1
 
     def schema_attempts(self, *, default: int) -> int:
         configured = (

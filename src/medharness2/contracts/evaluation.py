@@ -115,6 +115,7 @@ class HazardReviewArtifact(ContractModel):
     primary_result_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     primary_provenance: ModelProvenance
     reviewer_result: HazardResult
+    reviewer_consistency: dict[str, Any] = Field(default_factory=dict)
     disagreements: list[HazardDisagreement] = Field(default_factory=list)
     agreement_summary: dict[str, Any] = Field(default_factory=dict)
     primary_preserved: Literal[True] = True

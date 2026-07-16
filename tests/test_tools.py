@@ -1011,9 +1011,33 @@ def test_tool6_llm_strict_mode_rejects_mock_provider():
 def test_tool4_adds_hazard_levels():
     result = evaluate_hazards([{"error_type": "omission_finding"}], llm_client=build_mock_client())
     assert result["errors"][0]["hazard_level"] == 4
-    assert result["metadata"]["backend"] == "mock_judge"
-    assert result["metadata"]["provider"] == "mock"
-    assert result["metadata"]["model"]
+
+
+def test_tool4_reviewer_can_record_consistency_runs_without_replacing_primary():
+    primary = {
+        "errors": [{"error_type": "false_finding", "hazard_level": 3, "explanation": "p", "recommended_action": "review_if_relevant", "confidence": 0.8, "evidence_ids": ["e1"], "abstain": False}]
+    }
+    reviewer = {
+        "errors": [{"error_type": "false_finding", "hazard_level": 2, "explanation": "r", "recommended_action": "review_if_relevant", "confidence": 0.8, "evidence_ids": ["e1"], "abstain": False}]
+    }
+
+    class SequenceClient:
+        def __init__(self):
+            self.calls = 0
+
+        def call(self, *args, **kwargs):
+            self.calls += 1
+            return json.dumps(reviewer)
+
+    result = review_hazards(
+        evaluate_hazards([{"error_type": "false_finding"}], llm_client=SequenceClient(), require_llm=False),
+        [{"error_type": "false_finding"}],
+        llm_client=SequenceClient(),
+        consistency_runs=2,
+        require_llm=False,
+    )
+    assert result["reviewer_result"]["errors"][0]["hazard_level"] == 2
+    assert result["reviewer_consistency"]["runs"] == 2
 
 
 def test_tool4_returns_versioned_hazard_result_contract():

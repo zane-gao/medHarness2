@@ -169,6 +169,7 @@ def evaluate_pairwise(
                 judge_options=reviewer_options,
                 require_llm=True,
                 allow_fallback=False,
+                consistency_runs=reviewer_role.consistency_runs,
             )
 
         hazard_review = _checkpointed(
@@ -182,6 +183,7 @@ def evaluate_pairwise(
                 "model_role": "hazard_reviewer",
                 "require_llm": True,
                 "allow_fallback": False,
+                "consistency_runs": reviewer_role.consistency_runs,
                 "route": llm_route_fingerprint(client, reviewer_options),
             },
             compute_hazard_review,

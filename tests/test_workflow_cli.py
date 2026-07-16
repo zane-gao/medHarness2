@@ -510,6 +510,7 @@ def test_pairwise_runs_independent_hazard_reviewer_and_preserves_primary():
                 provider="chat_completions",
                 model="claude-opus-4-6",
                 max_retries=2,
+                consistency_runs=2,
             ),
         }
     )
@@ -522,13 +523,14 @@ def test_pairwise_runs_independent_hazard_reviewer_and_preserves_primary():
         llm_client=client,
     )
 
-    assert client.call_count == 2
+    assert client.call_count == 3
     assert client.call_kwargs[0]["model"] == "gpt-5.5"
     assert client.call_kwargs[1]["model"] == "claude-opus-4-6"
     assert result["hazards"]["errors"][0]["hazard_level"] == 4
     assert result["hazard_review"]["reviewer_result"]["errors"][0]["hazard_level"] == 2
     assert result["hazard_review"]["primary_preserved"] is True
     assert result["hazard_review"]["requires_adjudication"] is True
+    assert result["hazard_review"]["reviewer_consistency"]["runs"] == 2
 
 
 def test_pairwise_routes_hazard_disagreements_to_third_adjudicator(tmp_path: Path):

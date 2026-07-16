@@ -7,7 +7,7 @@ baseline:
   branch: main
   git_sha: da382ca
   dirty_worktree: true
-  pytest_passed: 371
+  pytest_passed: 372
   pytest_warnings: 17
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -66,7 +66,7 @@ workstreams:
     next_gate: Add typed contracts for remaining workflow2/workflow3 aggregate payloads and validate a frozen run with nonzero T4/T5/T6 audit artifacts.
   tools:
     status: in_progress
-    summary: T1 uses a strict real LLM judge; T2/T4 use deterministic templates plus LLM judgement; T5/T6 preserve deterministic primary results and emit hash-linked LLM audit artifacts. A pure-DMX 11-case run passed 11/11 with 99 verified role artifacts and zero fallback after fixing the T5 suggested-error-type prompt/schema mismatch. Test-retest instability remains material, so clinical gold-set calibration and repeated-run reliability validation are outstanding.
+    summary: T1 uses a strict real LLM judge; T2/T4 use deterministic templates plus LLM judgement; T5/T6 preserve deterministic primary results and emit hash-linked LLM audit artifacts. Hazard reviewer now supports configuration-driven consistency re-runs with contract-bound provenance while preserving the first reviewer result. A pure-DMX 11-case run passed 11/11 with 99 verified role artifacts and zero fallback after fixing the T5 suggested-error-type prompt/schema mismatch. Test-retest instability remains material, so clinical gold-set calibration and repeated-run reliability validation are outstanding.
     evidence_paths:
       - docs/llm_tooling_upgrade_20260710.md
       - docs/llm_tools_synthetic_smoke_20260710.json

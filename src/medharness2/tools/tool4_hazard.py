@@ -123,6 +123,7 @@ def review_hazards(
     judge_options: dict[str, Any] | None = None,
     require_llm: bool = True,
     allow_fallback: bool = False,
+    consistency_runs: int = 1,
 ) -> dict[str, Any]:
     primary = HazardResult.model_validate(primary_result)
     reviewer_payload = evaluate_hazards(
@@ -135,6 +136,19 @@ def review_hazards(
         allow_fallback=allow_fallback,
     )
     reviewer = HazardResult.model_validate(reviewer_payload)
+    consistency_runs = max(1, int(consistency_runs))
+    reviewer_retests: list[HazardResult] = []
+    for _ in range(consistency_runs - 1):
+        retest_payload = evaluate_hazards(
+            error_candidates,
+            llm_client=llm_client,
+            max_retries=max_retries,
+            model_role=model_role,
+            judge_options=judge_options,
+            require_llm=require_llm,
+            allow_fallback=allow_fallback,
+        )
+        reviewer_retests.append(HazardResult.model_validate(retest_payload))
     if len(primary.errors) != len(reviewer.errors):
         raise ValueError("Tool 4 reviewer error count does not match the primary result")
 
@@ -184,6 +198,7 @@ def review_hazards(
         "primary_result_sha256": primary_sha256,
         "primary_provenance": primary.provenance.model_dump(mode="json"),
         "reviewer_result": reviewer.model_dump(mode="json"),
+        "reviewer_consistency": _reviewer_consistency(reviewer, reviewer_retests),
         "disagreements": disagreements,
         "agreement_summary": {
             "compared_count": compared_count,
@@ -198,6 +213,33 @@ def review_hazards(
         "requires_adjudication": bool(disagreements),
     }
     return HazardReviewArtifact.model_validate(payload).model_dump(mode="json")
+
+
+def _reviewer_consistency(
+    primary: HazardResult,
+    repeats: list[HazardResult],
+) -> dict[str, Any]:
+    runs = 1 + len(repeats)
+    if not repeats:
+        return {"runs": runs, "exact_rate": None, "within_one_rate": None, "action_rate": None}
+    compared = 0
+    exact = within_one = action = 0
+    for repeat in repeats:
+        if len(repeat.errors) != len(primary.errors):
+            continue
+        for first, other in zip(primary.errors, repeat.errors):
+            compared += 1
+            delta = abs(first.hazard_level - other.hazard_level)
+            exact += delta == 0
+            within_one += delta <= 1
+            action += first.recommended_action == other.recommended_action
+    return {
+        "runs": runs,
+        "compared_count": compared,
+        "exact_rate": round(exact / compared, 4) if compared else None,
+        "within_one_rate": round(within_one / compared, 4) if compared else None,
+        "action_rate": round(action / compared, 4) if compared else None,
+    }
 
 
 def adjudicate_hazard_disagreements(
