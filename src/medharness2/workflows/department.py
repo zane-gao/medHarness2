@@ -8,6 +8,12 @@ from medharness2.tools.tool12_statistics import calculate_statistics, percentile
 from medharness2.utils.io import read_json, write_json
 
 
+def _nonnegative_count(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
 def run_department_comparison(batch_result_path: str | Path, output_path: str | Path) -> dict[str, Any]:
     batch = read_json(batch_result_path)
     per_reader = dict(batch.get("per_reader") or {})
@@ -36,18 +42,21 @@ def run_department_comparison(batch_result_path: str | Path, output_path: str | 
     }
     model_group_rows = [case.get("modelwise_metrics") or {} for case in batch.get("cases") or [] if case.get("modelwise_metrics")]
     denominator = dict(batch.get("denominator") or {})
-    source_case_count = int(
+    source_case_count = _nonnegative_count(
         _first_present(
             denominator.get("manifest_case_count"),
             denominator.get("source_case_count"),
             batch.get("case_count", 0),
-        )
+        ),
+        "source_case_count",
     )
-    successful_case_count = int(
-        _first_present(denominator.get("successful_case_count"), batch.get("case_count", 0))
+    successful_case_count = _nonnegative_count(
+        _first_present(denominator.get("successful_case_count"), batch.get("case_count", 0)),
+        "successful_case_count",
     )
-    failed_case_count = int(
-        _first_present(denominator.get("failed_case_count"), batch.get("failed_case_count", 0))
+    failed_case_count = _nonnegative_count(
+        _first_present(denominator.get("failed_case_count"), batch.get("failed_case_count", 0)),
+        "failed_case_count",
     )
     denominator.update(
         {
@@ -63,7 +72,7 @@ def run_department_comparison(batch_result_path: str | Path, output_path: str | 
         "reader_total_count": len(per_reader),
         "reader_count": len(reader_scores),
         "excluded_reader_count": len(excluded_readers),
-        "case_count": int(batch.get("case_count", 0)),
+        "case_count": _nonnegative_count(batch.get("case_count", 0), "case_count"),
         "failed_case_count": failed_case_count,
         "denominator": denominator,
         "statistics": {
@@ -77,7 +86,7 @@ def run_department_comparison(batch_result_path: str | Path, output_path: str | 
             "model_group": {"case_metric_count": len(model_group_rows)},
         },
     }
-    if int(batch.get("case_count", 0) or 0) == 0 and int(batch.get("failed_case_count", 0) or 0) == 0:
+    if _nonnegative_count(batch.get("case_count", 0), "case_count") == 0 and _nonnegative_count(batch.get("failed_case_count", 0), "failed_case_count") == 0:
         result["errors"] = ["no_cases_discovered"]
     write_json(output_path, result)
     return result

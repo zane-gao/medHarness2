@@ -440,6 +440,17 @@ def test_department_preserves_explicit_zero_denominator_values(tmp_path: Path):
     assert result["denominator"]["failure_rate"] == 0.0
 
 
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
+def test_department_rejects_invalid_batch_counts(tmp_path: Path, bad):
+    batch_path = tmp_path / "workflow2.json"
+    batch_path.write_text(
+        json.dumps({"case_count": bad, "failed_case_count": 0, "per_reader": {}}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="case_count"):
+        run_department_comparison(batch_path, tmp_path / "workflow3.json")
+
+
 def test_batch_readers_batches_medharness_cli_generation(monkeypatch, tmp_path: Path):
     script = tmp_path / "run_report_generation.py"
     script.write_text("# fake legacy script\n", encoding="utf-8")

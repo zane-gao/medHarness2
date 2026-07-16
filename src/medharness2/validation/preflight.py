@@ -11,6 +11,12 @@ from medharness2.config import AppConfig, load_config, resolve_existing_path
 from medharness2.utils.io import write_json
 
 
+def _nonnegative_count(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
 def run_sample_preflight(
     sample_root: str | Path,
     output_path: str | Path,
@@ -45,7 +51,10 @@ def run_sample_preflight(
     cases = list(route.get("cases") or [])
     if not cases:
         blockers.append("no_cases_discovered")
-    fallback_count = int(route.get("summary", {}).get("cases_requiring_fallback", 0) or 0)
+    raw_fallback_count = route.get("summary", {}).get("cases_requiring_fallback")
+    fallback_count = 0 if raw_fallback_count is None else _nonnegative_count(
+        raw_fallback_count, "cases_requiring_fallback"
+    )
     if fallback_count:
         warnings.append("cases_require_generation_fallback")
         if not cfg.generator.cloud_fallback_enabled:

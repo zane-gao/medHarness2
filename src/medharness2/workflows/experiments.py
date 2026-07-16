@@ -16,6 +16,16 @@ from medharness2.workflows.education import run_education_suggestions
 from medharness2.utils.io import read_json, write_json
 
 
+def _nonnegative_count(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
+def _count_or_zero(value: Any, label: str) -> int:
+    return 0 if value is None else _nonnegative_count(value, label)
+
+
 EXPERIMENT_IDS = [
     "radiologist_evaluation",
     "finding_extraction",
@@ -61,13 +71,13 @@ def experiment_registry_metrics(result: dict[str, Any]) -> dict[str, Any]:
     education = ((result.get("automation") or {}).get("education_generation") or {})
     status_counts = Counter(str(item.get("status") or "unknown") for item in result.get("experiments") or [])
     return {
-        "experiment_count": int(result.get("experiment_count") or 0),
+        "experiment_count": _count_or_zero(result.get("experiment_count"), "experiment_count"),
         "experiment_status_counts": dict(sorted(status_counts.items())),
         "validated_experiment_count": int(status_counts.get("validated", 0)),
         "pilot_experiment_count": int(status_counts.get("pilot", 0)),
         "not_ready_experiment_count": int(status_counts.get("not_ready", 0)),
         "education_generation_status": str(education.get("status") or "unknown"),
-        "education_suggestion_count": int(education.get("suggestion_count") or 0),
+        "education_suggestion_count": _count_or_zero(education.get("suggestion_count"), "education_suggestion_count"),
         "error_count": len(result.get("errors") or []),
     }
 
@@ -323,9 +333,9 @@ def _image_to_text_models(run_dir: Path, analysis: dict[str, Any]) -> dict[str, 
             "model_count": model_count,
             "source_counts": source_counts,
             "evidence_tier_counts": evidence_tier_counts,
-            "formal_fresh_count": int(evidence_tier_counts.get("formal_fresh") or 0),
-            "quality_failed_count": int(analysis.get("quality_gate_failed_count") or 0),
-            "generated_report_count": int(analysis.get("generated_report_count") or 0),
+            "formal_fresh_count": _count_or_zero(evidence_tier_counts.get("formal_fresh"), "formal_fresh_count"),
+            "quality_failed_count": _count_or_zero(analysis.get("quality_gate_failed_count"), "quality_gate_failed_count"),
+            "generated_report_count": _count_or_zero(analysis.get("generated_report_count"), "generated_report_count"),
         },
     }
 
@@ -346,9 +356,9 @@ def _modality_recognition(run_summary: dict[str, Any], workflow2: dict[str, Any]
         "outputs": ["modality_counts", "ocr_provenance_counts"],
         "metrics": {
             "modality_counts": dict(modalities),
-            "real_ocr_count": int(validation.get("real_ocr_count") or 0),
-            "mock_ocr_count": int(validation.get("mock_ocr_count") or 0),
-            "unknown_ocr_count": int(validation.get("unknown_ocr_count") or 0),
+            "real_ocr_count": _count_or_zero(validation.get("real_ocr_count"), "real_ocr_count"),
+            "mock_ocr_count": _count_or_zero(validation.get("mock_ocr_count"), "mock_ocr_count"),
+            "unknown_ocr_count": _count_or_zero(validation.get("unknown_ocr_count"), "unknown_ocr_count"),
         },
     }
 

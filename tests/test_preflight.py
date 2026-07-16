@@ -4,8 +4,29 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from medharness2.config import AppConfig, LLMConfig, ModelRoleConfig
 from medharness2.validation.preflight import run_sample_preflight
+
+
+def test_preflight_rejects_invalid_fallback_count(monkeypatch, tmp_path: Path):
+    sample_root = _write_minimal_sample(tmp_path)
+
+    def fake_plan(*args, **kwargs):
+        return {
+            "cases": [{"case_id": "case-1"}],
+            "summary": {"cases_requiring_fallback": True},
+            "paths": {},
+        }
+
+    monkeypatch.setattr("medharness2.workflows.sample_full.plan_sample_full_routes", fake_plan)
+    with pytest.raises(ValueError, match="cases_requiring_fallback"):
+        run_sample_preflight(
+            sample_root,
+            tmp_path / "preflight.json",
+            config=AppConfig(llm=LLMConfig(provider="mock")),
+        )
 
 
 def test_preflight_blocks_mock_ocr_when_real_ocr_required(tmp_path: Path):

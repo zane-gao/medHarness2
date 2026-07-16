@@ -4,11 +4,14 @@ import csv
 import json
 from pathlib import Path
 
+import pytest
+
 from medharness2.cli import main
 from medharness2.dashboard import _render_reader_rows, build_dashboard
 from medharness2.figures import build_figures
 from medharness2.workflows.experiments import run_experiments
 from medharness2.workflows.experiments import _image_to_text_models, _modality_recognition, _radiologist_evaluation
+from medharness2.workflows.experiments import experiment_registry_metrics
 
 
 def test_run_experiments_builds_six_study_results(tmp_path: Path):
@@ -64,6 +67,28 @@ def test_modality_recognition_preserves_explicit_empty_counts():
 
     assert result["status"] == "missing_inputs"
     assert result["metrics"]["modality_counts"] == {}
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
+def test_experiment_metrics_reject_invalid_numeric_counts(bad, tmp_path: Path):
+    (tmp_path / "analysis").mkdir()
+    with pytest.raises(ValueError, match="quality_gate_failed_count"):
+        _image_to_text_models(
+            tmp_path,
+            {
+                "generated_report_model_counts": {},
+                "quality_gate_failed_count": bad,
+            },
+        )
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
+def test_modality_metrics_reject_invalid_ocr_counts(bad):
+    with pytest.raises(ValueError, match="real_ocr_count"):
+        _modality_recognition(
+            {"validation": {"real_ocr_count": bad}},
+            {"cases": []},
+        )
 
 
 def test_run_experiments_writes_protocol_mapping_artifacts(tmp_path: Path):
