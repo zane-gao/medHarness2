@@ -51,7 +51,7 @@ def run_sample_preflight(
 
     ocr = _check_ocr_provider(cfg)
     if require_real_ocr:
-        if cfg.llm.provider.lower() == "mock":
+        if str(ocr.get("provider") or "").lower() == "mock":
             blockers.append("real_ocr_required_but_provider_is_mock")
         elif ocr.get("status") != "ready":
             blockers.append(str(ocr.get("blocker") or "real_ocr_provider_unavailable"))

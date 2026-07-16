@@ -4,7 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from medharness2.config import AppConfig, LLMConfig
+from medharness2.config import AppConfig, LLMConfig, ModelRoleConfig
 from medharness2.validation.preflight import run_sample_preflight
 
 
@@ -47,6 +47,31 @@ def test_preflight_accepts_chat_completions_ocr_provider_with_api_key(monkeypatc
     assert result["passed"] is True
     assert result["ocr"]["status"] == "ready"
     assert result["ocr"]["real_ocr_capable"] is True
+
+
+def test_preflight_uses_configured_ocr_primary_role_over_top_level_mock(monkeypatch, tmp_path: Path):
+    sample_root = _write_minimal_sample(tmp_path)
+    monkeypatch.setenv("DMX_API_KEY", "test-key")
+    result = run_sample_preflight(
+        sample_root,
+        tmp_path / "preflight.json",
+        config=AppConfig(
+            llm=LLMConfig(provider="mock"),
+            model_roles={
+                "ocr_primary": ModelRoleConfig(
+                    provider="chat_completions",
+                    model="doubao-seed-2-1-pro-260628",
+                    api_key_env="DMX_API_KEY",
+                )
+            },
+        ),
+        require_real_ocr=True,
+        limit=1,
+        model_keys=["*"],
+    )
+    assert result["passed"] is True
+    assert result["ocr"]["provider"] == "chat_completions"
+    assert result["ocr"]["model"] == "doubao-seed-2-1-pro-260628"
 
 
 def test_preflight_reports_missing_local_vlm_ocr_model(monkeypatch, tmp_path: Path):
