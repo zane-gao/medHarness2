@@ -151,8 +151,8 @@ def run_sample_full(
             "case_count": len(rows),
             "workflow2_case_count": _strict_nonnegative_int(batch.get("case_count", 0), "workflow2 case_count"),
             "workflow2_failed_case_count": _strict_nonnegative_int(batch.get("failed_case_count", 0), "workflow2 failed_case_count"),
-            "workflow3_case_count": int(department.get("case_count", 0)),
-            "reader_count": int(department.get("reader_count", 0)),
+            "workflow3_case_count": _strict_nonnegative_int(department.get("case_count", 0), "workflow3 case_count"),
+            "reader_count": _strict_nonnegative_int(department.get("reader_count", 0), "reader_count"),
         },
         "validation": validation,
     }

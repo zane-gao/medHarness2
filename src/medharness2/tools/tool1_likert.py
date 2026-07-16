@@ -22,6 +22,12 @@ LIKERT_METRICS = [
 MAX_JUDGE_REPORT_CHARS = 12_000
 
 
+def _strict_positive_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ValueError(f"{label} must be a positive integer")
+    return value
+
+
 def evaluate_likert(
     report_text: str,
     image_path: str | None = None,
@@ -42,7 +48,8 @@ def evaluate_likert(
 
     default = _deterministic_likert(report_text, image_path=image_path)
     judge_errors: list[str] = []
-    attempts = max(1, int(max_retries))
+    attempts = _strict_positive_int(max_retries, "max_retries")
+    consistency_runs = _strict_positive_int(consistency_runs, "consistency_runs")
     for attempt in range(attempts):
         prompt = _judge_prompt(report_text, image_path=image_path, previous_errors=judge_errors if attempt else [])
         try:

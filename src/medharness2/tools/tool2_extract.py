@@ -22,6 +22,12 @@ from medharness2.utils.io import parse_json_object
 MAX_EXTRACTION_REPORT_CHARS = 12_000
 
 
+def _strict_positive_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ValueError(f"{label} must be a positive integer")
+    return value
+
+
 def _template_count_or_zero(value: Any) -> int:
     if value is None:
         return 0
@@ -88,7 +94,7 @@ def extract_findings(
     if require_llm and provider.lower() == "mock":
         raise LLMClientError("Tool 2 strict mode requires a non-mock provider")
 
-    attempts = max(1, int(max_retries))
+    attempts = _strict_positive_int(max_retries, "max_retries")
     errors: list[str] = []
     for attempt in range(attempts):
         prompt = _extraction_prompt(

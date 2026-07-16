@@ -385,7 +385,10 @@ class LLMClient:
         except Exception as exc:
             raise LLMClientError("PyMuPDF is required for local VLM PDF OCR") from exc
         paths: list[str] = []
-        page_limit = max(1, int(max_pages if max_pages is not None else self.config.llm.local_cli_pdf_max_pages))
+        page_limit = _strict_call_int(
+            max_pages if max_pages is not None else self.config.llm.local_cli_pdf_max_pages,
+            "pdf_max_pages",
+        )
         try:
             with fitz.open(pdf) as doc:
                 for index, page in enumerate(doc[:page_limit]):

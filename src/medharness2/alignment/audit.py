@@ -17,6 +17,12 @@ from medharness2.llm_client import LLMClient, LLMClientError
 from medharness2.utils.io import parse_json_object
 
 
+def _strict_positive_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ValueError(f"{label} must be a positive integer")
+    return value
+
+
 _ERROR_TYPE_VALUES = (
     "false_finding",
     "omission_finding",
@@ -64,13 +70,13 @@ def audit_alignment(
         alignment_result,
     )
     error_count = len(alignment_result.get("error_candidates") or [])
-    chunk_size = max(1, int(max_errors_per_call))
+    chunk_size = _strict_positive_int(max_errors_per_call, "max_errors_per_call")
     target_chunks = [
         list(range(start, min(start + chunk_size, error_count)))
         for start in range(0, error_count, chunk_size)
     ] or [[]]
     errors: list[str] = []
-    attempts = max(1, int(max_retries))
+    attempts = _strict_positive_int(max_retries, "max_retries")
     responses: list[_AuditResponse] = []
     chunk_attempt_counts: list[int] = []
     for chunk_index, target_indices in enumerate(target_chunks):

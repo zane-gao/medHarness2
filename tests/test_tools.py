@@ -617,6 +617,16 @@ def test_tool5_llm_audit_records_grounded_issue_without_mutating_alignment():
     assert "private reference report text" not in client.calls[0]["prompt"]
 
 
+@pytest.mark.parametrize("field", ["max_retries", "max_errors_per_call"])
+@pytest.mark.parametrize("bad", [True, 1.5, 0, -1, "2"])
+def test_tool5_rejects_implicit_integer_controls(field, bad):
+    candidate = {"findings": []}
+    reference = {"findings": []}
+    alignment = align_graphs(candidate, reference)
+    with pytest.raises(ValueError, match=field):
+        audit_alignment(candidate, reference, alignment, require_llm=False, **{field: bad})
+
+
 def test_tool5_llm_adjudication_removes_complete_unsupported_error_pairs():
     candidate = {
         "findings": [
@@ -2029,6 +2039,14 @@ def test_tool1_can_record_retest_consistency_without_replacing_primary_score():
     assert result["_metadata"]["consistency_exact"] is True
 
 
+@pytest.mark.parametrize("bad", [True, 1.5, 0, -1, "2"])
+def test_tool1_rejects_implicit_retry_and_consistency_integer_coercion(bad):
+    with pytest.raises((ValueError, TypeError), match="(max_retries|consistency_runs)"):
+        evaluate_likert("FINDINGS: test", max_retries=bad)
+    with pytest.raises((ValueError, TypeError), match="consistency_runs"):
+        evaluate_likert("FINDINGS: test", consistency_runs=bad)
+
+
 def test_tool1_grounding_recognizes_contiguous_chinese_spans():
     client = _RecordingClient(
         {
@@ -2074,6 +2092,24 @@ def test_tool2_prompt_fences_report_and_candidate_data():
     assert "<report_text>" in prompt and "</report_text>" in prompt
     assert "<candidate_data>" in prompt and "</candidate_data>" in prompt
     assert "untrusted" in prompt.lower()
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, 0, -1, "2"])
+def test_tool2_rejects_implicit_retry_integer_coercion(bad):
+    with pytest.raises((ValueError, TypeError), match="max_retries"):
+        extract_findings("FINDINGS: test", modality="cxr", max_retries=bad, llm_client=build_mock_client())
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, 0, -1, "2"])
+def test_tool6_rejects_implicit_retry_integer_coercion(bad):
+    with pytest.raises((ValueError, TypeError), match="max_retries"):
+        assess_structure_clinical_significance(
+            "FINDINGS: test",
+            "FINDINGS: test",
+            compare_structure("FINDINGS: test", "FINDINGS: test"),
+            max_retries=bad,
+            require_llm=False,
+        )
 
 
 class _SequenceClient:
