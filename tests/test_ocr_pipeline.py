@@ -371,6 +371,60 @@ def test_ocr_candidate_benchmark_blocks_invalid_utf8_jsonl_manifest(tmp_path: Pa
     assert any("manifest:" in item for item in result["blocked_items"])
 
 
+def test_ocr_candidate_benchmark_rejects_candidate_sidecar_for_different_case(tmp_path: Path):
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"case_id": "other-case", "text": "same"}),
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "case1",
+                    "gold_text": "same",
+                    "candidates": {"model-a": str(candidate)},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "blocked"
+    assert result["selection"]["reason"] == "invalid_candidate_provenance"
+    assert result["blocked_items"] == ["provenance:case1:model-a:case_id"]
+
+
+def test_ocr_candidate_benchmark_rejects_candidate_sidecar_for_different_model(tmp_path: Path):
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"case_id": "case1", "model_key": "model-b", "text": "same"}),
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "case1",
+                    "gold_text": "same",
+                    "candidates": {"model-a": str(candidate)},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "blocked"
+    assert result["selection"]["reason"] == "invalid_candidate_provenance"
+    assert result["blocked_items"] == ["provenance:case1:model-a:model_key"]
+
+
 def test_ocr_candidate_benchmark_blocks_unequal_model_coverage(tmp_path: Path):
     manifest = tmp_path / "ocr_manifest.json"
     manifest.write_text(

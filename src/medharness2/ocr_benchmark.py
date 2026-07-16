@@ -386,6 +386,15 @@ def _validate_candidate_provenance(
         or any(item.get(key) is not None for key in ("page_count", "source_page_count", "retained_page_count", "render_hash", "render_sha256", "page_hashes", "rendered_page_sha256"))
         or expected_route
     )
+    # A structured candidate sidecar carrying an identity is itself a
+    # provenance declaration, even when the manifest uses the legacy text-only
+    # form.  Never score a sidecar under a different case ID.
+    candidate_case_id = str(observed.get("case_id") or "")
+    if candidate_case_id:
+        declared_fields = True
+    candidate_model = _first_value(observed, ("model_key", "model", "model_name"))
+    if candidate_model not in (None, ""):
+        declared_fields = True
     if source_pdf and not expected_pdf_hash:
         pdf_path = Path(str(source_pdf))
         if not pdf_path.is_absolute():
@@ -416,11 +425,13 @@ def _validate_candidate_provenance(
         if expected is not None and str(observed_value or "") != str(expected):
             blockers.append(f"provenance:{item.get('case_id')}:{model}:{field}")
     if declared_fields:
-        observed_case_id = str(observed.get("case_id") or "")
+        observed_case_id = candidate_case_id
         if observed_case_id and observed_case_id != str(item.get("case_id")):
             blockers.append(f"provenance:{item.get('case_id')}:{model}:case_id")
         elif not observed_case_id:
             blockers.append(f"provenance:{item.get('case_id')}:{model}:case_id_missing")
+        if candidate_model not in (None, "") and str(candidate_model) != str(model):
+            blockers.append(f"provenance:{item.get('case_id')}:{model}:model_key")
     return blockers
 
 
