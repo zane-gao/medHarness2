@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from medharness2.annotation import AnnotationCase, build_pilot_annotation_package
+from medharness2.annotation import AnnotationCase, build_pilot_annotation_package, validate_pilot_annotation_package
 from medharness2.privacy import ExternalPayloadPolicy
 
 
@@ -97,3 +97,35 @@ def test_annotation_schema_is_exported_with_package(tmp_path: Path):
     schema = json.loads((output_dir / "annotation.schema.json").read_text(encoding="utf-8"))
     assert schema["title"] == "AnnotationCase"
     assert (output_dir / "README.md").exists()
+
+
+def test_validate_pilot_annotation_package_reports_not_started_without_fabricating_completion(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    output_dir = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, output_dir, limit=3)
+
+    result = validate_pilot_annotation_package(output_dir)
+
+    assert result["status"] == "not_started"
+    assert result["case_count"] == 3
+    assert result["complete_case_count"] == 0
+    assert result["not_started_case_count"] == 3
+    assert result["errors"] == []
+
+
+def test_validate_pilot_annotation_package_blocks_adjudication_before_both_readers(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    output_dir = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, output_dir, limit=1)
+    case_path = output_dir / "cases" / "pilot-001.json"
+    payload = json.loads(case_path.read_text(encoding="utf-8"))
+    payload["annotations"]["adjudication"]["status"] = "complete"
+    case_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    manifest = json.loads((output_dir / "manifest.jsonl").read_text(encoding="utf-8"))
+    manifest["status"] = "in_progress"
+    (output_dir / "manifest.jsonl").write_text(json.dumps(manifest, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    result = validate_pilot_annotation_package(output_dir)
+
+    assert result["status"] == "blocked"
+    assert "case:pilot-001:adjudication_before_readers" in result["errors"]

@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from medharness2.catalog import build_capability_catalog
-from medharness2.annotation import build_pilot_annotation_package
+from medharness2.annotation import build_pilot_annotation_package, validate_pilot_annotation_package
 from medharness2.config import load_config
 from medharness2.contracts import export_json_schemas, migrate_run_case_artifacts
 from medharness2.dashboard import build_dashboard, build_dashboard_summary
@@ -48,6 +48,8 @@ def build_parser() -> argparse.ArgumentParser:
     annotation_pilot.add_argument("--run-dir", required=True)
     annotation_pilot.add_argument("--output-dir", required=True)
     annotation_pilot.add_argument("--limit", type=int, default=10)
+    annotation_validate = annotation_sub.add_parser("validate")
+    annotation_validate.add_argument("--package-dir", required=True)
     benchmark = subparsers.add_parser("benchmark")
     benchmark_sub = benchmark.add_subparsers(dest="benchmark_command", required=True)
     benchmark_plan = benchmark_sub.add_parser("plan")
@@ -203,6 +205,10 @@ def main(argv: list[str] | None = None) -> int:
         result = build_pilot_annotation_package(args.run_dir, args.output_dir, limit=args.limit)
         print(f"wrote {result['case_count']} blinded annotation cases to {args.output_dir}")
         return 0
+    if args.command == "annotation" and args.annotation_command == "validate":
+        result = validate_pilot_annotation_package(args.package_dir)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["status"] != "blocked" else 2
     if args.command == "benchmark" and args.benchmark_command == "plan":
         cfg = load_config(args.config) if args.config else load_config("config/formal_benchmark.yaml")
         result = plan_generation_benchmark(args.manifest, config=cfg, model_keys=args.models)

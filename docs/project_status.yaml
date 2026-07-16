@@ -7,7 +7,7 @@ baseline:
   branch: main
   git_sha: 5dc2cd1
   dirty_worktree: true
-  pytest_passed: 424
+  pytest_passed: 429
   pytest_warnings: 18
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -136,11 +136,11 @@ workstreams:
     next_gate: Expand the frozen CXR chest exploratory matrix, add clinician labels and formal validation IDs, then promote only models that pass the locked benchmark.
   clinical_validation:
     status: not_started
-    summary: Ten pilot cases are packaged, but reader A, reader B, and adjudication labels are not complete.
+    summary: Ten pilot cases are packaged; the new annotation validator confirms reader A, reader B, and adjudication are all not_started (0/10 complete), and refuses premature adjudication or manifest/status mismatches.
     evidence_paths:
       - annotation/pilot10/manifest.jsonl
       - annotation/pilot10/annotation.schema.json
-    next_gate: Complete pilot annotations and inter-rater reliability review.
+    next_gate: Complete both independent reader annotations, then adjudication, and rerun `medharness2 annotation validate --package-dir annotation/pilot10` before inter-rater reliability review.
   experiments:
     status: in_progress
     summary: Six executable YAML protocols and strict validation gates exist; all current results remain pilot with zero validated gates.

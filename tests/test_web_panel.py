@@ -105,3 +105,28 @@ def test_build_data_exposes_project_meta_and_source_health(tmp_path, monkeypatch
     assert set(data["source_health"]) >= {"core_run", "dmx_evaluation", "generation_benchmark", "ocr_audit", "experiment_results", "pilot10_manifest"}
     assert "source_case_count" in data["kpi"]
     assert "failure_rate" in data["kpi"]
+
+
+def test_extract_pilot10_uses_annotation_validator_for_completion(tmp_path):
+    package = tmp_path / "pilot10"
+    cases = package / "cases"
+    cases.mkdir(parents=True)
+    (package / "manifest.jsonl").write_text(
+        '{"pilot_case_id":"pilot-001","modality":"cxr","body_part":"chest","annotation_path":"cases/pilot-001.json","status":"not_started"}\n',
+        encoding="utf-8",
+    )
+    (cases / "pilot-001.json").write_text(
+        '{"schema_version":"2.0","artifact_type":"clinical_annotation_case","pilot_case_id":"pilot-001",'
+        '"source_case_sha256":"' + 'a' * 64 + '","modality":"cxr","body_part":"chest","reference_report":"",'
+        '"candidate_reports":[],"annotations":{"reader_a":{"reader_slot":"reader_a","status":"not_started",'
+        '"findings":[],"hazards":[],"overall_notes":"","confidence":null},"reader_b":{"reader_slot":"reader_b",'
+        '"status":"not_started","findings":[],"hazards":[],"overall_notes":"","confidence":null},'
+        '"adjudication":{"reader_slot":"adjudication","status":"not_started","findings":[],"hazards":[],'
+        '"overall_notes":"","confidence":null}}}\n',
+        encoding="utf-8",
+    )
+
+    result = build_panel.extract_pilot10(package / "manifest.jsonl")
+
+    assert result["done"] == 0
+    assert result["validation_status"] == "not_started"

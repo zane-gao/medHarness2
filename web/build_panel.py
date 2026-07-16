@@ -31,6 +31,8 @@ from pathlib import Path
 
 import yaml
 
+from medharness2.annotation import validate_pilot_annotation_package
+
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_RUN = REPO / "outputs" / "sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710"
 TEMPLATE = Path(__file__).resolve().parent / "panel_template.html"
@@ -543,11 +545,15 @@ def extract_pilot10(path: Path) -> dict | None:
         status_counts[st] = status_counts.get(st, 0) + 1
         mod = str(r.get("modality") or "unknown")
         modality_counts[mod] = modality_counts.get(mod, 0) + 1
+    validation = validate_pilot_annotation_package(path.parent)
     return {
         "total": len(rows),
         "status_counts": status_counts,
         "modality_counts": modality_counts,
-        "done": status_counts.get("completed", 0) + status_counts.get("adjudicated", 0),
+        "done": validation.get("complete_case_count", 0),
+        "validation_status": validation.get("status", "blocked"),
+        "validation_errors": validation.get("errors", []),
+        "validation_warnings": validation.get("warnings", []),
     }
 
 

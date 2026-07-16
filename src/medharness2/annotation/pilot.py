@@ -84,6 +84,89 @@ def build_pilot_annotation_package(
     }
 
 
+def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]:
+    """Validate package/file/reader state without upgrading incomplete labels."""
+    root = Path(package_dir)
+    manifest_path = root / "manifest.jsonl"
+    errors: list[str] = []
+    warnings: list[str] = []
+    rows: list[dict[str, Any]] = []
+    if not manifest_path.exists():
+        return {"status": "blocked", "case_count": 0, "complete_case_count": 0, "errors": ["missing_manifest"]}
+    for index, line in enumerate(manifest_path.read_text(encoding="utf-8").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            errors.append(f"manifest:row_{index}:invalid_json")
+            continue
+        if not isinstance(row, dict):
+            errors.append(f"manifest:row_{index}:not_an_object")
+            continue
+        rows.append(row)
+
+    complete = 0
+    in_progress = 0
+    for row in rows:
+        pilot_case_id = str(row.get("pilot_case_id") or "")
+        relative = str(row.get("annotation_path") or "")
+        if not pilot_case_id or not relative:
+            errors.append(f"manifest:{pilot_case_id or 'unknown'}:missing_identity")
+            continue
+        case_path = root / relative
+        if not case_path.exists():
+            errors.append(f"case:{pilot_case_id}:missing_file")
+            continue
+        try:
+            case = AnnotationCase.model_validate_json(case_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            errors.append(f"case:{pilot_case_id}:invalid_contract:{type(exc).__name__}")
+            continue
+        if case.pilot_case_id != pilot_case_id:
+            errors.append(f"case:{pilot_case_id}:id_mismatch")
+        if case.modality != str(row.get("modality") or "unknown"):
+            errors.append(f"case:{pilot_case_id}:modality_mismatch")
+        if case.body_part != str(row.get("body_part") or "unknown"):
+            errors.append(f"case:{pilot_case_id}:body_part_mismatch")
+        statuses = {slot: case.annotations[slot].status for slot in ("reader_a", "reader_b", "adjudication")}
+        if statuses["adjudication"] == "complete" and not (
+            statuses["reader_a"] == "complete" and statuses["reader_b"] == "complete"
+        ):
+            errors.append(f"case:{pilot_case_id}:adjudication_before_readers")
+        derived = _annotation_status(statuses)
+        declared = str(row.get("status") or "not_started")
+        if declared != derived:
+            errors.append(f"case:{pilot_case_id}:status_mismatch:{declared}!={derived}")
+        if derived == "complete":
+            complete += 1
+        elif derived == "in_progress":
+            in_progress += 1
+
+    if not rows:
+        errors.append("manifest:empty")
+    status = "blocked" if errors else ("complete" if complete == len(rows) and rows else "in_progress" if in_progress else "not_started")
+    if status == "not_started" and rows:
+        warnings.append("no_reader_annotations_started")
+    return {
+        "status": status,
+        "case_count": len(rows),
+        "complete_case_count": complete,
+        "in_progress_case_count": in_progress,
+        "not_started_case_count": len(rows) - complete - in_progress,
+        "errors": list(dict.fromkeys(errors)),
+        "warnings": warnings,
+    }
+
+
+def _annotation_status(statuses: dict[str, str]) -> str:
+    if all(statuses[slot] == "complete" for slot in ("reader_a", "reader_b", "adjudication")):
+        return "complete"
+    if any(status != "not_started" for status in statuses.values()):
+        return "in_progress"
+    return "not_started"
+
+
 def _load_case_payloads(root: Path) -> list[tuple[str, dict[str, Any]]]:
     workflow2 = read_json(root / "workflow2.json") if (root / "workflow2.json").exists() else {}
     rows: list[tuple[str, dict[str, Any]]] = []
