@@ -1529,6 +1529,13 @@ def test_tool4_preserves_t5_alignment_adjudication_provenance():
     assert '"alignment_error_index": 4' in client.calls[0]["prompt"]
 
 
+def test_tool4_does_not_propagate_boolean_alignment_error_index():
+    from medharness2.tools.tool4_hazard import _minimal_judge_candidate
+
+    candidate = {"error_type": "omission_finding", "alignment_error_index": True}
+    assert "alignment_error_index" not in _minimal_judge_candidate(candidate)
+
+
 def test_tool4_third_adjudicator_resolves_disagreement_and_hash_binds_inputs():
     candidates = [{"error_type": "omission_finding", "observation": "nodule"}]
     primary = evaluate_hazards(

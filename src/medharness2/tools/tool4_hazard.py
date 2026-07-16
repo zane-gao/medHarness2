@@ -615,7 +615,9 @@ def _judge_prompt(error_candidates: list[dict[str, Any]], previous_errors: list[
 
 def _minimal_judge_candidate(error: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {"error_type": str(error.get("error_type") or "mismatched_finding")}
-    if isinstance(error.get("alignment_error_index"), int):
+    if isinstance(error.get("alignment_error_index"), int) and not isinstance(
+        error.get("alignment_error_index"), bool
+    ):
         result["alignment_error_index"] = error["alignment_error_index"]
     audit_judgement = error.get("alignment_audit_judgement")
     if isinstance(audit_judgement, dict):
