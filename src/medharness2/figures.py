@@ -254,10 +254,13 @@ def _read_csv(path: Path) -> list[dict[str, str]]:
 
 
 def _int(value: Any) -> int:
-    try:
-        return int(float(value or 0))
-    except (TypeError, ValueError):
+    if value is None or value == "":
         return 0
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError("count must be a non-negative integer")
+    return value
 
 
 def _median(values: list[int]) -> float:

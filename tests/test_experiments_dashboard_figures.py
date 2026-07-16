@@ -12,6 +12,7 @@ from medharness2.figures import build_figures
 from medharness2.workflows.experiments import run_experiments
 from medharness2.workflows.experiments import _image_to_text_models, _modality_recognition, _radiologist_evaluation
 from medharness2.workflows.experiments import experiment_registry_metrics
+from medharness2.figures import _int as figure_int
 
 
 def test_run_experiments_builds_six_study_results(tmp_path: Path):
@@ -102,6 +103,12 @@ def test_dashboard_rejects_invalid_summary_counts(bad):
             {},
             {},
         )
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "2.5", "abc"])
+def test_figures_count_parser_rejects_invalid_values(bad):
+    with pytest.raises(ValueError, match="count"):
+        figure_int(bad)
 
 
 def test_run_experiments_writes_protocol_mapping_artifacts(tmp_path: Path):
