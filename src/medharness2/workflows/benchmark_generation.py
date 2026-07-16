@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import time
 from collections import Counter
 from dataclasses import asdict
@@ -605,11 +606,12 @@ def _stable_json(value: Any) -> str:
 
 
 def _numeric_summary(values: list[float]) -> dict[str, Any]:
-    if not values:
+    finite_values = [float(value) for value in values if math.isfinite(float(value))]
+    if not finite_values:
         return {"count": 0, "mean": None, "min": None, "max": None}
     return {
-        "count": len(values),
-        "mean": round(sum(values) / len(values), 4),
-        "min": round(min(values), 4),
-        "max": round(max(values), 4),
+        "count": len(finite_values),
+        "mean": round(sum(finite_values) / len(finite_values), 4),
+        "min": round(min(finite_values), 4),
+        "max": round(max(finite_values), 4),
     }

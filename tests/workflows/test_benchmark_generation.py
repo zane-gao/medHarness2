@@ -1,14 +1,28 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 import sys
 
 import pytest
 
 from medharness2.config import AppConfig, GeneratorConfig
-from medharness2.workflows.benchmark_generation import plan_generation_benchmark, run_generation_benchmark
+from medharness2.workflows.benchmark_generation import (
+    _numeric_summary,
+    plan_generation_benchmark,
+    run_generation_benchmark,
+)
 from medharness2.cli import main
+
+
+def test_numeric_summary_excludes_non_finite_latency_values():
+    assert _numeric_summary([1.5, math.nan, math.inf, 2.5]) == {
+        "count": 2,
+        "mean": 2.0,
+        "min": 1.5,
+        "max": 2.5,
+    }
 
 
 def _manifest(path: Path) -> Path:
