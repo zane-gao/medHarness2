@@ -197,6 +197,37 @@ def test_ocr_verifier_failure_does_not_fail_primary_ocr(tmp_path: Path):
     assert meta["quality_audit"]["status"] == "verifier_failed"
 
 
+def test_ocr_verifier_audits_each_retained_page(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    for text in ("page one", "page two"):
+        page = doc.new_page(width=300, height=200)
+        page.insert_text((30, 60), text)
+    doc.save(pdf)
+
+    class Verifier:
+        def __init__(self):
+            self.images: list[str] = []
+
+        def call(self, prompt, image_path=None, **kwargs):
+            self.images.append(image_path)
+            return '{"status":"agree"}'
+
+    verifier = Verifier()
+    extract_report_text(
+        pdf,
+        case_id="case-multi-audit",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=PageOCRClient(),
+        verifier_client=verifier,
+        force=True,
+    )
+    assert len(verifier.images) == 2
+    meta = json.loads((tmp_path / "ocr" / "case-multi-audit.ocr.json").read_text(encoding="utf-8"))
+    assert [item["page_index"] for item in meta["quality_audit"]["pages"]] == [1, 2]
+
+
 def test_ocr_candidate_benchmark_scores_and_blocks_missing_artifacts(tmp_path: Path):
     manifest = tmp_path / "ocr_manifest.json"
     manifest.write_text(

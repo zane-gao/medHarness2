@@ -128,31 +128,42 @@ def extract_report_text(
             if any(item.startswith("ocr_possible_truncation:") for item in warnings):
                 warnings.append("ocr_possible_truncation")
             if verifier_client is not None and page_results and retained_rendered_pages:
-                audit_prompt = (
-                    "Audit this OCR transcription against the supplied report page. "
-                    "Return JSON only with status (agree/disagreement), evidence spans, and short reason. "
-                    "Do not rewrite or provide a replacement transcription.\n\nOCR:\n" + text
-                )
-                try:
-                    raw_audit = verifier_client.call(
-                        audit_prompt,
-                        image_path=retained_rendered_pages[0],
-                        response_format="json",
-                        payload_classification="raw_medical_document",
-                        **dict(verifier_options or {}),
+                page_audits: list[dict[str, Any]] = []
+                for page_index, (page_text, image_path) in enumerate(
+                    zip(page_results, retained_rendered_pages), start=1
+                ):
+                    audit_prompt = (
+                        "Audit this OCR transcription against the supplied report page. "
+                        "Return JSON only with status (agree/disagreement), evidence spans, and short reason. "
+                        "Do not rewrite or provide a replacement transcription.\n\nOCR:\n" + page_text
                     )
                     try:
-                        quality_audit = json.loads(str(raw_audit))
-                    except json.JSONDecodeError:
-                        quality_audit = {"status": "invalid_verifier_response", "raw": str(raw_audit)[:500]}
-                        warnings.append("ocr_verifier_invalid_response")
-                except Exception as exc:
-                    quality_audit = {
-                        "status": "verifier_failed",
-                        "error_type": type(exc).__name__,
-                        "error": str(exc)[:500],
-                    }
-                    warnings.append("ocr_verifier_failed")
+                        raw_audit = verifier_client.call(
+                            audit_prompt,
+                            image_path=image_path,
+                            response_format="json",
+                            payload_classification="raw_medical_document",
+                            **dict(verifier_options or {}),
+                        )
+                        try:
+                            audit = json.loads(str(raw_audit))
+                        except json.JSONDecodeError:
+                            audit = {"status": "invalid_verifier_response", "raw": str(raw_audit)[:500]}
+                            warnings.append(f"ocr_verifier_invalid_response:page_{page_index}")
+                            warnings.append("ocr_verifier_invalid_response")
+                    except Exception as exc:
+                        audit = {
+                            "status": "verifier_failed",
+                            "error_type": type(exc).__name__,
+                            "error": str(exc)[:500],
+                        }
+                        warnings.append(f"ocr_verifier_failed:page_{page_index}")
+                        warnings.append("ocr_verifier_failed")
+                    page_audits.append({"page_index": page_index, **audit})
+                quality_audit = page_audits[0] if len(page_audits) == 1 else {
+                    "status": "completed",
+                    "pages": page_audits,
+                }
         method = "vlm_ocr"
         provider = primary_provider
         if not text:
