@@ -5,7 +5,7 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: pending-local-gated-benchmarks
+  git_sha: 0e1c975
   dirty_worktree: true
   pytest_passed: 365
   pytest_warnings: 17
