@@ -9,8 +9,8 @@ from medharness2.alignment.scoring import certainty, laterality, location, measu
 
 def align_graphs(candidate_graph: dict[str, Any], reference_graph: dict[str, Any], tolerance_mm: float = 5.0) -> dict[str, Any]:
     """Align candidate findings against a human/reference finding graph."""
-    candidate_findings = list(candidate_graph.get("findings") or [])
-    reference_findings = list(reference_graph.get("findings") or [])
+    candidate_findings = _object_list(candidate_graph.get("findings"), "candidate findings")
+    reference_findings = _object_list(reference_graph.get("findings"), "reference findings")
     matched: list[dict[str, Any]] = []
     approximate: list[dict[str, Any]] = []
     mismatched: list[dict[str, Any]] = []
@@ -122,3 +122,11 @@ def _compare_findings(a: dict[str, Any], b: dict[str, Any], tolerance_mm: float)
 
 
 __all__ = ["align_graphs", "audit_alignment", "normalize_measurement_mm"]
+
+
+def _object_list(value: Any, label: str) -> list[dict[str, Any]]:
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"{label} must be a list of objects")
+    return value

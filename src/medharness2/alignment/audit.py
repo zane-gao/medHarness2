@@ -183,19 +183,27 @@ def audit_alignment(
     )
 
 
+def _object_list(value: Any, label: str) -> list[dict[str, Any]]:
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"{label} must be a list of objects")
+    return value
+
+
 def _audit_bundle(
     candidate_graph: dict[str, Any],
     reference_graph: dict[str, Any],
     alignment_result: dict[str, Any],
 ) -> tuple[dict[str, Any], set[str], set[str]]:
-    candidate_findings = list(candidate_graph.get("findings") or [])
-    reference_findings = list(reference_graph.get("findings") or [])
+    candidate_findings = _object_list(candidate_graph.get("findings"), "candidate findings")
+    reference_findings = _object_list(reference_graph.get("findings"), "reference findings")
     candidate_rows, candidate_ids = _minimal_findings(candidate_findings, "candidate")
     reference_rows, reference_ids = _minimal_findings(reference_findings, "reference")
 
     pair_rows = []
     for category in ("matched", "approximate_match", "mismatched"):
-        for row in alignment_result.get(category) or []:
+        for row in _object_list(alignment_result.get(category), category):
             pair_rows.append(
                 {
                     "category": category,
@@ -205,7 +213,7 @@ def _audit_bundle(
                 }
             )
     error_rows = []
-    for index, error in enumerate(alignment_result.get("error_candidates") or []):
+    for index, error in enumerate(_object_list(alignment_result.get("error_candidates"), "error_candidates")):
         error_rows.append(
             {
                 "error_index": index,
@@ -533,7 +541,7 @@ def _adjudicate_errors(
     *,
     minimum_confidence: float = 0.8,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    deterministic = list(alignment_result.get("error_candidates") or [])
+    deterministic = _object_list(alignment_result.get("error_candidates"), "error_candidates")
     by_index = {judgement.error_index: judgement for judgement in judgements}
     retained: list[dict[str, Any]] = []
     rejected_count = 0

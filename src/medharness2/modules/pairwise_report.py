@@ -115,9 +115,9 @@ def evaluate_pairwise(
         else cfg.llm.max_retries
     )
     hazard_candidates = (
-        list(alignment_audit.get("adjudicated_error_candidates") or [])
+        _object_list(alignment_audit.get("adjudicated_error_candidates"), "adjudicated_error_candidates")
         if alignment_audit is not None
-        else list(alignment.get("error_candidates") or [])
+        else _object_list(alignment.get("error_candidates"), "error_candidates")
     )
     def compute_hazards() -> dict[str, Any]:
         return evaluate_hazards(
@@ -302,6 +302,14 @@ def evaluate_pairwise(
         "structure_audit": structure_audit,
         "warnings": ["image_path_unused_in_mvp_pairwise"] if image_path else [],
     }
+
+
+def _object_list(value: Any, label: str) -> list[dict[str, Any]]:
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"{label} must be a list of objects")
+    return value
 
 
 def _checkpointed(

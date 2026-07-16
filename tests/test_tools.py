@@ -2153,3 +2153,19 @@ class _FailingClient:
     def call(self, prompt: str, image_path: str | None = None, **kwargs):
         self.call_count += 1
         raise self.error
+
+@pytest.mark.parametrize("bad", ["bad", {"x": 1}, ["bad-item"]])
+def test_tool5_align_rejects_malformed_finding_lists(bad):
+    with pytest.raises(ValueError, match="candidate findings"):
+        align_graphs({"findings": bad}, {"findings": []})
+
+
+@pytest.mark.parametrize("bad", ["bad", {"x": 1}, ["bad-item"]])
+def test_tool5_audit_rejects_malformed_error_candidate_lists(bad):
+    with pytest.raises(ValueError, match="error_candidates"):
+        audit_alignment(
+            {"findings": []},
+            {"findings": []},
+            {"error_candidates": bad},
+            require_llm=False,
+        )
