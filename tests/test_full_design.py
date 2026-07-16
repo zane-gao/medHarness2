@@ -18,7 +18,7 @@ from medharness2.workflows.batch_readers import _mean_score as batch_mean_score
 from medharness2.workflows.batch_readers import _evaluation_metadata
 from medharness2.workflows.reevaluate_run import _mean_score as reevaluate_mean_score
 from medharness2.workflows.merge_batches import _mean_score as merge_mean_score
-from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full
+from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full, _strict_nonnegative_int
 
 
 def test_tool6_compares_report_structure():
@@ -760,6 +760,12 @@ def test_sample_full_workflow_orchestrates_manifest_batch_department_and_validat
     assert Path(result["paths"]["run_summary"]).exists()
     payload = json.loads(Path(result["paths"]["run_summary"]).read_text(encoding="utf-8"))
     assert payload["validation"]["passed"] is True
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, "1", -1])
+def test_sample_full_summary_rejects_implicit_integer_coercion(bad):
+    with pytest.raises(ValueError, match="workflow2 case_count"):
+        _strict_nonnegative_int(bad, "workflow2 case_count")
 
 
 def test_sample_full_dry_run_plans_all_compatible_local_models_without_outputs(tmp_path: Path):

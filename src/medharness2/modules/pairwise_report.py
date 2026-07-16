@@ -336,7 +336,12 @@ def _validate_alignment_audit_checkpoint(
     summary = dict(validated.get("adjudication_summary") or {})
     if summary.get("complete") is not True:
         raise ValueError("T5 checkpoint adjudication is incomplete")
-    if int(summary.get("deterministic_error_count", -1)) != error_candidate_count:
+    deterministic_error_count = summary.get("deterministic_error_count", -1)
+    if (
+        not isinstance(deterministic_error_count, int)
+        or isinstance(deterministic_error_count, bool)
+        or deterministic_error_count != error_candidate_count
+    ):
         raise ValueError("T5 checkpoint deterministic error count mismatch")
     if len(validated.get("error_judgements") or []) != error_candidate_count:
         raise ValueError("T5 checkpoint error judgement coverage mismatch")

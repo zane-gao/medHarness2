@@ -14,6 +14,12 @@ from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
 
 
+def _strict_nonnegative_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
 def plan_sample_full_routes(
     sample_root: str | Path,
     output_dir: str | Path,
@@ -143,8 +149,8 @@ def run_sample_full(
         },
         "summary": {
             "case_count": len(rows),
-            "workflow2_case_count": int(batch.get("case_count", 0)),
-            "workflow2_failed_case_count": int(batch.get("failed_case_count", 0)),
+            "workflow2_case_count": _strict_nonnegative_int(batch.get("case_count", 0), "workflow2 case_count"),
+            "workflow2_failed_case_count": _strict_nonnegative_int(batch.get("failed_case_count", 0), "workflow2 failed_case_count"),
             "workflow3_case_count": int(department.get("case_count", 0)),
             "reader_count": int(department.get("reader_count", 0)),
         },

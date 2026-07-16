@@ -83,6 +83,14 @@ def test_experiment_metrics_reject_invalid_numeric_counts(bad, tmp_path: Path):
         )
 
 
+def test_experiment_registry_metrics_uses_strict_internal_counts():
+    result = {"experiment_count": 0, "experiments": []}
+    metrics = experiment_registry_metrics(result)
+    assert metrics["validated_experiment_count"] == 0
+    assert metrics["pilot_experiment_count"] == 0
+    assert metrics["not_ready_experiment_count"] == 0
+
+
 @pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
 def test_modality_metrics_reject_invalid_ocr_counts(bad):
     with pytest.raises(ValueError, match="real_ocr_count"):

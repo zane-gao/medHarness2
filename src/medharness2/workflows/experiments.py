@@ -73,9 +73,9 @@ def experiment_registry_metrics(result: dict[str, Any]) -> dict[str, Any]:
     return {
         "experiment_count": _count_or_zero(result.get("experiment_count"), "experiment_count"),
         "experiment_status_counts": dict(sorted(status_counts.items())),
-        "validated_experiment_count": int(status_counts.get("validated", 0)),
-        "pilot_experiment_count": int(status_counts.get("pilot", 0)),
-        "not_ready_experiment_count": int(status_counts.get("not_ready", 0)),
+        "validated_experiment_count": _nonnegative_count(status_counts.get("validated", 0), "validated_experiment_count"),
+        "pilot_experiment_count": _nonnegative_count(status_counts.get("pilot", 0), "pilot_experiment_count"),
+        "not_ready_experiment_count": _nonnegative_count(status_counts.get("not_ready", 0), "not_ready_experiment_count"),
         "education_generation_status": str(education.get("status") or "unknown"),
         "education_suggestion_count": _count_or_zero(education.get("suggestion_count"), "education_suggestion_count"),
         "error_count": len(result.get("errors") or []),
@@ -184,8 +184,8 @@ def _radiologist_evaluation(analysis: dict[str, Any], workflow2: dict[str, Any],
         "inputs": ["workflow2.json", "workflow3.json", "analysis/reader_summary.csv"],
         "outputs": ["reader_count", "reader_percentiles", "overall_score"],
         "metrics": {
-            "case_count": int(_first_present(analysis.get("case_count"), workflow2.get("case_count"), 0)),
-            "reader_count": int(_first_present(analysis.get("reader_count"), len(readers))),
+            "case_count": _nonnegative_count(_first_present(analysis.get("case_count"), workflow2.get("case_count"), 0), "radiologist case_count"),
+            "reader_count": _nonnegative_count(_first_present(analysis.get("reader_count"), len(readers)), "radiologist reader_count"),
             "percentile_count": len(percentiles),
         },
     }
