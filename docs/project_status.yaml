@@ -7,7 +7,7 @@ baseline:
   branch: main
   git_sha: 1926e95
   dirty_worktree: true
-  pytest_passed: 511
+  pytest_passed: 512
   pytest_warnings: 18
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -166,7 +166,7 @@ workstreams:
     next_gate: Re-enable strict data-governance review before any external clinical-data run.
   control_panel:
     status: validated
-    summary: The internal project-status dashboard has been rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Current and legacy reader panels preserve missing scores/percentiles as null and exclude or show them as unavailable instead of rendering zero/P0. Reader totals are now separated from statistically eligible reader counts, so mock/fallback rows are excluded from aggregates without changing completed-reader accounting. Rule extraction now keeps missing measurements distinct from explicit zero values during finding de-duplication. Static checks and source inspection passed. Current full regression is 511 passed with 18 warnings. Explicit empty modality counts are preserved instead of being inferred from case rows. Explicit zero model counts in experiment summaries are preserved instead of being replaced by CSV row counts. Explicit empty aggregate arrays and manifest line-number errors are now fail-closed. Playwright desktop/mobile execution was not completed because this environment lacks the @playwright/test package and Chromium browser, so visual regression remains an environment follow-up rather than evidence of failure.
+    summary: The internal project-status dashboard has been rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Current and legacy reader panels preserve missing scores/percentiles as null and exclude or show them as unavailable instead of rendering zero/P0. Reader totals are now separated from statistically eligible reader counts, so mock/fallback rows are excluded from aggregates without changing completed-reader accounting. Rule extraction now keeps missing measurements distinct from explicit zero values during finding de-duplication. Static checks and source inspection passed. Current full regression is 512 passed with 18 warnings. Legacy generation now preserves caller case_id provenance in its input overlay. Explicit empty modality counts are preserved instead of being inferred from case rows. Explicit zero model counts in experiment summaries are preserved instead of being replaced by CSV row counts. Explicit empty aggregate arrays and manifest line-number errors are now fail-closed. Playwright desktop/mobile execution was not completed because this environment lacks the @playwright/test package and Chromium browser, so visual regression remains an environment follow-up rather than evidence of failure.
     evidence_paths:
       - web/build_panel.py
       - web/panel_template.html

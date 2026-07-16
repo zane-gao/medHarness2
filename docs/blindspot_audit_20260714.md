@@ -20,9 +20,9 @@
 > **2026-07-16 统计分母收尾增量**：department、analyze-run 和实验摘要现在保留显式 `0` 的 source/success/failure/reader 计数，不再使用 `or` 把合法零值误判为缺失并回退到病例行数。全量回归测试为 509 passed、18 warnings。
 > **2026-07-16 validation 收尾增量**：`validate_sample_run` 现在保留显式 `summary.case_count=0`，与非空 manifest 的冲突会明确记录，不再被 `or len(manifest_rows)` 覆盖。全量回归测试为 509 passed、18 warnings。
 > **2026-07-16 实验摘要收尾增量**：image-to-text 实验摘要保留上游显式 `generated_report_model_counts`，即使值为 0 也不再被 CSV 行数覆盖；全量回归测试为 510 passed、18 warnings。
-> **2026-07-16 模态摘要收尾增量**：实验模态识别摘要保留显式空 `modality_counts`，不再从病例行自动推导并掩盖“无上游证据”的状态；全量回归测试为 511 passed、18 warnings。
+> **2026-07-16 模态摘要收尾增量**：实验模态识别摘要保留显式空 `modality_counts`，不再从病例行自动推导并掩盖“无上游证据”的状态；全量回归测试为 512 passed、18 warnings。
 > **2026-07-16 legacy provenance 收尾增量**：旧版本地报告生成器现在透传调用方的 `case_id` 到 legacy input overlay，不再把不同病例统一写成 `medharness2_single_case`；新增集成断言覆盖该 provenance 绑定。
-> **2026-07-16 验证账本收尾增量**：补充显式空聚合数组/百分位映射的失败测试，并为多个非对象 manifest 行保留实际 JSONL 行号；当前全量回归为 505 passed、18 warnings。该收尾只强化本地验证边界，不改变外部真实证据门禁状态。
+> **2026-07-16 验证账本收尾增量**：补充显式空聚合数组/百分位映射的失败测试，并为多个非对象 manifest 行保留实际 JSONL 行号；当前全量回归为 512 passed、18 warnings。该收尾只强化本地验证边界，不改变外部真实证据门禁状态。
 > **2026-07-16 评委输入边界增量**：Tool1/Tool2 对外部评委 prompt 的报告文本增加长度上限、头尾保留和明确的 quoted-data 边界；Tool2 prompt/stage 版本升级为 `tool2-hybrid-v3`，避免 checkpoint 将新旧提示词混用。全量回归测试为 410 passed、18 warnings。
 > **2026-07-16 统计汇总增量**：Tool12 纳入 reader-level `overall_score`；Workflow3 department 输出补齐 source/success/failure 分母及成功率、失败率，避免 reader 统计只呈现分数而丢失失败病例分母。全量回归测试为 412 passed、18 warnings。
 > **2026-07-16 排名语义增量**：Tool9 近 cutoff 候选仍保留供复核，但不再把它们标成正式 `selected_top_n`；新增 `near_cutoff_review` 区分复核候选，避免 analyze/education 下游误把不确定候选纳入正式 Top-N。
