@@ -15,10 +15,10 @@
 > **2026-07-16 后续增量**：OCR preflight 现在识别 `chat_completions`/DMX 等 OpenAI 兼容 provider，并在凭据存在时报告为可执行，而不再误报 `unsupported_llm_provider_for_ocr`；OCR `require_real` 缓存门禁和核心执行路径都只接受明确支持的真实 provider，未知 provider metadata 或直接调用都不能绕过门禁；OCR 现在跳过确定性全白页、保留稀疏有效页并记录页级墨量/跳过原因；OCR verifier 失败/非法响应只记录审计警告，不会改写或拖垮主 OCR；Tool4 hazard 的 observation/location 已与对齐层统一优先 canonical code；这只是能力门禁，不代表真实 OCR 质量已验证。全量回归测试更新为 391 passed。
 > **2026-07-16 后续增量**：`dmx_strong.yaml` 已提供 Doubao Seed 候选主 OCR（`ocr_primary`）和独立 Qwen OCR verifier（`ocr_verifier`）路由；两者只作为冻结 benchmark 候选，不能据模型名称直接宣布 winner。多页 OCR verifier 现在按原始 PDF 页码逐页抽查，保留页级审计结果及 verifier provider/model/role provenance；`validate-run --require-real-ocr` 与 OCR 核心统一真实 provider 白名单，未知 provider 不再被误计为真实 OCR；Tool1 增加解释 grounding 诊断字段，但不自动改分。全量回归测试为 401 passed、18 warnings。
 > **2026-07-16 OCR 评测收尾增量**：OCR provenance 新增 `source_page_count`/`retained_page_count`，保留旧 `page_count` 兼容；候选 benchmark 现在拒绝不等覆盖、重复 case-model 行后再选 provisional winner。旧 OCR sidecar 缓存仍可兼容复用，专用 OCR role 继续严格校验模型路由；preflight 现在透传 role 模型到本地 CLI/HF 能力检查。
-> **2026-07-16 评委异常边界增量**：Tool4 hazard 评委调用现在只把明确的客户端/传输异常（`LLMClientError`、连接/超时、`OSError`）纳入重试与 fallback；`AttributeError`、`KeyError` 等编程错误会直接抛出，不再被伪装成模型失败或低证据结果。新增回归测试覆盖该 fail-fast 语义。
+> **2026-07-16 评委异常边界增量**：Tool4 hazard 评委调用现在只把明确的客户端/传输异常（`LLMClientError`、连接/超时、`OSError`）纳入重试与 fallback；通用 `RuntimeError`、`AttributeError`、`KeyError` 等编程错误会直接抛出，不再被伪装成模型失败或低证据结果。新增回归测试覆盖该 fail-fast 语义。
 > **2026-07-16 OCR benchmark 诊断增量**：缺失或空的 OCR 冻结 manifest 现在分别写入 `manifest:missing_file` / `manifest:empty`，CLI 仍以非零退出；阻断原因不再只依赖空列表，便于定位冻结集尚未就位的具体原因。
 > **2026-07-16 Tool1 重测配置增量**：`single_report` 现在透传 `general_judge.consistency_runs` 到 Tool1，并把该参数纳入 checkpoint 输入；此前强配置虽支持重测字段，但单病例评分路径未实际执行，现已补回归测试验证双次调用与一致性 provenance。
-> **2026-07-16 Tool1 异常边界增量**：Tool1 现在与 Tool4 统一，仅将明确的客户端/传输异常和响应校验异常纳入重试；`AttributeError` 等编程错误直接抛出，不再被转换为确定性评分。新增运行时失败重试与 fail-fast 回归测试。
+> **2026-07-16 Tool1 异常边界增量**：Tool1 现在与 Tool4 统一，仅将明确的客户端/传输异常和响应校验异常纳入重试；通用 `RuntimeError`、`AttributeError` 等编程错误直接抛出，不再被转换为确定性评分。新增连接失败重试与 fail-fast 回归测试。
 > **2026-07-16 抽取收尾增量**：规则抽取去重不再把缺失/非法 measurement 隐式转换为 `0.0`；未知 measurement 与明确 `0 mm` 保持可区分，新增 CXR 回归测试覆盖该边界。该修复不改变既有 finding schema 或路由接口。
 > **2026-07-16 聚合输入收尾增量**：显式提供空的 workflow2 `cases`/`failed_cases` 或 workflow3 `reader_percentiles` 时，不再被历史兼容默认值绕过一致性校验；manifest 中合法但非对象的 JSONL 行现在保留真实行号并 fail-closed。全量回归测试为 504 passed、18 warnings。
 > **2026-07-16 统计分母收尾增量**：department、analyze-run 和实验摘要现在保留显式 `0` 的 source/success/failure/reader 计数，不再使用 `or` 把合法零值误判为缺失并回退到病例行数。全量回归测试为 509 passed、18 warnings。

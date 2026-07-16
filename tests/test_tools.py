@@ -54,7 +54,7 @@ def test_tool1_likert_normalizes_scores():
 
 
 def test_tool1_retries_runtime_provider_failures_and_records_fallback():
-    client = _FailingClient(RuntimeError("upstream timeout"))
+    client = _FailingClient(ConnectionError("upstream timeout"))
 
     result = evaluate_likert(
         "FINDINGS: Clear lungs.",
@@ -67,7 +67,7 @@ def test_tool1_retries_runtime_provider_failures_and_records_fallback():
     assert client.call_count == 2
     assert result["_metadata"]["backend"] == "deterministic_fallback"
     assert result["_metadata"]["fallback_used"] is True
-    assert "RuntimeError" in result["_metadata"]["judge_errors"][0]
+    assert "ConnectionError" in result["_metadata"]["judge_errors"][0]
 
 
 def test_tool1_does_not_turn_client_programming_errors_into_fallbacks():
@@ -1267,7 +1267,7 @@ def test_tool4_falls_back_when_judge_schema_is_invalid():
 
 
 def test_tool4_falls_back_when_external_judge_call_fails():
-    client = _FailingClient(RuntimeError("upstream timeout with no secret material"))
+    client = _FailingClient(ConnectionError("upstream timeout with no secret material"))
 
     result = evaluate_hazards(
         [{"error_type": "false_finding", "finding": {"observation": "nodule"}}],
@@ -1285,7 +1285,7 @@ def test_tool4_falls_back_when_external_judge_call_fails():
     assert result["metadata"]["backend"] == "deterministic_fallback"
     assert result["metadata"]["fallback_used"] is True
     assert result["metadata"]["judge_error_count"] == 2
-    assert "RuntimeError" in result["metadata"]["judge_errors"][0]
+    assert "ConnectionError" in result["metadata"]["judge_errors"][0]
     assert result["errors"][0]["hazard_level"] == 3
 
 
