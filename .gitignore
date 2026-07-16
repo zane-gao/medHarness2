@@ -8,6 +8,7 @@ venv/
 outputs/
 docs/pat.txt
 .superpowers/
+.serena/
 build/
 dist/
 *.egg-info/
