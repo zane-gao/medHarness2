@@ -120,3 +120,25 @@ def test_evaluation_contract_rejects_implicit_integer_fields(bad):
                 "recommended_action": "x",
             }
         )
+
+@pytest.mark.parametrize("bad", [True, "0.5"])
+def test_contract_float_fields_reject_boolean_and_string_coercion(bad):
+    from medharness2.contracts import FindingGraph, HazardJudgement, Measurement
+    from medharness2.contracts.aggregate import DenominatorAggregate
+
+    with pytest.raises(ValidationError):
+        Measurement.model_validate({"value": bad, "unit": "mm"})
+    with pytest.raises(ValidationError):
+        FindingGraph.model_validate({"modality": "cxr", "backend": "rule", "coverage": bad})
+    with pytest.raises(ValidationError):
+        HazardJudgement.model_validate(
+            {
+                "error_type": "other",
+                "hazard_level": 3,
+                "explanation": "x",
+                "recommended_action": "x",
+                "confidence": bad,
+            }
+        )
+    with pytest.raises(ValidationError):
+        DenominatorAggregate.model_validate({"success_rate": bad})

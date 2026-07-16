@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, model_validator
 
 
 SCHEMA_VERSION = "2.0"
@@ -25,9 +25,9 @@ class TextSpan(ContractModel):
 
 
 class Measurement(ContractModel):
-    value: float = Field(ge=0)
+    value: StrictFloat = Field(ge=0)
     unit: Literal["mm", "cm"]
-    normalized_mm: float | None = Field(default=None, ge=0)
+    normalized_mm: StrictFloat | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def normalize_measurement(self) -> "Measurement":

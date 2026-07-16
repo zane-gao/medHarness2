@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictFloat, StrictInt, model_validator
 
 from medharness2.contracts.common import ContractModel
 
@@ -23,8 +23,8 @@ class DenominatorAggregate(AggregateCompatModel):
     manifest_case_count: StrictInt | None = Field(default=None, ge=0)
     successful_case_count: StrictInt | None = Field(default=None, ge=0)
     failed_case_count: StrictInt | None = Field(default=None, ge=0)
-    success_rate: float | None = Field(default=None, ge=0, le=1)
-    failure_rate: float | None = Field(default=None, ge=0, le=1)
+    success_rate: StrictFloat | None = Field(default=None, ge=0, le=1)
+    failure_rate: StrictFloat | None = Field(default=None, ge=0, le=1)
 
     @model_validator(mode="after")
     def validate_counts_and_rates(self) -> "DenominatorAggregate":
@@ -61,7 +61,7 @@ class DenominatorAggregate(AggregateCompatModel):
 class ReaderAggregate(AggregateCompatModel):
     cases: list[str] = Field(default_factory=list)
     case_count: StrictInt | None = Field(default=None, ge=0)
-    overall_score: float | None = None
+    overall_score: StrictFloat | None = None
     human_metrics: list[dict[str, Any]] = Field(default_factory=list)
     modelwise_metrics: list[dict[str, Any]] = Field(default_factory=list)
     human_statistics: dict[str, Any] = Field(default_factory=dict)
@@ -89,8 +89,8 @@ class Workflow2Aggregate(AggregateCompatModel):
 
 
 class ReaderPercentile(AggregateCompatModel):
-    overall_score: float | None = None
-    percentile: float | None = Field(default=None, ge=0, le=100)
+    overall_score: StrictFloat | None = None
+    percentile: StrictFloat | None = Field(default=None, ge=0, le=100)
     case_count: StrictInt | None = Field(default=None, ge=0)
 
 

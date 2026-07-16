@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictFloat, StrictInt, model_validator
 
 from medharness2.contracts.common import (
     SCHEMA_VERSION,
@@ -38,7 +38,7 @@ class FindingGraph(ContractModel):
     findings: list[Finding] = Field(default_factory=list)
     relations: list[dict[str, Any]] = Field(default_factory=list)
     missing: list[str] = Field(default_factory=list)
-    coverage: float = Field(default=0.0, ge=0, le=1)
+    coverage: StrictFloat = Field(default=0.0, ge=0, le=1)
     nodes: list[dict[str, Any]] = Field(default_factory=list)
     template_coverage: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
@@ -70,7 +70,7 @@ class HazardJudgement(ContractModel):
     hazard_level: StrictInt = Field(ge=1, le=5)
     explanation: str = Field(min_length=1)
     recommended_action: str = Field(min_length=1)
-    confidence: float | None = Field(default=None, ge=0, le=1)
+    confidence: StrictFloat | None = Field(default=None, ge=0, le=1)
     evidence_ids: list[str] = Field(default_factory=list)
     abstain: bool = False
     finding: dict[str, Any] | str | None = None
@@ -128,7 +128,7 @@ class HazardAdjudicationDecision(ContractModel):
     hazard_level: StrictInt = Field(ge=1, le=5)
     recommended_action: str = Field(min_length=1)
     explanation: str = Field(min_length=1)
-    confidence: float = Field(ge=0, le=1)
+    confidence: StrictFloat = Field(ge=0, le=1)
     evidence_ids: list[str] = Field(default_factory=list)
     abstain: bool = False
     primary_hazard_level: StrictInt = Field(ge=1, le=5)
@@ -176,7 +176,7 @@ class AlignmentAuditIssue(ContractModel):
     error_index: StrictInt | None = Field(default=None, ge=0)
     suggested_error_type: str | None = None
     explanation: str = Field(min_length=1)
-    confidence: float = Field(ge=0, le=1)
+    confidence: StrictFloat = Field(ge=0, le=1)
 
     @model_validator(mode="after")
     def validate_issue_references(self) -> "AlignmentAuditIssue":
@@ -201,7 +201,7 @@ class AlignmentErrorJudgement(ContractModel):
     ]
     suggested_error_type: str | None = None
     explanation: str = Field(min_length=1)
-    confidence: float = Field(ge=0, le=1)
+    confidence: StrictFloat = Field(ge=0, le=1)
 
     @model_validator(mode="after")
     def validate_suggested_error_type(self) -> "AlignmentErrorJudgement":
@@ -216,7 +216,7 @@ class AlignmentAuditArtifact(ContractModel):
     alignment_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     auditor_provenance: ModelProvenance
     verdict: Literal["pass", "issues_found", "abstain"]
-    confidence: float = Field(ge=0, le=1)
+    confidence: StrictFloat = Field(ge=0, le=1)
     summary: str = Field(min_length=1)
     issues: list[AlignmentAuditIssue] = Field(default_factory=list)
     error_judgements: list[AlignmentErrorJudgement] = Field(default_factory=list)
@@ -267,7 +267,7 @@ class StructureAuditArtifact(ContractModel):
     assessor_provenance: ModelProvenance
     verdict: Literal["no_material_issue", "minor_issue", "major_issue", "abstain"]
     clinical_impact: StrictInt = Field(ge=1, le=5)
-    confidence: float = Field(ge=0, le=1)
+    confidence: StrictFloat = Field(ge=0, le=1)
     summary: str = Field(min_length=1)
     issues: list[StructureAuditIssue] = Field(default_factory=list)
     primary_preserved: Literal[True] = True
