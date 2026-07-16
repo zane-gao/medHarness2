@@ -268,6 +268,12 @@ def test_workflow_mean_scores_exclude_fallback_rows_and_block_when_all_fallback(
         assert scorer([rows[0]]) is None
 
 
+def test_workflow_mean_scores_ignore_non_finite_metrics():
+    rows = [{"likert_mean": float("nan"), "structure_score": float("inf"), "finding_coverage": 0.5}]
+    for scorer in (batch_mean_score, reevaluate_mean_score, merge_mean_score):
+        assert scorer(rows) == pytest.approx(0.5)
+
+
 def test_batch_readers_and_department_workflows(tmp_path: Path):
     report1 = tmp_path / "r1.txt"
     report2 = tmp_path / "r2.txt"
