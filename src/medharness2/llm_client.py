@@ -197,6 +197,8 @@ class LLMClient:
                 if attempt + 1 >= max_retries:
                     break
                 status = getattr(getattr(exc, "response", None), "status_code", 0)
+                if isinstance(exc, requests.HTTPError) and not _is_retryable_status(status):
+                    break
                 delay = _retry_after_seconds(getattr(exc, "response", None)) if _is_retryable_status(status) else None
                 time.sleep(delay if delay is not None else llm.retry_initial_sec * (2**attempt))
             except ValueError as exc:

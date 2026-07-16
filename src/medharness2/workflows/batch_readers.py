@@ -45,6 +45,8 @@ def run_batch_readers(
     for row in rows:
         try:
             report_text, report_path = _resolve_report_text(row.report_text)
+            if report_text is None and (report_path is None or not report_path.exists()):
+                raise FileNotFoundError(f"report text file not found: {row.report_text or '<empty>'}")
             image_path = row.derived_assets.get("primary_image") or row.volume_path or (row.image_paths[0] if row.image_paths else "")
             case_output = case_dir / f"{row.case_id}.json"
             workflow1 = run_single_case(
@@ -158,8 +160,8 @@ def _precompute_medharness_cli_reports(
 
 def _case_generation_input(row: CaseManifest, *, include_reference: bool) -> dict[str, Any] | None:
     report_text, report_path = _resolve_report_text(row.report_text)
-    if report_text is None and report_path is not None:
-        if not report_path.exists():
+    if report_text is None:
+        if report_path is None or not report_path.exists():
             return None
         report_text = report_path.read_text(encoding="utf-8")
     image_path = (

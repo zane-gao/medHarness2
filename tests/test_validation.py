@@ -39,6 +39,40 @@ def test_validate_sample_run_accepts_real_ocr_metadata(tmp_path: Path):
     assert result["real_ocr_count"] == 2
 
 
+def test_validate_sample_run_accepts_text_layer_ocr_with_source_pdf(tmp_path: Path):
+    _write_run(tmp_path, warning_counts={}, failed_case_count=0, ocr_provider="local_pdf_text")
+    manifest_lines = (tmp_path / "manifest.jsonl").read_text(encoding="utf-8").splitlines()
+    for index, line in enumerate(manifest_lines):
+        row = json.loads(line)
+        pdf = tmp_path / "reports" / f"case{index}.pdf"
+        pdf.parent.mkdir(parents=True, exist_ok=True)
+        pdf.write_bytes(f"pdf-{index}".encode())
+        row["report_pdf"] = str(pdf)
+        manifest_lines[index] = json.dumps(row)
+        text_path = tmp_path / "ocr" / f"case{index}.txt"
+        text_path.write_text("FINDINGS: clear.\n", encoding="utf-8")
+        sidecar = tmp_path / "ocr" / f"case{index}.ocr.json"
+        sidecar.write_text(
+            json.dumps(
+                {
+                    "case_id": f"case{index}",
+                    "method": "pdf_text_layer",
+                    "provider": "local_pdf_text",
+                    "source_pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest(),
+                    "warnings": [],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    (tmp_path / "manifest.jsonl").write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+
+    result = validate_sample_run(tmp_path, expected_cases=2, require_real_ocr=True)
+
+    assert result["passed"] is True
+    assert result["real_ocr_count"] == 2
+
+
 def test_validate_sample_run_rejects_unknown_vlm_provider(tmp_path: Path):
     _write_run(tmp_path, warning_counts={}, failed_case_count=0, ocr_provider="future_magic_provider")
     result = validate_sample_run(tmp_path, expected_cases=2, require_real_ocr=True)

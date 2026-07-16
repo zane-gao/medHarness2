@@ -287,6 +287,41 @@ def test_chat_completions_does_not_retry_non_retryable_http_errors(monkeypatch):
     assert sleeps == []
 
 
+def test_chat_completions_does_not_retry_http_error_without_error_envelope(monkeypatch):
+    monkeypatch.setenv("DMX_API_KEY", "test-only-secret")
+    calls = 0
+
+    class _Response:
+        status_code = 400
+        headers = {}
+
+        def json(self):
+            return {"message": "bad request"}
+
+        def raise_for_status(self):
+            response = requests.Response()
+            response.status_code = self.status_code
+            raise requests.HTTPError("bad request", response=response)
+
+    def fake_post(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return _Response()
+
+    monkeypatch.setattr("requests.post", fake_post)
+    client = LLMClient(AppConfig(llm=LLMConfig(provider="mock", max_retries=3)))
+
+    with pytest.raises(LLMClientError):
+        client.call(
+            "hello",
+            provider="chat_completions",
+            api_key_env="DMX_API_KEY",
+            max_retries=3,
+            payload_classification="synthetic_test",
+        )
+    assert calls == 1
+
+
 def test_openai_responses_surfaces_success_body_error_without_retry(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-only-secret")
     calls = 0

@@ -402,7 +402,7 @@ def _count_real_ocr_provenance(root: Path, rows: list[dict[str, Any]]) -> tuple[
             if str(meta.get("source_pdf_sha256") or "") != source_hash:
                 unknown_count += 1
                 continue
-            if _ocr_pages_have_quality_blockers(meta):
+            if str(meta.get("method") or "").lower() == "vlm_ocr" and _ocr_pages_have_quality_blockers(meta):
                 unknown_count += 1
                 continue
         method = str(meta.get("method") or "").lower()

@@ -54,6 +54,8 @@ def reevaluate_run(
             input_payload = dict(workflow1.get("input") or {})
             report_path = _resolve_existing(source, input_payload.get("report_path"))
             report_text = read_text(report_path) if report_path and report_path.exists() else _fallback_report_text(workflow1)
+            if not report_text:
+                raise ValueError("missing_report_text")
             image_path = _resolve_existing(source, input_payload.get("image_path"))
             if not image_path:
                 raise ValueError(f"missing image_path for {case_id}")
@@ -237,7 +239,7 @@ def _fallback_report_text(workflow1: dict[str, Any]) -> str:
         for item in findings
         if item.get("source_text") or item.get("text")
     )
-    return text or "FINDINGS: Report text unavailable.\nIMPRESSION: Report text unavailable."
+    return text
 
 
 def _copy_optional_source_files(source: Path, out: Path) -> None:
