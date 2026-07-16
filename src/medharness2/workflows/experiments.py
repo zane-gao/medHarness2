@@ -166,11 +166,18 @@ def _radiologist_evaluation(analysis: dict[str, Any], workflow2: dict[str, Any],
         "inputs": ["workflow2.json", "workflow3.json", "analysis/reader_summary.csv"],
         "outputs": ["reader_count", "reader_percentiles", "overall_score"],
         "metrics": {
-            "case_count": int(analysis.get("case_count") or workflow2.get("case_count") or 0),
-            "reader_count": int(analysis.get("reader_count") or len(readers)),
+            "case_count": int(_first_present(analysis.get("case_count"), workflow2.get("case_count"), 0)),
+            "reader_count": int(_first_present(analysis.get("reader_count"), len(readers))),
             "percentile_count": len(percentiles),
         },
     }
+
+
+def _first_present(*values: Any) -> Any:
+    for value in values:
+        if value is not None:
+            return value
+    return 0
 
 
 def _finding_extraction(cases: list[dict[str, Any]]) -> dict[str, Any]:

@@ -79,6 +79,25 @@ def test_analyze_reader_summary_keeps_missing_overall_score_empty(tmp_path: Path
     assert missing["overall_score"] == ""
 
 
+def test_analyze_run_preserves_explicit_zero_denominator_values(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    workflow2_path = run_dir / "workflow2.json"
+    workflow2 = json.loads(workflow2_path.read_text(encoding="utf-8"))
+    workflow2["failed_case_count"] = 2
+    workflow2["denominator"] = {
+        "manifest_case_count": 0,
+        "successful_case_count": 0,
+        "failed_case_count": 0,
+    }
+    workflow2_path.write_text(json.dumps(workflow2), encoding="utf-8")
+
+    result = analyze_run(run_dir, tmp_path / "analysis")
+
+    assert result["source_case_count"] == 0
+    assert result["successful_case_count"] == 0
+    assert result["failed_case_count"] == 0
+
+
 def test_cli_analyze_run_records_failed_registry_on_exception(tmp_path: Path):
     run_dir = tmp_path / "missing_workflow_outputs"
     run_dir.mkdir()

@@ -33,13 +33,18 @@ def run_department_comparison(batch_result_path: str | Path, output_path: str | 
     model_group_rows = [case.get("modelwise_metrics") or {} for case in batch.get("cases") or [] if case.get("modelwise_metrics")]
     denominator = dict(batch.get("denominator") or {})
     source_case_count = int(
-        denominator.get("manifest_case_count")
-        or denominator.get("source_case_count")
-        or batch.get("case_count", 0)
-        or 0
+        _first_present(
+            denominator.get("manifest_case_count"),
+            denominator.get("source_case_count"),
+            batch.get("case_count", 0),
+        )
     )
-    successful_case_count = int(denominator.get("successful_case_count") or batch.get("case_count", 0) or 0)
-    failed_case_count = int(denominator.get("failed_case_count") or batch.get("failed_case_count", 0) or 0)
+    successful_case_count = int(
+        _first_present(denominator.get("successful_case_count"), batch.get("case_count", 0))
+    )
+    failed_case_count = int(
+        _first_present(denominator.get("failed_case_count"), batch.get("failed_case_count", 0))
+    )
     denominator.update(
         {
             "source_case_count": source_case_count,
@@ -70,3 +75,11 @@ def run_department_comparison(batch_result_path: str | Path, output_path: str | 
     }
     write_json(output_path, result)
     return result
+
+
+def _first_present(*values: Any) -> Any:
+    """Return the first non-None value, preserving explicit zeroes."""
+    for value in values:
+        if value is not None:
+            return value
+    return 0

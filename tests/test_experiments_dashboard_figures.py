@@ -8,6 +8,7 @@ from medharness2.cli import main
 from medharness2.dashboard import _render_reader_rows, build_dashboard
 from medharness2.figures import build_figures
 from medharness2.workflows.experiments import run_experiments
+from medharness2.workflows.experiments import _radiologist_evaluation
 
 
 def test_run_experiments_builds_six_study_results(tmp_path: Path):
@@ -26,6 +27,17 @@ def test_run_experiments_builds_six_study_results(tmp_path: Path):
     assert (output_dir / "results.json").exists()
     assert (output_dir / "results.md").exists()
     assert (output_dir / "experiment_summary.csv").exists()
+
+
+def test_radiologist_evaluation_preserves_explicit_zero_counts():
+    result = _radiologist_evaluation(
+        {"case_count": 0, "reader_count": 0},
+        {"case_count": 3, "per_reader": {"reader": {}}},
+        {"reader_percentiles": {"reader": {}}},
+    )
+
+    assert result["metrics"]["case_count"] == 0
+    assert result["metrics"]["reader_count"] == 0
 
 
 def test_run_experiments_writes_protocol_mapping_artifacts(tmp_path: Path):

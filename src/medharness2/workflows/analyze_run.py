@@ -205,24 +205,38 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
         for row in sorted(modality_rows.values(), key=lambda item: (str(item["modality"]), str(item["body_part"])))
     ]
     reader_summary_rows = _reader_rows(workflow2, workflow3)
+    denominator = workflow2.get("denominator") or {}
     source_case_count = int(
-        workflow2.get("denominator", {}).get("manifest_case_count")
-        or workflow2.get("denominator", {}).get("source_case_count")
-        or workflow2.get("case_count", 0)
-        or 0
+        _first_present(
+            denominator.get("manifest_case_count"),
+            denominator.get("source_case_count"),
+            workflow2.get("case_count", 0),
+        )
     )
-    successful_case_count = int(workflow2.get("case_count", 0) or len(case_rows))
-    failed_case_count = int(workflow2.get("failed_case_count", 0) or 0)
+    successful_case_count = int(
+        _first_present(
+            denominator.get("successful_case_count"),
+            workflow2.get("case_count"),
+            len(case_rows),
+        )
+    )
+    failed_case_count = int(
+        _first_present(
+            denominator.get("failed_case_count"),
+            workflow2.get("failed_case_count"),
+            0,
+        )
+    )
     result = {
         "output_dir": str(root),
         "analysis_dir": str(out),
-        "case_count": int(workflow2.get("case_count", 0) or len(case_rows)),
+        "case_count": int(_first_present(workflow2.get("case_count"), len(case_rows))),
         "failed_case_count": failed_case_count,
         "source_case_count": source_case_count,
         "successful_case_count": successful_case_count,
         "success_rate": round(successful_case_count / max(source_case_count, 1), 4),
         "failure_rate": round(failed_case_count / max(source_case_count, 1), 4),
-        "reader_count": int(workflow3.get("reader_count", 0) or len(reader_summary_rows)),
+        "reader_count": int(_first_present(workflow3.get("reader_count"), len(reader_summary_rows))),
         "generated_report_count": generated_report_count,
         "ranking_count": ranking_count,
         "pairwise_count": pairwise_count,
@@ -275,6 +289,14 @@ def _reader_rows(workflow2: dict[str, Any], workflow3: dict[str, Any]) -> list[d
             }
         )
     return rows
+
+
+def _first_present(*values: Any) -> Any:
+    """Return the first non-None value, preserving explicit zeroes."""
+    for value in values:
+        if value is not None:
+            return value
+    return 0
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
