@@ -104,3 +104,19 @@ def test_aggregate_contract_rejects_implicit_integer_counts(bad):
         DenominatorAggregate.model_validate({"source_case_count": bad})
     with pytest.raises(ValidationError):
         Workflow3Aggregate.model_validate({"reader_count": bad})
+
+@pytest.mark.parametrize("bad", [True, 1.5, "2"])
+def test_evaluation_contract_rejects_implicit_integer_fields(bad):
+    from medharness2.contracts import HazardJudgement, TextSpan
+
+    with pytest.raises(ValidationError):
+        TextSpan.model_validate({"start": bad, "end": 2})
+    with pytest.raises(ValidationError):
+        HazardJudgement.model_validate(
+            {
+                "error_type": "other",
+                "hazard_level": bad,
+                "explanation": "x",
+                "recommended_action": "x",
+            }
+        )

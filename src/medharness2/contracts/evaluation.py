@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 
 from medharness2.contracts.common import (
     SCHEMA_VERSION,
@@ -67,7 +67,7 @@ class GeneratedReportArtifact(ContractModel):
 
 class HazardJudgement(ContractModel):
     error_type: str = Field(min_length=1)
-    hazard_level: int = Field(ge=1, le=5)
+    hazard_level: StrictInt = Field(ge=1, le=5)
     explanation: str = Field(min_length=1)
     recommended_action: str = Field(min_length=1)
     confidence: float | None = Field(default=None, ge=0, le=1)
@@ -84,7 +84,7 @@ class HazardJudgement(ContractModel):
     measurement: str | float | None = None
     certainty: str | None = None
     text: str | None = None
-    alignment_error_index: int | None = Field(default=None, ge=0)
+    alignment_error_index: StrictInt | None = Field(default=None, ge=0)
     alignment_audit_judgement: dict[str, Any] | None = None
     original_error_type: str | None = None
 
@@ -98,11 +98,11 @@ class HazardResult(ContractModel):
 
 
 class HazardDisagreement(ContractModel):
-    error_index: int = Field(ge=0)
+    error_index: StrictInt = Field(ge=0)
     error_type: str = Field(min_length=1)
-    primary_hazard_level: int = Field(ge=1, le=5)
-    reviewer_hazard_level: int = Field(ge=1, le=5)
-    level_delta: int = Field(ge=0, le=4)
+    primary_hazard_level: StrictInt = Field(ge=1, le=5)
+    reviewer_hazard_level: StrictInt = Field(ge=1, le=5)
+    level_delta: StrictInt = Field(ge=0, le=4)
     primary_recommended_action: str = Field(min_length=1)
     reviewer_recommended_action: str = Field(min_length=1)
     disagreement_types: list[Literal["hazard_level", "recommended_action"]] = Field(default_factory=list)
@@ -123,16 +123,16 @@ class HazardReviewArtifact(ContractModel):
 
 
 class HazardAdjudicationDecision(ContractModel):
-    error_index: int = Field(ge=0)
+    error_index: StrictInt = Field(ge=0)
     error_type: str = Field(min_length=1)
-    hazard_level: int = Field(ge=1, le=5)
+    hazard_level: StrictInt = Field(ge=1, le=5)
     recommended_action: str = Field(min_length=1)
     explanation: str = Field(min_length=1)
     confidence: float = Field(ge=0, le=1)
     evidence_ids: list[str] = Field(default_factory=list)
     abstain: bool = False
-    primary_hazard_level: int = Field(ge=1, le=5)
-    reviewer_hazard_level: int = Field(ge=1, le=5)
+    primary_hazard_level: StrictInt = Field(ge=1, le=5)
+    reviewer_hazard_level: StrictInt = Field(ge=1, le=5)
     primary_recommended_action: str = Field(min_length=1)
     reviewer_recommended_action: str = Field(min_length=1)
 
@@ -144,9 +144,9 @@ class HazardAdjudicationArtifact(ContractModel):
     hazard_review_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     adjudicator_provenance: ModelProvenance
     decisions: list[HazardAdjudicationDecision] = Field(default_factory=list)
-    disagreement_count: int = Field(ge=0)
-    resolved_count: int = Field(ge=0)
-    abstained_count: int = Field(ge=0)
+    disagreement_count: StrictInt = Field(ge=0)
+    resolved_count: StrictInt = Field(ge=0)
+    abstained_count: StrictInt = Field(ge=0)
     primary_preserved: Literal[True] = True
     reviewer_preserved: Literal[True] = True
     clinical_validation_required: Literal[True] = True
@@ -173,7 +173,7 @@ class AlignmentAuditIssue(ContractModel):
     ]
     candidate_id: str | None = None
     reference_id: str | None = None
-    error_index: int | None = Field(default=None, ge=0)
+    error_index: StrictInt | None = Field(default=None, ge=0)
     suggested_error_type: str | None = None
     explanation: str = Field(min_length=1)
     confidence: float = Field(ge=0, le=1)
@@ -192,7 +192,7 @@ class AlignmentAuditIssue(ContractModel):
 
 
 class AlignmentErrorJudgement(ContractModel):
-    error_index: int = Field(ge=0)
+    error_index: StrictInt = Field(ge=0)
     disposition: Literal[
         "valid",
         "unsupported",
@@ -266,7 +266,7 @@ class StructureAuditArtifact(ContractModel):
     structure_diff_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     assessor_provenance: ModelProvenance
     verdict: Literal["no_material_issue", "minor_issue", "major_issue", "abstain"]
-    clinical_impact: int = Field(ge=1, le=5)
+    clinical_impact: StrictInt = Field(ge=1, le=5)
     confidence: float = Field(ge=0, le=1)
     summary: str = Field(min_length=1)
     issues: list[StructureAuditIssue] = Field(default_factory=list)

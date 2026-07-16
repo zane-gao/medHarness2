@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 
 SCHEMA_VERSION = "2.0"
@@ -14,8 +14,8 @@ class ContractModel(BaseModel):
 
 
 class TextSpan(ContractModel):
-    start: int = Field(ge=0)
-    end: int = Field(ge=0)
+    start: StrictInt = Field(ge=0)
+    end: StrictInt = Field(ge=0)
 
     @model_validator(mode="after")
     def validate_order(self) -> "TextSpan":
