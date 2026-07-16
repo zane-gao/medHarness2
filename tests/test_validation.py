@@ -168,6 +168,29 @@ def test_validate_sample_run_rejects_malformed_aggregate_reader_payload(tmp_path
     assert "workflow3_aggregate:ValidationError" in result["errors"]
 
 
+def test_validate_sample_run_rejects_inconsistent_aggregate_denominators(tmp_path: Path):
+    _write_manifest(tmp_path / "manifest.jsonl", 2, with_report_text=True)
+    _write_json(tmp_path / "workflow2.json", {
+        "case_count": 1,
+        "failed_case_count": 1,
+        "cases": [{"case_id": "case0"}],
+        "failed_cases": [{"case_id": "case1"}],
+        "denominator": {
+            "source_case_count": 2,
+            "successful_case_count": 0,
+            "failed_case_count": 1,
+            "success_rate": 0,
+            "failure_rate": 0.5,
+        },
+    })
+    _write_json(tmp_path / "workflow3.json", {"case_count": 1, "reader_count": 0})
+
+    result = validate_sample_run(tmp_path, expected_cases=2)
+
+    assert result["passed"] is False
+    assert "workflow2_aggregate:ValidationError" in result["errors"]
+
+
 def test_validate_sample_run_rejects_invalid_nested_case_artifact_contract(tmp_path: Path):
     _write_run(tmp_path, warning_counts={}, failed_case_count=1)
     _write_json(
