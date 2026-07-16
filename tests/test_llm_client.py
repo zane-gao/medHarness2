@@ -47,6 +47,20 @@ def test_openai_provider_requires_api_key(monkeypatch):
         client.call("hello", payload_classification="synthetic_test")
 
 
+@pytest.mark.parametrize("provider", ["openai", "chat_completions"])
+def test_llm_providers_reject_whitespace_api_key(monkeypatch, provider):
+    monkeypatch.setenv("TEST_API_KEY", "  \n\t")
+    client = LLMClient(AppConfig(llm=LLMConfig(provider="mock", max_retries=1)))
+
+    with pytest.raises(LLMClientError, match="Missing API key"):
+        client.call(
+            "hello",
+            provider=provider,
+            api_key_env="TEST_API_KEY",
+            payload_classification="synthetic_test",
+        )
+
+
 def test_call_can_override_provider_endpoint_and_runtime_options(monkeypatch):
     monkeypatch.setenv("DMX_API_KEY", "test-only-secret")
     captured = {}

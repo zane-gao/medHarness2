@@ -600,7 +600,8 @@ def _validate_role_routes(
         if route.provider.lower() == "mock" or not route.provider or not route.model:
             raise ValueError(f"Role {role} must use a real configured LLM")
         if require_credentials and (
-            not route.api_key_env or not os.environ.get(route.api_key_env)
+            not route.api_key_env
+            or not str(os.environ.get(route.api_key_env) or "").strip()
         ):
             raise ValueError(
                 f"Missing API credential environment variable for role {role}: {route.api_key_env}"

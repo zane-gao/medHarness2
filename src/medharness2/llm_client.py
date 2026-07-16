@@ -80,7 +80,7 @@ class LLMClient:
         llm = self.config.llm
         api_key_env = kwargs.get("api_key_env") or llm.api_key_env
         api_key = os.environ.get(api_key_env)
-        if not api_key:
+        if not str(api_key or "").strip():
             raise LLMClientError(f"Missing API key environment variable: {api_key_env}")
         payload: dict[str, Any] = {
             "model": kwargs.get("model") or llm.model,
@@ -146,7 +146,7 @@ class LLMClient:
         # per-call 覆盖优先，其次取配置默认；这样评委循环能对同一 client 传不同 key/model。
         api_key_env = kwargs.get("api_key_env") or llm.api_key_env
         api_key = os.environ.get(api_key_env)
-        if not api_key:
+        if not str(api_key or "").strip():
             raise LLMClientError(f"Missing API key environment variable: {api_key_env}")
         messages = [{"role": "user", "content": self._build_chat_content(prompt, image_path)}]
         payload: dict[str, Any] = {
