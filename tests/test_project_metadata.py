@@ -11,7 +11,7 @@ def test_project_status_has_current_release_evidence():
     payload = yaml.safe_load(Path("docs/project_status.yaml").read_text(encoding="utf-8"))
 
     assert payload["schema_version"] == "1.0"
-    assert payload["updated_at"] == "2026-07-15"
+    assert payload["updated_at"] == "2026-07-16"
     assert payload["current_phase"]
     assert payload["release_readiness"] == "pilot_only"
     assert payload["baseline"]["branch"] == "main"

@@ -15,6 +15,7 @@ from medharness2.config import AppConfig, load_config, resolve_existing_path
 from medharness2.data.sample_data import load_manifest
 from medharness2.llm_client import LLMClient
 from medharness2.schema import GeneratedReport
+from medharness2.tools.tool12_statistics import compare_metric_groups, correct_pvalues_holm
 from medharness2.utils.io import read_json, write_json
 from medharness2.workflows.single_case import run_single_case
 
@@ -900,6 +901,7 @@ def _build_evaluation_summary(
             sorted(validated_attempt_counts.items())
         ),
         "provider_model_counts": dict(sorted(provider_model_counts.items())),
+        "formal_statistics": _formal_statistical_comparisons(result_rows),
         "metrics": {
             "candidate_likert_mean": _numeric_summary(candidate_likert),
             "alignment_f1": _numeric_summary(alignment_f1),
@@ -1009,6 +1011,54 @@ def _historical_failure_artifacts(output: Path) -> list[dict[str, str]]:
         for path in sorted(failure_root.rglob("*.json"))
         if path.is_file()
     ]
+
+
+def _formal_statistical_comparisons(result_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Build auditable model-pair comparisons; never infer significance from a single case."""
+    eligible = [row for row in result_rows if row.get("status") == "succeeded"]
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in eligible:
+        model = str(row.get("model") or "unknown")
+        grouped.setdefault(model, []).append(row)
+    models = sorted(grouped)
+    metrics = ("candidate_likert_mean", "alignment_f1")
+    comparisons: list[dict[str, Any]] = []
+    raw_p_values: dict[str, float] = {}
+    blocked_reasons: list[str] = []
+    for left_index, left_model in enumerate(models):
+        for right_model in models[left_index + 1 :]:
+            for metric in metrics:
+                left = [float((row.get("metrics") or {})[metric]) for row in grouped[left_model] if isinstance((row.get("metrics") or {}).get(metric), (int, float))]
+                right = [float((row.get("metrics") or {})[metric]) for row in grouped[right_model] if isinstance((row.get("metrics") or {}).get(metric), (int, float))]
+                comparison_id = f"{left_model}__vs__{right_model}__{metric}"
+                result = compare_metric_groups(left, right)
+                item = {"id": comparison_id, "model_a": left_model, "model_b": right_model, "metric": metric, **result}
+                if result["method"] == "insufficient_data":
+                    blocked_reasons.append(comparison_id)
+                else:
+                    raw_p_values[comparison_id] = float(result["p_value"])
+                comparisons.append(item)
+    if not comparisons:
+        return {"status": "blocked", "method": "insufficient_data", "comparisons": [], "blocked_reasons": ["need_at_least_two_models"]}
+    corrected = correct_pvalues_holm(raw_p_values)
+    for item in comparisons:
+        if item["id"] in corrected:
+            item["p_value_holm"] = corrected[item["id"]]
+    status = (
+        "succeeded"
+        if raw_p_values and not blocked_reasons
+        else "completed_with_blocked_comparisons"
+        if raw_p_values
+        else "blocked"
+    )
+    return {
+        "status": status,
+        "method": "welch_normal_approximation+holm" if raw_p_values else "insufficient_data",
+        "comparisons": comparisons,
+        "blocked_reasons": blocked_reasons,
+        "eligible_case_count": len(eligible),
+        "model_count": len(models),
+    }
 
 
 def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:

@@ -12,9 +12,26 @@ from medharness2.checkpoints import StageCheckpointStore
 from medharness2.utils.io import write_json
 from medharness2.workflows.benchmark_evaluation import (
     _case_evaluation_metrics,
+    _formal_statistical_comparisons,
     evaluate_generation_benchmark,
     verify_real_llm_case_evaluation,
 )
+
+
+def test_formal_statistical_comparisons_apply_holm_and_block_small_groups():
+    rows = [
+        {"status": "succeeded", "model": "a", "metrics": {"candidate_likert_mean": 4.0, "alignment_f1": 0.8}},
+        {"status": "succeeded", "model": "a", "metrics": {"candidate_likert_mean": 4.2, "alignment_f1": 0.9}},
+        {"status": "succeeded", "model": "b", "metrics": {"candidate_likert_mean": 2.0, "alignment_f1": 0.4}},
+        {"status": "succeeded", "model": "b", "metrics": {"candidate_likert_mean": 2.2, "alignment_f1": 0.5}},
+    ]
+    result = _formal_statistical_comparisons(rows)
+    assert result["status"] == "succeeded"
+    assert result["method"] == "welch_normal_approximation+holm"
+    assert result["comparisons"][0]["metric"] == "candidate_likert_mean"
+    assert "p_value_holm" in result["comparisons"][0]
+    blocked = _formal_statistical_comparisons(rows[:2])
+    assert blocked["status"] == "blocked"
 
 
 def test_evaluate_generation_benchmark_writes_hash_bound_resumable_artifacts(

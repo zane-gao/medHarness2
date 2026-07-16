@@ -29,6 +29,8 @@ def test_run_education_suggestions_from_workflow1(tmp_path: Path):
     assert result["suggestions"]
     assert result["suggestions"][0]["finding_id"] == "f1"
     assert result["general_suggestions"]
+    assert result["metadata"]["source"] == "deterministic_fallback"
+    assert result["metadata"]["fallback_used"] is True
 
 
 def test_run_education_suggestions_from_workflow2(tmp_path: Path):
@@ -44,6 +46,8 @@ def test_run_education_suggestions_from_workflow2(tmp_path: Path):
     assert result["radiologist_summary"]["radiologist_id"] == "reader_a"
     assert "Completeness and Accuracy" in result["radiologist_summary"]["weakest_metrics"]
     assert result["suggestions"][0]["metric"] == "Completeness and Accuracy"
+    assert result["metadata"]["source"] == "mock_judge"
+    assert result["metadata"]["fallback_used"] is True
 
 
 def test_run_education_requires_exactly_one_input(tmp_path: Path):
@@ -70,6 +74,30 @@ def test_education_fallback_is_explicitly_marked(tmp_path: Path):
         llm_client=FailingClient(),
     )
     assert result["metadata"]["fallback_used"] is True
+
+
+def test_education_real_client_is_marked_as_llm_judge(tmp_path: Path):
+    output = tmp_path / "education.json"
+    (tmp_path / "workflow2.json").write_text(json.dumps(_workflow2_payload()), encoding="utf-8")
+
+    class RealisticClient:
+        class Config:
+            class LLM:
+                provider = "chat_completions"
+            llm = LLM()
+
+        config = Config()
+
+        def call(self, *args, **kwargs):
+            return json.dumps(kwargs["response_json"], ensure_ascii=False)
+
+    result = run_education_suggestions(
+        eval_radiologist=tmp_path / "workflow2.json",
+        output_path=output,
+        llm_client=RealisticClient(),
+    )
+    assert result["metadata"]["source"] == "llm_judge"
+    assert result["metadata"]["fallback_used"] is False
 
 
 def test_cli_workflow_education_eval_report(tmp_path: Path):

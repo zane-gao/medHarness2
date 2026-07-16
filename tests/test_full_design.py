@@ -71,6 +71,17 @@ def test_statistics_ignore_bookkeeping_fields():
     assert set(stats) == {"score"}
 
 
+def test_statistics_excludes_fallback_rows_and_reports_single_sample_uncertainty():
+    stats = calculate_statistics([
+        {"score": 0.9, "metadata": {"fallback_used": False}},
+        {"score": 0.1, "metadata": {"fallback_used": True}},
+    ])
+    assert stats["score"]["n"] == 1
+    assert stats["score"]["mean"] == pytest.approx(0.9)
+    assert stats["score"]["ci_lower"] is None
+    assert stats["score"]["ci_upper"] is None
+
+
 def test_statistics_exposes_group_test_and_holm_correction():
     comparison = compare_metric_groups([0.9, 0.8, 0.85], [0.4, 0.5, 0.45])
     assert comparison["n_a"] == 3

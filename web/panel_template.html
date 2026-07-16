@@ -971,6 +971,7 @@ document.getElementById("gate-table").innerHTML = `
         <p>共 ${Object.values(roles).reduce((a,b)=>a+b,0)} 次角色调用（${Object.entries(roles).map(([k,v])=>`${esc(k)}×${v}`).join("、")}），纯 DMX 单一供应商路由（此前验证的 Yunwu/codex 双供应商是显式备胎，不自动切换）：</p>
         <table class="plain"><tr><th>模型</th><th>接入点</th><th class="num">调用</th></tr>${provRows}</table>
         <p style="margin-top:8px">重要保留：文档明确警示<b>重测稳定性不足</b>——同 9 例新旧两轮评估，T1 五维完全一致率仅 11%、重大错误共识完全一致率仅 22%。单次自动评价还不能当稳定临床结论引用。</p>
+        ${S.formal_statistics ? `<p style="margin-top:8px">正式统计门禁：<b>${esc(S.formal_statistics.status || "blocked")}</b>，方法 ${esc(S.formal_statistics.method || "insufficient_data")}；比较 ${S.formal_statistics.comparisons?.length || 0} 项${S.formal_statistics.blocked_reasons?.length ? `，阻断 ${S.formal_statistics.blocked_reasons.length} 项` : ""}。Holm 校正后的 p 值仅在样本充足的比较中展示，不能替代临床金标准。</p>` : ""}
       </div></details>
     </div>`);
   }

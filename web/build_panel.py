@@ -303,6 +303,7 @@ def extract_smoke(eval_dir: Path) -> dict | None:
         "provider_model_counts": summary.get("provider_model_counts") or {},
         "role_call_counts": summary.get("role_call_counts") or {},
         "candidate_likert": metrics.get("candidate_likert_mean") or {},
+        "formal_statistics": summary.get("formal_statistics") or {},
         "hazard_error_count": metrics.get("hazard_error_count"),
         "hazard_disagreement_count": metrics.get("hazard_disagreement_count"),
         "hazard_agreement": metrics.get("hazard_agreement") or {},

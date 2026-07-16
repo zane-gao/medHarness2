@@ -17,12 +17,14 @@ STATISTIC_METRICS = {
 }
 
 
-def calculate_statistics(rows: list[dict[str, Any]]) -> dict[str, dict[str, float]]:
+def calculate_statistics(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     values_by_key: dict[str, list[float]] = {}
     for row in rows:
+        if not _eligible_for_statistics(row):
+            continue
         for key, value in _numeric_metrics(row).items():
             values_by_key.setdefault(key, []).append(value)
-    result: dict[str, dict[str, float]] = {}
+    result: dict[str, dict[str, Any]] = {}
     for key, values in values_by_key.items():
         mean = statistics.mean(values)
         std = statistics.stdev(values) if len(values) > 1 else 0.0
@@ -33,8 +35,8 @@ def calculate_statistics(rows: list[dict[str, Any]]) -> dict[str, dict[str, floa
             "std": std,
             "min": min(values),
             "max": max(values),
-            "ci_lower": mean - ci,
-            "ci_upper": mean + ci,
+            "ci_lower": None if ci is None else mean - ci,
+            "ci_upper": None if ci is None else mean + ci,
         }
     return result
 
@@ -57,12 +59,26 @@ def _numeric_metrics(row: dict[str, Any]) -> dict[str, float]:
     }
 
 
-def _ci_half_width(std: float, n: int) -> float:
+def _ci_half_width(std: float, n: int) -> float | None:
     if n <= 1:
-        return 0.0
+        return None
     # Conservative t critical values for the small pilot sizes; 1.96 thereafter.
     critical = {2: 12.706, 3: 4.303, 4: 3.182, 5: 2.776, 6: 2.571, 7: 2.447, 8: 2.365, 9: 2.306, 10: 2.262}.get(n, 1.96)
     return critical * std / math.sqrt(n)
+
+
+def _eligible_for_statistics(row: dict[str, Any]) -> bool:
+    metadata = row.get("metadata") or row.get("provenance") or {}
+    if bool(metadata.get("fallback_used")):
+        return False
+    if str(row.get("evidence_tier") or "").lower() in {"debug_fallback", "mock"}:
+        return False
+    return str(row.get("source") or "").lower() not in {
+        "local_vlm_fallback",
+        "mock",
+        "fallback",
+        "mock_fallback",
+    }
 
 
 def compare_metric_groups(group_a: list[float], group_b: list[float]) -> dict[str, float | int | str]:

@@ -123,7 +123,11 @@ def _try_llm_json(client: LLMClient, prompt: str, default: dict[str, Any]) -> di
         return fallback
     merged = _merge_required(default, parsed)
     metadata = dict(merged.get("metadata") or {})
-    metadata.update({"source": "llm_judge", "fallback_used": False})
+    provider = str(getattr(getattr(client, "config", None), "llm", None) and getattr(client.config.llm, "provider", "") or "").lower()
+    if provider == "mock":
+        metadata.update({"source": "mock_judge", "fallback_used": True})
+    else:
+        metadata.update({"source": "llm_judge", "fallback_used": False})
     merged["metadata"] = metadata
     return merged
 
