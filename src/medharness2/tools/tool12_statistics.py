@@ -98,8 +98,8 @@ def _eligible_for_statistics(row: dict[str, Any]) -> bool:
 
 def compare_metric_groups(group_a: list[float], group_b: list[float]) -> dict[str, float | int | str]:
     """Welch-style comparison with a deterministic permutation fallback for tiny samples."""
-    a = [float(value) for value in group_a]
-    b = [float(value) for value in group_b]
+    a = [float(value) for value in group_a if _is_finite_number(value)]
+    b = [float(value) for value in group_b if _is_finite_number(value)]
     if not a or not b:
         return {"n_a": len(a), "n_b": len(b), "mean_a": 0.0, "mean_b": 0.0, "difference": 0.0, "p_value": 1.0, "method": "insufficient_data"}
     mean_a = statistics.mean(a)
@@ -120,7 +120,10 @@ def compare_metric_groups(group_a: list[float], group_b: list[float]) -> dict[st
 
 
 def correct_pvalues_holm(p_values: dict[str, float]) -> dict[str, float]:
-    ordered = sorted(((key, min(1.0, max(0.0, float(value)))) for key, value in p_values.items()), key=lambda item: item[1])
+    ordered = sorted(
+        ((key, _finite_p_value(value)) for key, value in p_values.items()),
+        key=lambda item: item[1],
+    )
     corrected: dict[str, float] = {}
     running = 0.0
     count = len(ordered)
@@ -129,3 +132,23 @@ def correct_pvalues_holm(p_values: dict[str, float]) -> dict[str, float]:
         running = max(running, adjusted)
         corrected[key] = running
     return corrected
+
+
+def _is_finite_number(value: Any) -> bool:
+    if isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError):
+        return False
+
+
+def _finite_p_value(value: Any) -> float:
+    """Map malformed p-values to the conservative non-significant value."""
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return 1.0
+    if not math.isfinite(parsed):
+        return 1.0
+    return min(1.0, max(0.0, parsed))

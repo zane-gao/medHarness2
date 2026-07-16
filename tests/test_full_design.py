@@ -212,6 +212,23 @@ def test_tool10_ignores_non_finite_metric_values(bad_value: float):
     assert result["score"] == pytest.approx(0.5)
 
 
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+def test_compare_metric_groups_ignores_non_finite_observations(bad_value: float):
+    comparison = compare_metric_groups([bad_value, 0.5], [0.4, 0.3])
+
+    assert comparison["n_a"] == 1
+    assert comparison["n_b"] == 2
+    assert comparison["method"] == "insufficient_data"
+    assert comparison["p_value"] == 1.0
+
+
+def test_holm_treats_non_finite_p_values_as_non_significant():
+    corrected = correct_pvalues_holm({"invalid": float("nan"), "valid": 0.01})
+
+    assert corrected["invalid"] == 1.0
+    assert corrected["valid"] == pytest.approx(0.02)
+
+
 def test_workflow_mean_scores_use_same_likert_normalization():
     rows = [{"likert_mean": 1.0}, {"likert_mean": 5.0}]
     expected = pytest.approx(0.5)
