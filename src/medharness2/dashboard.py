@@ -250,6 +250,14 @@ def _render_status_chip(validation: dict[str, Any]) -> str:
     return '<span class="chip bad"><span class="dot"></span>验证未通过</span>'
 
 
+def _count_or_zero(value: Any, label: str) -> int:
+    if value is None:
+        return 0
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
 def _render_kpis(
     summary: dict[str, Any],
     validation: dict[str, Any],
@@ -258,23 +266,23 @@ def _render_kpis(
     experiments: dict[str, Any],
     figures: dict[str, Any],
 ) -> str:
-    case_count = int(_first_present(summary.get("case_count"), analysis.get("case_count"), 0))
-    reader_count = int(_first_present(summary.get("reader_count"), analysis.get("reader_count"), 0))
-    generated = int(_first_present(analysis.get("generated_report_count"), 0))
-    ranking = int(_first_present(analysis.get("ranking_count"), 0))
-    qg_pass = int(_first_present(analysis.get("quality_gate_passed_count"), 0))
-    qg_fail = int(_first_present(analysis.get("quality_gate_failed_count"), 0))
+    case_count = _count_or_zero(_first_present(summary.get("case_count"), analysis.get("case_count"), 0), "case_count")
+    reader_count = _count_or_zero(_first_present(summary.get("reader_count"), analysis.get("reader_count"), 0), "reader_count")
+    generated = _count_or_zero(_first_present(analysis.get("generated_report_count"), 0), "generated_report_count")
+    ranking = _count_or_zero(_first_present(analysis.get("ranking_count"), 0), "ranking_count")
+    qg_pass = _count_or_zero(_first_present(analysis.get("quality_gate_passed_count"), 0), "quality_gate_passed_count")
+    qg_fail = _count_or_zero(_first_present(analysis.get("quality_gate_failed_count"), 0), "quality_gate_failed_count")
     qg_total = qg_pass + qg_fail
     pass_rate = f"{qg_pass / qg_total * 100:.0f}%" if qg_total else "—"
     tiles = [
-        ("病例 Cases", case_count, f"真实 OCR {int(validation.get('real_ocr_count') or 0)} 例"),
+        ("病例 Cases", case_count, f"真实 OCR {_count_or_zero(validation.get('real_ocr_count'), 'real_ocr_count')} 例"),
         ("读者 Readers", reader_count, "doctor vs model"),
         ("候选报告", generated, f"排名 {ranking} 组"),
         ("质量门控通过率", pass_rate, f"{qg_pass} 过 / {qg_fail} 失败"),
         ("注册模型", len(catalog.get("models") or []), "报告生成注册表"),
         ("工具 / 阶段", f"{len(catalog.get('tools') or [])} / {len(catalog.get('workflow_stages') or [])}", "Tool / Workflow stage"),
-        ("实验研究", int(_first_present(experiments.get("experiment_count"), 0)), "Notion 协议映射"),
-        ("图表产物", int(_first_present(figures.get("figure_count"), 0)), "Fig + Table"),
+        ("实验研究", _count_or_zero(_first_present(experiments.get("experiment_count"), 0), "experiment_count"), "Notion 协议映射"),
+        ("图表产物", _count_or_zero(_first_present(figures.get("figure_count"), 0), "figure_count"), "Fig + Table"),
     ]
     return "".join(
         '<div class="kpi">'
@@ -295,7 +303,7 @@ def _render_health_strip(validation: dict[str, Any], analysis: dict[str, Any]) -
 
     if validation:
         chips.append(chip(bool(validation.get("passed")), "validate-run " + ("passed" if validation.get("passed") else "failed")))
-        mock = int(validation.get("mock_ocr_count") or 0)
+        mock = _count_or_zero(validation.get("mock_ocr_count"), "mock_ocr_count")
         chips.append(chip(mock == 0, f"mock OCR {mock}"))
         ocr = validation.get("ocr") or {}
         if ocr:
@@ -305,21 +313,21 @@ def _render_health_strip(validation: dict[str, Any], analysis: dict[str, Any]) -
             chips.append(chip(ocr_ready, label))
         else:
             required = bool(validation.get("require_real_ocr"))
-            real = int(validation.get("real_ocr_count") or 0)
-            unknown = int(validation.get("unknown_ocr_count") or 0)
+            real = _count_or_zero(validation.get("real_ocr_count"), "real_ocr_count")
+            unknown = _count_or_zero(validation.get("unknown_ocr_count"), "unknown_ocr_count")
             if required and real > 0 and mock == 0 and unknown == 0:
                 chips.append(chip(True, "OCR ready（运行证据）"))
             else:
                 chips.append(chip(False, "OCR 就绪状态未知"))
-    failed_cases = int(analysis.get("failed_case_count") or 0)
+    failed_cases = _count_or_zero(analysis.get("failed_case_count"), "failed_case_count")
     chips.append(chip(failed_cases == 0, f"失败病例 {failed_cases}"))
-    qg_fail = int(analysis.get("quality_gate_failed_count") or 0)
+    qg_fail = _count_or_zero(analysis.get("quality_gate_failed_count"), "quality_gate_failed_count")
     chips.append(chip(qg_fail == 0, f"质量门控失败 {qg_fail}"))
     warn_counts = analysis.get("generated_report_warning_counts") or {}
-    fallback = int(warn_counts.get("local_vlm_fallback_used") or 0)
+    fallback = _count_or_zero(warn_counts.get("local_vlm_fallback_used"), "local_vlm_fallback_used")
     if fallback:
         chips.append(chip(False, f"VLM 兜底 {fallback} 份"))
-    artifact = int(warn_counts.get("artifact_reuse_not_fresh_inference") or 0)
+    artifact = _count_or_zero(warn_counts.get("artifact_reuse_not_fresh_inference"), "artifact_reuse_not_fresh_inference")
     if artifact:
         chips.append(chip(False, f"工件复用 {artifact} 份（非新推理）"))
     return "".join(chips)

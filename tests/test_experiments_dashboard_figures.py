@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from medharness2.cli import main
-from medharness2.dashboard import _render_reader_rows, build_dashboard
+from medharness2.dashboard import _render_health_strip, _render_kpis, _render_reader_rows, build_dashboard
 from medharness2.figures import build_figures
 from medharness2.workflows.experiments import run_experiments
 from medharness2.workflows.experiments import _image_to_text_models, _modality_recognition, _radiologist_evaluation
@@ -88,6 +88,19 @@ def test_modality_metrics_reject_invalid_ocr_counts(bad):
         _modality_recognition(
             {"validation": {"real_ocr_count": bad}},
             {"cases": []},
+        )
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
+def test_dashboard_rejects_invalid_summary_counts(bad):
+    with pytest.raises(ValueError, match="quality_gate_failed_count"):
+        _render_kpis(
+            {},
+            {"real_ocr_count": 0},
+            {"quality_gate_failed_count": bad},
+            {},
+            {},
+            {},
         )
 
 
