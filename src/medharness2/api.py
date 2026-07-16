@@ -241,6 +241,16 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
             model_sources=request.model_sources,
             config=cfg,
         )
+    result_errors = list(result.get("errors") or [])
+    _record_registry(
+        Path(request.output_path).parent,
+        stage="workflow.single-case",
+        status="failed" if result_errors else "passed",
+        inputs={"output_path": request.output_path, "case_id": request.case_id or ""},
+        outputs={"result": request.output_path},
+        metrics={"generated_report_count": len(result.get("generated_reports") or []), "error_count": len(result_errors)},
+        warnings=result_errors,
+    )
     return {
         "output_path": request.output_path,
         "summary": {
@@ -248,6 +258,7 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
             "generated_reports": len(result.get("generated_reports") or []),
             "pairwise_comparisons": len(result.get("pairwise_comparisons") or []),
             "rankings": len(result.get("rankings") or []),
+            "errors": result_errors,
         },
         "result": result,
     }
@@ -265,6 +276,7 @@ def experiments_run(request: ExperimentRunRequest) -> dict[str, Any]:
     _record_registry(
         request.output_dir,
         stage="experiments.run",
+        status="failed" if result.get("errors") else "passed",
         inputs={"run_dir": request.run_dir},
         outputs=outputs,
         metrics=metrics,
@@ -272,13 +284,14 @@ def experiments_run(request: ExperimentRunRequest) -> dict[str, Any]:
     _record_registry(
         request.run_dir,
         stage="experiments.run",
+        status="failed" if result.get("errors") else "passed",
         inputs={"run_dir": request.run_dir},
         outputs={"experiment_dir": request.output_dir, **outputs},
         metrics=metrics,
     )
     return {
         "output_dir": request.output_dir,
-        "summary": {"experiments": result["experiment_count"]},
+        "summary": {"experiments": result["experiment_count"], "errors": list(result.get("errors") or [])},
         "result": result,
     }
 
@@ -545,15 +558,18 @@ def _record_registry(
     inputs: dict[str, Any],
     outputs: dict[str, Any],
     metrics: dict[str, Any],
+    status: str = "passed",
+    warnings: list[str] | None = None,
 ) -> None:
     record_registry_entry(
         registry_dir,
         command=["medharness2-api", stage],
         stage=stage,
-        status="passed",
+        status=status,
         inputs=inputs,
         outputs=outputs,
         metrics=metrics,
+        warnings=warnings,
     )
 
 

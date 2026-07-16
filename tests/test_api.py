@@ -91,6 +91,29 @@ def test_api_single_case_preserves_explicit_case_id(tmp_path: Path):
     assert payload["input"]["case_id"] == "api-case-id"
 
 
+def test_api_single_case_surfaces_no_generated_reports_in_summary_and_registry(tmp_path: Path):
+    config_path = tmp_path / "no_generator.yaml"
+    config_path.write_text(
+        "llm:\n  provider: mock\ngenerator:\n  cloud_fallback_enabled: false\n  default_models: []\n  local_models: []\n",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "api_result.json"
+    response = TestClient(app).post(
+        "/workflow/single-case",
+        json={
+            "report_text": "FINDINGS: Normal. IMPRESSION: Normal.",
+            "image_path": "tests/fixtures/dummy.dcm",
+            "output_path": str(output_path),
+            "modality": "cxr",
+            "config_path": str(config_path),
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["summary"]["errors"] == ["no_generated_reports"]
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_api_single_case_requires_report_text_or_path(tmp_path: Path):
     client = TestClient(app)
     response = client.post(
@@ -476,6 +499,18 @@ def test_api_outputs_write_run_registry_entries(tmp_path: Path):
     assert response.status_code == 200
     education_registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
     assert education_registry["entries"][-1]["stage"] == "workflow.education"
+
+
+def test_api_experiments_run_surfaces_missing_source_as_failed_registry(tmp_path: Path):
+    output_dir = tmp_path / "experiments"
+    response = TestClient(app).post(
+        "/experiments/run",
+        json={"run_dir": str(tmp_path / "missing"), "output_dir": str(output_dir)},
+    )
+    assert response.status_code == 200
+    assert response.json()["summary"]["errors"] == ["run_dir_not_found"]
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
 
 
 def _write_json(path: Path, payload: dict) -> None:
