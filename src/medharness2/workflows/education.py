@@ -44,13 +44,16 @@ def _report_suggestions(payload: dict[str, Any], client: LLMClient) -> dict[str,
     if not findings:
         raise ValueError("Workflow 1 result must contain human_evaluation.finding_graph.findings.")
     weakest_metric, weakest_score = _weakest_likert(likert)
+    overall_score = _overall_likert(likert)
+    if weakest_metric is None or weakest_score is None or overall_score is None:
+        return _blocked_report_result("missing_likert_statistics")
     hazards = _hazards(payload)
     targeted_ids = _target_finding_ids(findings, hazards)
     default = {
         "mode": "eval_report",
         "status": "suggestions_generated",
         "report_summary": {
-            "overall_score": _overall_likert(likert),
+            "overall_score": overall_score,
             "weakest_metric": weakest_metric,
             "weakest_score": weakest_score,
             "peer_gap": None,
@@ -175,28 +178,51 @@ def _merge_required(default: dict[str, Any], parsed: dict[str, Any]) -> dict[str
     return merged
 
 
-def _weakest_likert(likert: dict[str, Any]) -> tuple[str, int]:
-    best_metric = LIKERT_METRICS[0]
-    best_score = 6
+def _weakest_likert(likert: dict[str, Any]) -> tuple[str | None, int | None]:
+    valid: list[tuple[str, int]] = []
     for metric in LIKERT_METRICS:
         item = likert.get(metric) or {}
         try:
-            score = int(float(item.get("score", 0)))
+            raw_score = item.get("score")
+            if raw_score is None or raw_score == "":
+                continue
+            score = int(float(raw_score))
         except (TypeError, ValueError):
-            score = 0
-        if score < best_score:
-            best_metric, best_score = metric, score
-    return best_metric, max(1, min(5, best_score if best_score != 6 else 1))
+            continue
+        if 1 <= score <= 5:
+            valid.append((metric, score))
+    return min(valid, key=lambda item: item[1]) if valid else (None, None)
 
 
-def _overall_likert(likert: dict[str, Any]) -> float:
+def _overall_likert(likert: dict[str, Any]) -> float | None:
     scores = []
     for metric in LIKERT_METRICS:
         try:
-            scores.append(float((likert.get(metric) or {}).get("score", 0)))
+            raw_score = (likert.get(metric) or {}).get("score")
+            if raw_score is None or raw_score == "":
+                continue
+            score = float(raw_score)
+            if 1 <= score <= 5:
+                scores.append(score)
         except (TypeError, ValueError):
             continue
-    return round(sum(scores) / len(scores), 4) if scores else 0.0
+    return round(sum(scores) / len(scores), 4) if scores else None
+
+
+def _blocked_report_result(reason: str) -> dict[str, Any]:
+    return {
+        "mode": "eval_report",
+        "status": "blocked_insufficient_data",
+        "report_summary": {
+            "overall_score": None,
+            "weakest_metric": None,
+            "weakest_score": None,
+            "peer_gap": None,
+        },
+        "suggestions": [],
+        "general_suggestions": [],
+        "metadata": {"source": "insufficient_data", "fallback_used": False, "blocked_reasons": [reason]},
+    }
 
 
 def _hazards(payload: dict[str, Any]) -> list[dict[str, Any]]:

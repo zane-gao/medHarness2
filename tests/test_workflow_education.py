@@ -253,3 +253,45 @@ def _workflow2_payload() -> dict:
             },
         },
     }
+
+
+def test_education_blocks_report_when_all_likert_scores_missing(tmp_path: Path):
+    payload = _workflow1_payload()
+    payload["human_evaluation"]["likert"] = {}
+    source = tmp_path / "workflow1.json"
+    source.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    result = run_education_suggestions(
+        eval_report=source,
+        output_path=tmp_path / "education.json",
+        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+    )
+
+    assert result["status"] == "blocked_insufficient_data"
+    assert result["report_summary"]["overall_score"] is None
+    assert result["report_summary"]["weakest_metric"] is None
+    assert result["metadata"]["blocked_reasons"] == ["missing_likert_statistics"]
+
+
+def test_education_ignores_missing_and_invalid_likert_scores_without_zero_filling(tmp_path: Path):
+    payload = _workflow1_payload()
+    payload["human_evaluation"]["likert"] = {
+        "Completeness and Accuracy": {"score": None},
+        "Conciseness and Clarity": {"score": "bad"},
+        "Terminological Accuracy": {"score": 4},
+        "Structure and Style": {},
+        "Overall Writing Quality": {"score": 2},
+    }
+    source = tmp_path / "workflow1.json"
+    source.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    result = run_education_suggestions(
+        eval_report=source,
+        output_path=tmp_path / "education.json",
+        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+    )
+
+    assert result["status"] == "suggestions_generated"
+    assert result["report_summary"]["weakest_metric"] == "Overall Writing Quality"
+    assert result["report_summary"]["weakest_score"] == 2
+    assert result["report_summary"]["overall_score"] == 3.0
