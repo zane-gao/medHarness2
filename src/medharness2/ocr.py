@@ -332,14 +332,14 @@ def _render_pdf_pages(pdf: Path, output_dir: Path) -> list[str]:
         import fitz
     except Exception as exc:
         raise RuntimeError("PyMuPDF is required for scanned PDF OCR") from exc
-    doc = fitz.open(pdf)
     dpi = 300
     matrix = fitz.Matrix(dpi / 72.0, dpi / 72.0)
     paths: list[str] = []
-    for index, page in enumerate(doc):
-        path = output_dir / f"page_{index + 1:04d}.png"
-        page.get_pixmap(matrix=matrix, alpha=False).save(path)
-        paths.append(str(path))
+    with fitz.open(pdf) as doc:
+        for index, page in enumerate(doc):
+            path = output_dir / f"page_{index + 1:04d}.png"
+            page.get_pixmap(matrix=matrix, alpha=False).save(path)
+            paths.append(str(path))
     return paths
 
 
