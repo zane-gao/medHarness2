@@ -921,11 +921,13 @@ def _build_evaluation_summary(
         str(level)
         for metrics in case_metrics
         for level in metrics.get("adjudicated_hazard_levels") or []
+        if _valid_hazard_level(level)
     )
     consensus_hazard_levels = Counter(
         str(level)
         for metrics in case_metrics
         for level in metrics.get("consensus_hazard_levels") or []
+        if _valid_hazard_level(level)
     )
     consensus_max_hazard_levels = Counter(
         str(metrics["consensus_max_hazard_level"])
@@ -1138,6 +1140,10 @@ def _finite_stat_value(value: Any) -> bool:
 def _valid_int(value: Any) -> bool:
     """Return true only for integer values, excluding bool-as-int coercion."""
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _valid_hazard_level(value: Any) -> bool:
+    return _valid_int(value) and 1 <= int(value) <= 5
 
 
 def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:

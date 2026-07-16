@@ -693,6 +693,24 @@ def test_case_evaluation_metrics_ignore_boolean_hazard_levels():
     assert metrics["consensus_unresolved_error_count"] == 1
 
 
+def test_evaluation_summary_filters_invalid_hazard_level_lists():
+    payload = _strict_case_evaluation()
+    summary = _build_evaluation_summary(
+        [{"status": "succeeded", "metrics": {
+            "candidate_likert_mean": 4.0,
+            "alignment_f1": 0.8,
+            "adjudicated_hazard_levels": [True, 0, 3, 6],
+            "consensus_hazard_levels": [False, 2, 9],
+        }}],
+        source_mode="test",
+        results_path="results.json",
+        resumed_count=0,
+        historical_failure_count=0,
+    )
+    assert summary["metrics"]["adjudicated_hazard_level_counts"] == {"3": 1}
+    assert summary["metrics"]["consensus_hazard_level_counts"] == {"2": 1}
+
+
 def test_case_evaluation_metrics_require_clinical_validation_without_llm_disagreement():
     metrics = _case_evaluation_metrics(_strict_case_evaluation())
 
