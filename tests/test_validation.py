@@ -174,6 +174,18 @@ def test_validate_sample_run_rejects_non_object_manifest_rows(tmp_path: Path):
     assert "invalid_manifest_jsonl:row_1:not_object" in result["errors"]
 
 
+def test_validate_sample_run_preserves_explicit_zero_summary_case_count(tmp_path: Path):
+    _write_json(tmp_path / "summary.json", {"case_count": 0})
+    _write_manifest(tmp_path / "manifest.jsonl", 1)
+    _write_json(tmp_path / "workflow2.json", {"case_count": 0, "failed_case_count": 0})
+    _write_json(tmp_path / "workflow3.json", {"case_count": 0, "reader_count": 0})
+
+    result = validate_sample_run(tmp_path, expected_cases=0)
+
+    assert result["passed"] is False
+    assert "manifest_count_mismatch:1!=0" in result["errors"]
+
+
 def test_validate_sample_run_reports_manifest_line_numbers_for_multiple_scalars(tmp_path: Path):
     (tmp_path / "manifest.jsonl").write_text('"first"\n"second"\n', encoding="utf-8")
     _write_json(tmp_path / "summary.json", {"case_count": 0})

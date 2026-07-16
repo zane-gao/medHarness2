@@ -46,7 +46,7 @@ def validate_sample_run(
     if require_workflows and workflow3_path.exists():
         _validate_aggregate_contract(Workflow3Aggregate, workflow3, "workflow3_aggregate", errors)
 
-    case_count = int(summary.get("case_count") or len(manifest_rows) or 0)
+    case_count = int(_first_present(summary.get("case_count"), len(manifest_rows), 0))
     if expected_cases is not None and case_count != expected_cases:
         errors.append(f"case_count_mismatch:{case_count}!={expected_cases}")
     if manifest_rows and case_count != len(manifest_rows):
@@ -249,6 +249,14 @@ def _validate_contract(model: Any, payload: dict[str, Any], label: str, errors: 
         model.model_validate(payload)
     except Exception as exc:
         errors.append(f"{label}:{type(exc).__name__}")
+
+
+def _first_present(*values: Any) -> Any:
+    """Return first non-None value, retaining explicit zeroes."""
+    for value in values:
+        if value is not None:
+            return value
+    return 0
 
 
 def _validate_aggregate_contract(model: Any, payload: dict[str, Any], label: str, errors: list[str]) -> None:

@@ -18,6 +18,7 @@
 > **2026-07-16 抽取收尾增量**：规则抽取去重不再把缺失/非法 measurement 隐式转换为 `0.0`；未知 measurement 与明确 `0 mm` 保持可区分，新增 CXR 回归测试覆盖该边界。该修复不改变既有 finding schema 或路由接口。
 > **2026-07-16 聚合输入收尾增量**：显式提供空的 workflow2 `cases`/`failed_cases` 或 workflow3 `reader_percentiles` 时，不再被历史兼容默认值绕过一致性校验；manifest 中合法但非对象的 JSONL 行现在保留真实行号并 fail-closed。全量回归测试为 504 passed、18 warnings。
 > **2026-07-16 统计分母收尾增量**：department、analyze-run 和实验摘要现在保留显式 `0` 的 source/success/failure/reader 计数，不再使用 `or` 把合法零值误判为缺失并回退到病例行数。全量回归测试为 508 passed、18 warnings。
+> **2026-07-16 validation 收尾增量**：`validate_sample_run` 现在保留显式 `summary.case_count=0`，与非空 manifest 的冲突会明确记录，不再被 `or len(manifest_rows)` 覆盖。全量回归测试为 509 passed、18 warnings。
 > **2026-07-16 验证账本收尾增量**：补充显式空聚合数组/百分位映射的失败测试，并为多个非对象 manifest 行保留实际 JSONL 行号；当前全量回归为 505 passed、18 warnings。该收尾只强化本地验证边界，不改变外部真实证据门禁状态。
 > **2026-07-16 评委输入边界增量**：Tool1/Tool2 对外部评委 prompt 的报告文本增加长度上限、头尾保留和明确的 quoted-data 边界；Tool2 prompt/stage 版本升级为 `tool2-hybrid-v3`，避免 checkpoint 将新旧提示词混用。全量回归测试为 410 passed、18 warnings。
 > **2026-07-16 统计汇总增量**：Tool12 纳入 reader-level `overall_score`；Workflow3 department 输出补齐 source/success/failure 分母及成功率、失败率，避免 reader 统计只呈现分数而丢失失败病例分母。全量回归测试为 412 passed、18 warnings。
