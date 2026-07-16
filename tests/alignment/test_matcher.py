@@ -37,6 +37,22 @@ def test_duplicate_observations_use_global_best_location_matching():
     assert result["metrics"]["f1"] == 1.0
 
 
+def test_unparsed_legacy_finding_is_not_aligned_as_a_real_observation():
+    candidate = {"findings": [_finding("unparsed_legacy_finding", "right lung")]}
+    reference = {"findings": [_finding("nodule", "right lung")]}
+
+    result = align_graphs(candidate, reference)
+
+    assert result["matched"] == []
+    assert result["candidate_only"][0]["observation"] == "unparsed_legacy_finding"
+    assert result["reference_only"][0]["observation"] == "nodule"
+    assert [item["error_type"] for item in result["error_candidates"]] == [
+        "false_finding",
+        "omission_finding",
+    ]
+    assert result["metrics"]["f1"] == 0.0
+
+
 def test_perfect_alignment_has_symmetric_agreement_one():
     graph = {"findings": [_finding("nodule", "right upper lobe", measurement="10 mm")]}
 

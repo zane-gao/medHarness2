@@ -11,7 +11,14 @@ def finding_pair_score(candidate: dict[str, Any], reference: dict[str, Any], *, 
         candidate_observation != reference_observation
         or not candidate_observation
         or candidate_observation
-        in {"other finding", "other_finding", "reported finding", "reported_finding"}
+        in {
+            "other finding",
+            "other_finding",
+            "reported finding",
+            "reported_finding",
+            "unparsed legacy finding",
+            "unparsed_legacy_finding",
+        }
     ):
         return None
 

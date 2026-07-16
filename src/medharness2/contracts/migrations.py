@@ -242,14 +242,14 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
             str(raw.get("finding_id") or raw.get("id") or f"f{index}"),
             seen_ids,
         )
-        observation_text = str(
+        observation_value = (
             raw.get("observation_text")
             or raw.get("observation")
             or raw.get("observation_code")
             or raw.get("source_text")
             or raw.get("text")
-            or "reported_finding"
-        ).strip()
+        )
+        observation_text = str(observation_value or "unparsed_legacy_finding").strip()
         location_text = _optional_text(raw.get("location_text") or raw.get("location"))
         measurements, unparsed_measurement = _migrate_measurements(raw)
         attributes = deepcopy(dict(raw.get("attributes") or {}))
@@ -269,6 +269,11 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
                 "v2_validation_failed": True,
                 "v2_validation_error": validation_error[:500],
             }
+        if not observation_value:
+            attributes.setdefault("migration_metadata", {})["observation_unparsed"] = True
+            attributes.setdefault("migration_warnings", []).append(
+                "legacy_finding_missing_observation"
+            )
         findings.append(
             {
                 "finding_id": finding_id,

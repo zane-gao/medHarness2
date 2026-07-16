@@ -153,6 +153,25 @@ def test_migrate_v1_case_preserves_scalar_evidence_id_and_measurement_object():
     assert hazards.errors[0].evidence_ids == ["f1"]
 
 
+def test_migrate_v1_missing_observation_is_explicitly_unparsed_not_reported_finding():
+    legacy = _legacy_case()
+    legacy["human_evaluation"] = {
+        "finding_graph": {
+            "modality": "cxr",
+            "backend": "legacy",
+            "findings": [{"id": "f1", "text": ""}],
+        }
+    }
+
+    migrated = migrate_case_evaluation_v1(legacy, case_id="case-1")
+    finding = migrated["human_evaluation"]["finding_graph"]["findings"][0]
+
+    assert finding["observation_text"] == "unparsed_legacy_finding"
+    assert finding["observation_code"] is None
+    assert finding["attributes"]["migration_metadata"]["observation_unparsed"] is True
+    assert "legacy_finding_missing_observation" in finding["attributes"]["migration_warnings"]
+
+
 def test_migrate_v1_hazard_preserves_unknown_top_level_fields():
     legacy = _legacy_case()
     legacy["pairwise_comparisons"] = [
