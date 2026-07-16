@@ -206,43 +206,46 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
     ]
     reader_summary_rows = _reader_rows(workflow2, workflow3)
     denominator = workflow2.get("denominator") or {}
-    source_case_count = int(
+    source_case_count = _strict_nonnegative_int(
         _first_present(
             denominator.get("manifest_case_count"),
             denominator.get("source_case_count"),
             workflow2.get("case_count", 0),
-        )
+        ),
+        "source_case_count",
     )
-    successful_case_count = int(
+    successful_case_count = _strict_nonnegative_int(
         _first_present(
             denominator.get("successful_case_count"),
             workflow2.get("case_count"),
             len(case_rows),
-        )
+        ),
+        "successful_case_count",
     )
-    failed_case_count = int(
+    failed_case_count = _strict_nonnegative_int(
         _first_present(
             denominator.get("failed_case_count"),
             workflow2.get("failed_case_count"),
             0,
-        )
+        ),
+        "failed_case_count",
     )
     result = {
         "output_dir": str(root),
         "analysis_dir": str(out),
-        "case_count": int(_first_present(workflow2.get("case_count"), len(case_rows))),
+        "case_count": _strict_nonnegative_int(_first_present(workflow2.get("case_count"), len(case_rows)), "case_count"),
         "failed_case_count": failed_case_count,
         "source_case_count": source_case_count,
         "successful_case_count": successful_case_count,
         "success_rate": round(successful_case_count / max(source_case_count, 1), 4),
         "failure_rate": round(failed_case_count / max(source_case_count, 1), 4),
-        "reader_count": int(_first_present(workflow3.get("reader_count"), len(reader_summary_rows))),
+        "reader_count": _strict_nonnegative_int(_first_present(workflow3.get("reader_count"), len(reader_summary_rows)), "reader_count"),
         "generated_report_count": generated_report_count,
         "ranking_count": ranking_count,
         "pairwise_count": pairwise_count,
         "quality_gate_passed_count": quality_passed,
         "quality_gate_failed_count": quality_failed,
-        "errors": ["no_cases_discovered"] if int(_first_present(workflow2.get("case_count"), len(case_rows))) == 0 and failed_case_count == 0 else [],
+        "errors": ["no_cases_discovered"] if _strict_nonnegative_int(_first_present(workflow2.get("case_count"), len(case_rows)), "case_count") == 0 and failed_case_count == 0 else [],
         "generated_report_model_counts": dict(sorted(model_counts.items())),
         "generated_report_source_counts": dict(sorted(source_counts.items())),
         "generated_report_evidence_tier_counts": dict(sorted(evidence_tier_counts.items())),
@@ -298,6 +301,12 @@ def _first_present(*values: Any) -> Any:
         if value is not None:
             return value
     return 0
+
+
+def _strict_nonnegative_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:

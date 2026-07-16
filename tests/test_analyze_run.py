@@ -4,6 +4,8 @@ import csv
 import json
 from pathlib import Path
 
+import pytest
+
 from medharness2.cli import main
 from medharness2.workflows.analyze_run import analyze_run
 
@@ -129,6 +131,22 @@ def test_analyze_run_preserves_explicit_zero_denominator_values(tmp_path: Path):
     assert result["source_case_count"] == 0
     assert result["successful_case_count"] == 0
     assert result["failed_case_count"] == 0
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, "2", -1])
+def test_analyze_run_rejects_non_integer_denominator_counts(tmp_path: Path, bad):
+    run_dir = _write_run(tmp_path / "run")
+    workflow2_path = run_dir / "workflow2.json"
+    workflow2 = json.loads(workflow2_path.read_text(encoding="utf-8"))
+    workflow2["denominator"] = {
+        "manifest_case_count": bad,
+        "successful_case_count": 0,
+        "failed_case_count": 0,
+    }
+    workflow2_path.write_text(json.dumps(workflow2), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="source_case_count"):
+        analyze_run(run_dir, tmp_path / "analysis")
 
 
 def test_cli_analyze_run_records_failed_registry_on_exception(tmp_path: Path):
