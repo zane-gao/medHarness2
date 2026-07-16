@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 import fitz
@@ -8,7 +9,7 @@ import pytest
 
 from medharness2.config import AppConfig, LLMConfig, ModelRoleConfig
 from medharness2.ocr import extract_report_text
-from medharness2.ocr_benchmark import evaluate_ocr_candidates
+from medharness2.ocr_benchmark import _aggregate, evaluate_ocr_candidates
 
 
 class PageOCRClient:
@@ -19,6 +20,36 @@ class PageOCRClient:
         assert image_path
         self.paths.append(image_path)
         return f"FINDINGS: page {len(self.paths)}\nIMPRESSION: stable"
+
+
+def test_ocr_aggregate_excludes_non_finite_metric_rows():
+    result = _aggregate(
+        [
+            {
+                "case_id": "case1",
+                "model": "model-a",
+                "clinical_cer": math.nan,
+                "digit_token_accuracy": math.inf,
+                "negation_token_accuracy": 0.5,
+                "possible_truncation": False,
+            },
+            {
+                "case_id": "case2",
+                "model": "model-a",
+                "clinical_cer": 0.2,
+                "digit_token_accuracy": 1.0,
+                "negation_token_accuracy": 1.0,
+                "possible_truncation": False,
+            },
+        ]
+    )
+    assert result["model-a"] == {
+        "case_count": 1,
+        "clinical_cer_mean": 0.2,
+        "digit_token_accuracy_mean": 1.0,
+        "negation_token_accuracy_mean": 1.0,
+        "truncation_count": 0,
+    }
 
 
 def test_scanned_pdf_ocr_is_page_ordered_and_records_provenance(tmp_path: Path):

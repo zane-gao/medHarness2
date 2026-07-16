@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import math
 import re
 import unicodedata
 from collections.abc import Sequence
@@ -129,12 +130,28 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
         grouped.setdefault(row["model"], []).append(row)
     result = {}
     for model, items in grouped.items():
+        valid_items = [
+            item
+            for item in items
+            if all(
+                isinstance(item.get(field), (int, float))
+                and not isinstance(item.get(field), bool)
+                and math.isfinite(float(item[field]))
+                for field in (
+                    "clinical_cer",
+                    "digit_token_accuracy",
+                    "negation_token_accuracy",
+                )
+            )
+        ]
+        if not valid_items:
+            continue
         result[model] = {
-            "case_count": len(items),
-            "clinical_cer_mean": round(sum(float(x["clinical_cer"]) for x in items) / len(items), 6),
-            "digit_token_accuracy_mean": round(sum(float(x["digit_token_accuracy"]) for x in items) / len(items), 6),
-            "negation_token_accuracy_mean": round(sum(float(x["negation_token_accuracy"]) for x in items) / len(items), 6),
-            "truncation_count": sum(bool(x["possible_truncation"]) for x in items),
+            "case_count": len(valid_items),
+            "clinical_cer_mean": round(sum(float(x["clinical_cer"]) for x in valid_items) / len(valid_items), 6),
+            "digit_token_accuracy_mean": round(sum(float(x["digit_token_accuracy"]) for x in valid_items) / len(valid_items), 6),
+            "negation_token_accuracy_mean": round(sum(float(x["negation_token_accuracy"]) for x in valid_items) / len(valid_items), 6),
+            "truncation_count": sum(bool(x["possible_truncation"]) for x in valid_items),
         }
     return result
 
