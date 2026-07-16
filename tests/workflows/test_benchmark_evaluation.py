@@ -78,6 +78,21 @@ def test_formal_statistical_comparisons_apply_holm_and_block_small_groups():
     assert blocked["status"] == "blocked"
 
 
+def test_formal_statistical_comparisons_ignore_non_finite_metrics():
+    rows = [
+        {"status": "succeeded", "model": "a", "metrics": {"candidate_likert_mean": math.nan, "alignment_f1": 0.8}},
+        {"status": "succeeded", "model": "a", "metrics": {"candidate_likert_mean": 4.0, "alignment_f1": 0.9}},
+        {"status": "succeeded", "model": "b", "metrics": {"candidate_likert_mean": 2.0, "alignment_f1": 0.4}},
+        {"status": "succeeded", "model": "b", "metrics": {"candidate_likert_mean": 2.2, "alignment_f1": 0.5}},
+    ]
+
+    result = _formal_statistical_comparisons(rows)
+
+    likert = next(item for item in result["comparisons"] if item["metric"] == "candidate_likert_mean")
+    assert likert["n_a"] == 1
+    assert likert["mean_a"] == 4.0
+
+
 def test_evaluate_generation_benchmark_writes_hash_bound_resumable_artifacts(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
