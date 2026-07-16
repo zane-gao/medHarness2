@@ -605,6 +605,15 @@ def test_verify_real_llm_case_evaluation_counts_validated_attempts_by_role():
     assert verification["validated_attempt_counts"]["alignment_auditor"] == 1
 
 
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "0"])
+def test_verify_real_llm_case_evaluation_rejects_invalid_t5_retained_count(bad):
+    payload = _strict_case_evaluation()
+    audit = payload["pairwise_comparisons"][0]["comparison"]["alignment_audit"]
+    audit["adjudication_summary"]["retained_error_count"] = bad
+    with pytest.raises(ValueError, match="T5 retained error count"):
+        verify_real_llm_case_evaluation(payload)
+
+
 def test_verify_real_llm_case_evaluation_enforces_configured_t1_retest():
     payload = _strict_case_evaluation()
     for evaluation in [payload["human_evaluation"], payload["generated_evaluations"][0]]:

@@ -27,6 +27,12 @@ DEFAULT_HAZARD = {
 }
 
 
+def _strict_positive_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ValueError(f"{label} must be a positive integer")
+    return value
+
+
 class _HazardAdjudicationDecisionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -69,7 +75,7 @@ def evaluate_hazards(
         raise LLMClientError("Tool 4 strict mode requires a non-mock provider")
     judge_backend = "mock_judge" if provider == "mock" else "llm_judge"
     judge_errors: list[str] = []
-    attempts = max(1, int(max_retries))
+    attempts = _strict_positive_int(max_retries, "max_retries")
     judge_candidates = ExternalPayloadPolicy().sanitize_hazard_candidates(
         [_minimal_judge_candidate(candidate) for candidate in error_candidates]
     )
@@ -129,6 +135,8 @@ def review_hazards(
     allow_fallback: bool = False,
     consistency_runs: int = 1,
 ) -> dict[str, Any]:
+    max_retries = _strict_positive_int(max_retries, "max_retries")
+    consistency_runs = _strict_positive_int(consistency_runs, "consistency_runs")
     primary = HazardResult.model_validate(primary_result)
     reviewer_payload = evaluate_hazards(
         error_candidates,
@@ -140,7 +148,6 @@ def review_hazards(
         allow_fallback=allow_fallback,
     )
     reviewer = HazardResult.model_validate(reviewer_payload)
-    consistency_runs = max(1, int(consistency_runs))
     reviewer_retests: list[HazardResult] = []
     for _ in range(consistency_runs - 1):
         retest_payload = evaluate_hazards(

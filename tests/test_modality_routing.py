@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from medharness2.config import AppConfig, GeneratorConfig
 from medharness2.generators.registry import GeneratorEntry, ReportGeneratorRegistry
 from medharness2.tools.tool7_modality import _normalize_modality_token, recognize_modality
@@ -10,6 +12,24 @@ def test_registry_keeps_modality_route_when_body_part_is_unknown():
     registry = ReportGeneratorRegistry(AppConfig())
     entries = registry.compatible_entries("ct", body_part="wrist")
     assert any(entry.key == "merlin_fresh" for entry in entries)
+
+
+@pytest.mark.parametrize("field", ["max_new_tokens", "timeout_sec"])
+@pytest.mark.parametrize("bad", [True, 1.5, "160", 0, -1])
+def test_registry_rejects_invalid_generation_limits_without_coercion(field, bad):
+    config = AppConfig(
+        generator=GeneratorConfig(
+            local_models=[
+                {
+                    "key": "bad_model",
+                    "source": "artifact_reuse",
+                    field: bad,
+                }
+            ]
+        )
+    )
+    with pytest.raises(ValueError, match=field):
+        ReportGeneratorRegistry(config)
 
 
 def test_registry_prefers_matching_body_part_without_requiring_it():

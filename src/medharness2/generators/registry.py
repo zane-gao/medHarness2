@@ -33,6 +33,14 @@ _GENERATION_PARAMETER_FIELDS = {
 }
 
 
+def _strict_positive_int(value: Any, label: str, default: int) -> int:
+    if value is None:
+        return default
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ValueError(f"{label} must be a positive integer")
+    return value
+
+
 @dataclass
 class GeneratorEntry:
     key: str
@@ -635,11 +643,11 @@ class ReportGeneratorRegistry:
                     output_jsonl=str(row.get("output_jsonl") or ""),
                     device=str(row.get("device") or "cuda:0"),
                     dtype=str(row.get("dtype") or "bf16"),
-                    max_new_tokens=int(row.get("max_new_tokens") or 160),
+                    max_new_tokens=_strict_positive_int(row.get("max_new_tokens"), "max_new_tokens", 160),
                     generation_parameters=dict(
                         row.get("generation_parameters") or {}
                     ),
-                    timeout_sec=int(row.get("timeout_sec") or 1800),
+                    timeout_sec=_strict_positive_int(row.get("timeout_sec"), "timeout_sec", 1800),
                     evidence_tier=str(row.get("evidence_tier") or ""),
                     model_version=str(row.get("model_version") or ""),
                     model_sha256=str(row.get("model_sha256") or ""),

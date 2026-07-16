@@ -433,7 +433,7 @@ def verify_real_llm_case_evaluation(
         raise ValueError("T5 adjudication is incomplete")
     if _strict_nonnegative_int(adjudication_summary.get("deterministic_error_count"), "T5 deterministic_error_count") != deterministic_error_count:
         raise ValueError("T5 deterministic error count mismatch")
-    if int(adjudication_summary.get("retained_error_count", -1)) != len(
+    if _strict_nonnegative_int(adjudication_summary.get("retained_error_count"), "T5 retained error count") != len(
         adjudicated_candidates
     ):
         raise ValueError("T5 retained error count mismatch")
@@ -535,7 +535,9 @@ def verify_real_llm_case_evaluation(
     role_counts = Counter(item["role"] for item in evidence)
     validated_attempt_counts: Counter[str] = Counter()
     for item in evidence:
-        validated_attempt_counts[item["role"]] += int(item["attempt_count"])
+        validated_attempt_counts[item["role"]] += _strict_nonnegative_int(
+            item["attempt_count"], f"{item['role']} attempt_count"
+        )
     provider_model_counts = Counter(
         f"{item['provider']}::{item['model']}::{item['endpoint_host']}"
         for item in evidence
@@ -1191,21 +1193,20 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
         "deterministic_alignment_error_count": len(
             (comparison.get("alignment") or {}).get("error_candidates") or []
         ),
-        "t5_rejected_error_count": int(adjudication_summary.get("rejected_error_count", 0)),
-        "t5_retained_error_count": int(adjudication_summary.get("retained_error_count", 0)),
-        "t5_modified_error_count": int(adjudication_summary.get("modified_error_count", 0)),
-        "t5_abstained_error_count": int(adjudication_summary.get("abstained_error_count", 0)),
+        "t5_rejected_error_count": _count_or_zero(adjudication_summary.get("rejected_error_count"), "T5 rejected_error_count"),
+        "t5_retained_error_count": _count_or_zero(adjudication_summary.get("retained_error_count"), "T5 retained error count"),
+        "t5_modified_error_count": _count_or_zero(adjudication_summary.get("modified_error_count"), "T5 modified_error_count"),
+        "t5_abstained_error_count": _count_or_zero(adjudication_summary.get("abstained_error_count"), "T5 abstained_error_count"),
         "hazard_error_count": len(hazard_errors),
         "max_hazard_level": max(hazard_levels) if hazard_levels else 0,
         "hazard_disagreement_count": len(hazard_review.get("disagreements") or []),
-        "hazard_compared_count": int(
-            agreement_summary["compared_count"]
-            if "compared_count" in agreement_summary
-            else len(hazard_errors)
+        "hazard_compared_count": _count_or_zero(
+            agreement_summary.get("compared_count", len(hazard_errors)),
+            "hazard compared_count",
         ),
-        "hazard_exact_agreement_count": int(agreement_summary.get("exact_agreement_count", 0)),
-        "hazard_within_one_count": int(agreement_summary.get("within_one_count", 0)),
-        "hazard_action_agreement_count": int(agreement_summary.get("action_agreement_count", 0)),
+        "hazard_exact_agreement_count": _count_or_zero(agreement_summary.get("exact_agreement_count"), "hazard exact_agreement_count"),
+        "hazard_within_one_count": _count_or_zero(agreement_summary.get("within_one_count"), "hazard within_one_count"),
+        "hazard_action_agreement_count": _count_or_zero(agreement_summary.get("action_agreement_count"), "hazard action_agreement_count"),
         "hazard_adjudication_decision_count": len(adjudication_decisions),
         "hazard_adjudication_abstained_count": sum(
             bool(decision.get("abstain"))

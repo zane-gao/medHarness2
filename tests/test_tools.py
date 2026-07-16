@@ -1089,6 +1089,29 @@ def test_tool4_adds_hazard_levels():
     assert result["errors"][0]["hazard_level"] == 4
 
 
+@pytest.mark.parametrize("bad", [True, 1.5, "2", 0, -1])
+def test_tool4_rejects_invalid_max_retries_without_coercion(bad):
+    with pytest.raises(ValueError, match="max_retries"):
+        evaluate_hazards(
+            [{"error_type": "false_finding"}],
+            llm_client=build_mock_client(),
+            max_retries=bad,
+        )
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, "2", 0, -1])
+def test_tool4_rejects_invalid_consistency_runs_without_coercion(bad):
+    primary = evaluate_hazards([{"error_type": "false_finding"}], llm_client=build_mock_client())
+    with pytest.raises(ValueError, match="consistency_runs"):
+        review_hazards(
+            primary,
+            [{"error_type": "false_finding"}],
+            llm_client=build_mock_client(),
+            consistency_runs=bad,
+            require_llm=False,
+        )
+
+
 def test_tool4_does_not_turn_client_programming_errors_into_fallbacks():
     class BrokenClient:
         def call(self, *args, **kwargs):
