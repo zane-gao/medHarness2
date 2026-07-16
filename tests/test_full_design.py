@@ -623,6 +623,32 @@ def test_batch_readers_marks_empty_manifest_as_blocked(tmp_path: Path):
     assert result["errors"] == ["no_cases_discovered"]
 
 
+def test_department_marks_empty_batch_as_blocked(tmp_path: Path):
+    batch = tmp_path / "empty-workflow2.json"
+    batch.write_text(
+        json.dumps(
+            {
+                "case_count": 0,
+                "failed_case_count": 0,
+                "cases": [],
+                "failed_cases": [],
+                "per_reader": {},
+                "denominator": {
+                    "manifest_case_count": 0,
+                    "successful_case_count": 0,
+                    "failed_case_count": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = run_department_comparison(batch, tmp_path / "workflow3.json")
+
+    assert result["case_count"] == 0
+    assert result["errors"] == ["no_cases_discovered"]
+
+
 def test_batch_readers_does_not_placeholder_when_real_ocr_role_is_configured(tmp_path: Path):
     manifest = tmp_path / "manifest.jsonl"
     manifest.write_text(

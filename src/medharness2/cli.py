@@ -564,6 +564,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if failed_case_count or workflow_errors else 0
     if args.command == "workflow" and args.workflow == "department":
         result = run_department_comparison(args.batch_result, args.output)
+        workflow_errors = list(result.get("errors") or [])
         _record_registry(
             Path(args.output).parent,
             command=command,
@@ -573,11 +574,12 @@ def main(argv: list[str] | None = None) -> int:
             metrics={
                 "case_count": int(result.get("case_count", 0) or 0),
                 "reader_count": int(result.get("reader_count", 0) or 0),
+                "error_count": len(workflow_errors),
             },
         )
         print(f"wrote medHarness2 department output to {args.output}")
         print(f"cases={result['case_count']} readers={result['reader_count']}")
-        return 0
+        return 1 if workflow_errors else 0
     if args.command == "workflow" and args.workflow == "merge-batches":
         try:
             result = merge_batch_results(

@@ -73,6 +73,8 @@ def run_department_comparison(batch_result_path: str | Path, output_path: str | 
             "model_group": {"case_metric_count": len(model_group_rows)},
         },
     }
+    if int(batch.get("case_count", 0) or 0) == 0 and int(batch.get("failed_case_count", 0) or 0) == 0:
+        result["errors"] = ["no_cases_discovered"]
     write_json(output_path, result)
     return result
 

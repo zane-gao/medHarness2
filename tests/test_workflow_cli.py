@@ -1164,6 +1164,42 @@ def test_cli_exploratory_benchmark_returns_nonzero_when_no_results(tmp_path: Pat
     assert summary["result_count"] == 0
 
 
+def test_cli_department_rejects_empty_batch(tmp_path: Path):
+    batch = tmp_path / "workflow2.json"
+    batch.write_text(
+        json.dumps(
+            {
+                "case_count": 0,
+                "failed_case_count": 0,
+                "cases": [],
+                "failed_cases": [],
+                "per_reader": {},
+                "denominator": {
+                    "manifest_case_count": 0,
+                    "successful_case_count": 0,
+                    "failed_case_count": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "workflow3.json"
+
+    code = main(
+        [
+            "workflow",
+            "department",
+            "--batch-result",
+            str(batch),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert code == 1
+    assert json.loads(output.read_text(encoding="utf-8"))["errors"] == ["no_cases_discovered"]
+
+
 def test_cli_validate_run_writes_failed_run_registry(tmp_path: Path):
     output_dir = tmp_path / "run"
     output_dir.mkdir()
