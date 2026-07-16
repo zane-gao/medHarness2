@@ -83,14 +83,14 @@ def _score_interval(
     for lower_key, upper_key in (("score_ci_lower", "score_ci_upper"), ("ci_lower", "ci_upper")):
         lower = _finite_or_none(payload.get(lower_key))
         upper = _finite_or_none(payload.get(upper_key))
-        if lower is not None and upper is not None and lower <= upper:
-            return max(0.0, lower), min(1.0, upper)
+        if lower is not None and upper is not None and lower <= upper and 0.0 <= lower <= upper <= 1.0:
+            return lower, upper
     bounds: list[tuple[float, float, float]] = []
     for metric, weight in metric_weights.items():
         if float(weight) <= 0 or metric not in metrics:
             continue
-        lower = _finite_or_none(payload.get(f"{metric}_ci_lower"))
-        upper = _finite_or_none(payload.get(f"{metric}_ci_upper"))
+        lower = _metric_interval_bound(metric, payload.get(f"{metric}_ci_lower"))
+        upper = _metric_interval_bound(metric, payload.get(f"{metric}_ci_upper"))
         if lower is None or upper is None or lower > upper:
             return None
         bounds.append((lower, upper, float(weight)))
@@ -98,7 +98,21 @@ def _score_interval(
         return None
     lower = sum(item[0] * item[2] for item in bounds) / total_weight
     upper = sum(item[1] * item[2] for item in bounds) / total_weight
-    return max(0.0, lower), min(1.0, upper)
+    return lower, upper
+
+
+def _metric_interval_bound(metric: str, value: Any) -> float | None:
+    """Normalize an uncertainty bound with the same scale as its metric."""
+    number = _finite_or_none(value)
+    if number is None:
+        return None
+    if metric == "likert_mean":
+        if not 1.0 <= number <= 5.0:
+            return None
+        return (number - 1.0) / 4.0
+    if not 0.0 <= number <= 1.0:
+        return None
+    return number
 
 
 def _finite_or_none(value: Any) -> float | None:

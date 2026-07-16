@@ -1885,6 +1885,44 @@ def test_tool9_does_not_fabricate_uncertainty_without_ci():
     assert [row["model"] for row in ranked] == ["a"]
 
 
+def test_tool9_normalizes_likert_metric_ci_before_weighting():
+    rows = [
+        {
+            "model": "a",
+            "composite_inputs": {
+                "likert_mean": 4.2,
+                "likert_mean_ci_lower": 3.0,
+                "likert_mean_ci_upper": 5.0,
+                "structure_score": 0.8,
+                "structure_score_ci_lower": 0.7,
+                "structure_score_ci_upper": 0.9,
+                "finding_coverage": 0.8,
+                "finding_coverage_ci_lower": 0.7,
+                "finding_coverage_ci_upper": 0.9,
+            },
+        },
+        {
+            "model": "b",
+            "composite_inputs": {
+                "likert_mean": 4.0,
+                "likert_mean_ci_lower": 3.8,
+                "likert_mean_ci_upper": 4.2,
+                "structure_score": 0.8,
+                "structure_score_ci_lower": 0.7,
+                "structure_score_ci_upper": 0.9,
+                "finding_coverage": 0.8,
+                "finding_coverage_ci_lower": 0.7,
+                "finding_coverage_ci_upper": 0.9,
+            },
+        },
+    ]
+    ranked = select_top_k(rows, top_k=1, near_cutoff_tolerance=0.0)
+    assert [row["model"] for row in ranked] == ["a", "b"]
+    assert ranked[0]["score_ci_lower"] == 0.62
+    assert ranked[0]["score_ci_upper"] == 0.94
+    assert ranked[1]["uncertainty_overlap"] is True
+
+
 def test_tool1_can_record_retest_consistency_without_replacing_primary_score():
     class StableClient:
         def __init__(self):

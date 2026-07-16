@@ -109,7 +109,7 @@ Workflow (端到端 + 文件 I/O)
 ### Tool 9 · Top-N 排名 — `tools/tool9_rank.py`
 
 - **入口**：`select_top_k(evaluations, weights=None, top_k=3) -> list`
-- **并列/不确定性门禁**：Top-N cutoff 差值不超过 `near_cutoff_tolerance=0.01` 的候选会一并保留，并标记 `near_cutoff`。若候选提供总分 CI（`score_ci_lower/score_ci_upper` 或 `ci_lower/ci_upper`），或提供全部排名指标的 CI，则会计算保守加权区间；与 cutoff 区间重叠的候选额外标记 `uncertainty_overlap` 与 `requires_review`，不把点估计差异误写成确定赢家。缺少 CI 时不伪造不确定性。
+- **并列/不确定性门禁**：Top-N cutoff 差值不超过 `near_cutoff_tolerance=0.01` 的候选会一并保留，并标记 `near_cutoff`。若候选提供总分 CI（`score_ci_lower/score_ci_upper` 或 `ci_lower/ci_upper`，必须已是 0–1）或提供全部排名指标的 CI，则会计算保守加权区间；其中 `likert_mean` 的 1–5 CI 会先按 `(x-1)/4` 归一化。与 cutoff 区间重叠的候选额外标记 `uncertainty_overlap` 与 `requires_review`，不把点估计差异误写成确定赢家。缺少或量纲非法的 CI 时不伪造不确定性。
 - **实现**：取每份评估的 `composite_inputs`（likert_mean/structure_score/finding_coverage），`_numeric_metrics` 归一化到 [0,1]（1–5 Likert 使用 `(x-1)/4`；已经是 0–1 的值保持原值），按权重 `{likert_mean 0.4, structure 0.3, coverage 0.3}`（来自 `config.ranking.weights`）加权平均、除以权重和，降序排序，标 `rank` 与 `selected_top_n`，返回 Top-N 及 cutoff 近似并列候选。
 - **输出**：`[{index, model, score, metrics{}, score_ci_lower, score_ci_upper, uncertainty_status, uncertainty_overlap, requires_review, rank, selected_top_n}]`。
 - **关键**：workflow 只把**质量门控通过**的候选喂进来（见 Workflow 1）。
