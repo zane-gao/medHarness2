@@ -387,6 +387,7 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.output).parent,
             command=command,
             stage="workflow.single-case",
+            status="failed" if result.get("errors") else "passed",
             inputs={
                 "report": args.report,
                 "image": args.image,
@@ -406,7 +407,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"wrote medHarness2 single-case output to {args.output}")
         print(f"generated_reports={len(result['generated_reports'])} pairwise={len(result['pairwise_comparisons'])}")
-        return 0
+        return 1 if result.get("errors") else 0
     if args.command == "workflow" and args.workflow == "sample-data":
         config = load_config(args.config) if args.config else load_config()
         rows = prepare_sample_dataset(

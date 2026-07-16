@@ -715,6 +715,30 @@ def test_cli_single_case(tmp_path: Path):
     assert entry["metrics"]["generated_report_count"] == len(payload["generated_reports"])
 
 
+def test_cli_single_case_rejects_when_no_generator_is_available(tmp_path: Path):
+    report = tmp_path / "human.txt"
+    image = tmp_path / "dummy.dcm"
+    output = tmp_path / "result.json"
+    report.write_text("FINDINGS: No pneumothorax. IMPRESSION: No acute disease.", encoding="utf-8")
+    image.write_text("dummy", encoding="utf-8")
+    config = tmp_path / "no_generator.yaml"
+    config.write_text(
+        "llm:\n  provider: mock\ngenerator:\n  cloud_fallback_enabled: false\n  default_models: []\n  local_models: []\n",
+        encoding="utf-8",
+    )
+
+    code = main([
+        "workflow", "single-case", "--report", str(report), "--image", str(image),
+        "--output", str(output), "--modality", "cxr", "--config", str(config),
+    ])
+
+    assert code == 1
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["errors"] == ["no_generated_reports"]
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_cli_single_case_preserves_explicit_case_id(tmp_path: Path):
     report = tmp_path / "human.txt"
     image = tmp_path / "dummy.dcm"

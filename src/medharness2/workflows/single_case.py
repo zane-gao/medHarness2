@@ -162,5 +162,7 @@ def run_single_case(
         "rankings": rankings,
         "pairwise_comparisons": pairwise,
     }
+    if not any(str(report.report or "").strip() for report in generated):
+        result["errors"] = ["no_generated_reports"]
     write_json(output_path, result)
     return result
