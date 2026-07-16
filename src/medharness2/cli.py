@@ -503,16 +503,27 @@ def main(argv: list[str] | None = None) -> int:
         print(f"generated_reports={len(result['generated_reports'])} pairwise={len(result['pairwise_comparisons'])}")
         return 1 if result.get("errors") else 0
     if args.command == "workflow" and args.workflow == "sample-data":
-        config = load_config(args.config) if args.config else load_config()
-        rows = prepare_sample_dataset(
-            args.sample_root,
-            args.output_dir,
-            config=config,
-            limit=args.limit,
-            run_ocr=not args.skip_ocr,
-            require_real_ocr=args.require_real_ocr,
-            force_ocr=args.force_ocr,
-        )
+        try:
+            config = load_config(args.config) if args.config else load_config()
+            rows = prepare_sample_dataset(
+                args.sample_root,
+                args.output_dir,
+                config=config,
+                limit=args.limit,
+                run_ocr=not args.skip_ocr,
+                require_real_ocr=args.require_real_ocr,
+                force_ocr=args.force_ocr,
+            )
+        except Exception as exc:
+            _record_registry(
+                args.output_dir, command=command, stage="workflow.sample-data", status="failed",
+                inputs={"sample_root": args.sample_root, "config": args.config or ""},
+                outputs={"manifest": str(Path(args.output_dir) / "manifest.jsonl")},
+                metrics={"error_count": 1, "exception_type": type(exc).__name__},
+                warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 sample-data failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         _record_registry(
             args.output_dir,
             command=command,
@@ -540,17 +551,33 @@ def main(argv: list[str] | None = None) -> int:
         print(f"cases={len(rows)}")
         return 0 if rows else 1
     if args.command == "workflow" and args.workflow == "sample-full":
-        config = load_config(args.config) if args.config else load_config()
-        model_keys = _model_keys(args)
-        if args.dry_run:
-            result = plan_sample_full_routes(
-                args.sample_root,
-                args.output_dir,
-                config=config,
-                limit=args.limit,
-                model_keys=model_keys,
-                model_sources=args.model_sources,
+        try:
+            config = load_config(args.config) if args.config else load_config()
+            model_keys = _model_keys(args)
+            if args.dry_run:
+                result = plan_sample_full_routes(
+                    args.sample_root, args.output_dir, config=config, limit=args.limit,
+                    model_keys=model_keys, model_sources=args.model_sources,
+                )
+            else:
+                result = run_sample_full(
+                    args.sample_root, args.output_dir, config=config, limit=args.limit,
+                    model_keys=model_keys, model_sources=args.model_sources,
+                    run_ocr=not args.skip_ocr, require_real_ocr=args.require_real_ocr,
+                    force_ocr=args.force_ocr, expected_cases=args.expected_cases,
+                )
+        except Exception as exc:
+            stage = "workflow.sample-full.dry-run" if args.dry_run else "workflow.sample-full"
+            _record_registry(
+                args.output_dir, command=command, stage=stage, status="failed",
+                inputs={"sample_root": args.sample_root, "config": args.config or ""},
+                outputs={"output_dir": args.output_dir},
+                metrics={"error_count": 1, "exception_type": type(exc).__name__},
+                warnings=[_exception_warning(exc)],
             )
+            print(f"medHarness2 sample-full failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
+        if args.dry_run:
             _record_registry(
                 args.output_dir,
                 command=command,
@@ -574,18 +601,6 @@ def main(argv: list[str] | None = None) -> int:
                 f"fallback={result['summary']['cases_requiring_fallback']}"
             )
             return 0 if result["summary"]["case_count"] else 1
-        result = run_sample_full(
-            args.sample_root,
-            args.output_dir,
-            config=config,
-            limit=args.limit,
-            model_keys=model_keys,
-            model_sources=args.model_sources,
-            run_ocr=not args.skip_ocr,
-            require_real_ocr=args.require_real_ocr,
-            force_ocr=args.force_ocr,
-            expected_cases=args.expected_cases,
-        )
         validation_passed = bool(result.get("validation", {}).get("passed"))
         _record_registry(
             args.output_dir,
@@ -623,15 +638,22 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if result["validation"]["passed"] else 1
     if args.command == "workflow" and args.workflow == "batch-readers":
-        config = load_config(args.config) if args.config else load_config()
-        result = run_batch_readers(
-            args.manifest,
-            args.output,
-            model_keys=_model_keys(args),
-            model_sources=args.model_sources,
-            limit=args.limit,
-            config=config,
-        )
+        try:
+            config = load_config(args.config) if args.config else load_config()
+            result = run_batch_readers(
+                args.manifest, args.output, model_keys=_model_keys(args),
+                model_sources=args.model_sources, limit=args.limit, config=config,
+            )
+        except Exception as exc:
+            _record_registry(
+                Path(args.output).parent, command=command, stage="workflow.batch-readers", status="failed",
+                inputs={"manifest": args.manifest, "config": args.config or ""},
+                outputs={"workflow2": args.output},
+                metrics={"error_count": 1, "exception_type": type(exc).__name__},
+                warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 batch-readers failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         failed_case_count = int(result.get("failed_case_count", 0) or 0)
         workflow_errors = list(result.get("errors") or [])
         _record_registry(
@@ -797,8 +819,8 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1 if result.get("errors") else 0
     if args.command == "workflow" and args.workflow == "reevaluate-run":
-        config = load_config(args.config) if args.config else load_config()
         try:
+            config = load_config(args.config) if args.config else load_config()
             result = reevaluate_run(args.source_run_dir, args.output_dir, config=config)
         except Exception as exc:
             _record_registry(

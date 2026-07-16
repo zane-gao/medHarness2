@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from medharness2.checkpoints import StageCheckpointStore
 from medharness2.cli import main
 from medharness2.config import AppConfig, GeneratorConfig, LLMConfig, ModelRoleConfig, load_config
@@ -1460,3 +1462,52 @@ def test_cli_benchmark_evaluate_writes_failed_summary_on_malformed_config(tmp_pa
     payload = json.loads((output_dir / "benchmark_evaluation_summary.json").read_text(encoding="utf-8"))
     assert payload["status"] == "failed"
     assert payload["error_type"] == "ValueError"
+
+@pytest.mark.parametrize(
+    ("workflow_args", "registry_dir", "stage"),
+    [
+        (
+            lambda tmp, cfg: [
+                "workflow", "sample-data", "--sample-root", str(tmp / "sample"),
+                "--output-dir", str(tmp / "sample-data"), "--config", str(cfg),
+            ],
+            lambda tmp: tmp / "sample-data",
+            "workflow.sample-data",
+        ),
+        (
+            lambda tmp, cfg: [
+                "workflow", "sample-full", "--sample-root", str(tmp / "sample"),
+                "--output-dir", str(tmp / "sample-full"), "--dry-run", "--config", str(cfg),
+            ],
+            lambda tmp: tmp / "sample-full",
+            "workflow.sample-full.dry-run",
+        ),
+        (
+            lambda tmp, cfg: [
+                "workflow", "batch-readers", "--manifest", str(tmp / "manifest.jsonl"),
+                "--output", str(tmp / "batch.json"), "--config", str(cfg),
+            ],
+            lambda tmp: tmp,
+            "workflow.batch-readers",
+        ),
+        (
+            lambda tmp, cfg: [
+                "workflow", "reevaluate-run", "--source-run-dir", str(tmp / "source"),
+                "--output-dir", str(tmp / "reevaluated"), "--config", str(cfg),
+            ],
+            lambda tmp: tmp / "reevaluated",
+            "workflow.reevaluate-run",
+        ),
+    ],
+)
+def test_cli_workflow_config_failures_are_recorded(tmp_path: Path, workflow_args, registry_dir, stage):
+    config = tmp_path / "malformed.yaml"
+    config.write_text("- not-a-mapping\n", encoding="utf-8")
+    (tmp_path / "manifest.jsonl").write_text("{}\n", encoding="utf-8")
+    code = main(workflow_args(tmp_path, config))
+    assert code == 1
+    registry = json.loads((registry_dir(tmp_path) / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == stage
+    assert entry["status"] == "failed"
+    assert entry["metrics"]["exception_type"] == "ValueError"
