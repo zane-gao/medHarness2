@@ -520,6 +520,25 @@ def test_api_dashboard_build_marks_registry_failed_when_render_fails(tmp_path: P
     assert registry["entries"][-1]["status"] == "failed"
 
 
+def test_api_figures_build_marks_registry_failed_when_render_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    experiment_dir = tmp_path / "experiments"
+    experiment_dir.mkdir()
+    output_dir = tmp_path / "figures"
+
+    def fail_render(*args, **kwargs):
+        raise RuntimeError("figure_render_failed")
+
+    monkeypatch.setattr("medharness2.api.build_figures", fail_render)
+    response = TestClient(app).post(
+        "/figures/build",
+        json={"experiment_dir": str(experiment_dir), "output_dir": str(output_dir)},
+    )
+
+    assert response.status_code == 500
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_api_experiments_run_surfaces_missing_source_as_failed_registry(tmp_path: Path):
     output_dir = tmp_path / "experiments"
     response = TestClient(app).post(

@@ -298,7 +298,19 @@ def experiments_run(request: ExperimentRunRequest) -> dict[str, Any]:
 
 @app.post("/figures/build")
 def figures_build(request: FiguresBuildRequest) -> dict[str, Any]:
-    result = build_figures(request.experiment_dir, request.output_dir)
+    try:
+        result = build_figures(request.experiment_dir, request.output_dir)
+    except Exception as exc:
+        _record_registry(
+            request.output_dir,
+            stage="figures.build",
+            status="failed",
+            inputs={"experiment_dir": request.experiment_dir},
+            outputs={"figure_dir": request.output_dir},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
+        )
+        raise HTTPException(status_code=500, detail=f"figures_build_failed:{type(exc).__name__}") from exc
     metrics = {"figure_count": result["figure_count"]}
     outputs = {
         "figure_dir": request.output_dir,
@@ -307,6 +319,7 @@ def figures_build(request: FiguresBuildRequest) -> dict[str, Any]:
     _record_registry(
         request.output_dir,
         stage="figures.build",
+        status="passed",
         inputs={"experiment_dir": request.experiment_dir},
         outputs=outputs,
         metrics=metrics,
