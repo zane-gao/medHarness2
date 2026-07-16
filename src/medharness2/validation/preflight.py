@@ -105,7 +105,7 @@ def _check_ocr_provider(config: AppConfig) -> dict[str, Any]:
         "codex_proxy",
         "codex",
     }:
-        key_set = bool(os.environ.get(api_key_env))
+        key_set = bool(str(os.environ.get(api_key_env) or "").strip())
         return {
             "provider": provider,
             "model": model,

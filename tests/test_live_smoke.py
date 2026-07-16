@@ -15,6 +15,16 @@ def test_live_smoke_is_blocked_without_credentials(tmp_path: Path, monkeypatch):
     assert json.loads((tmp_path / "smoke.json").read_text())["reason"] == "missing_api_key"
 
 
+def test_live_smoke_treats_whitespace_api_key_as_missing(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("SMOKE_KEY", "  \n\t")
+    cfg = AppConfig(model_roles={"general_judge": ModelRoleConfig(api_key_env="SMOKE_KEY")})
+
+    result = run_live_judge_smoke(tmp_path / "smoke.json", config=cfg)
+
+    assert result["status"] == "blocked"
+    assert result["reason"] == "missing_api_key"
+
+
 def test_live_smoke_validates_synthetic_json(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("SMOKE_KEY", "test-only")
     cfg = AppConfig(

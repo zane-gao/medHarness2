@@ -26,7 +26,7 @@ def run_live_judge_smoke(
         return result
     configured_provider = str(route.provider or "").strip().lower()
     provider = configured_provider or str(cfg.llm.provider or "").strip().lower()
-    if not route.api_key_env or not os.environ.get(route.api_key_env):
+    if not route.api_key_env or not str(os.environ.get(route.api_key_env) or "").strip():
         result = {
             "status": "blocked",
             "reason": "missing_api_key",
