@@ -483,6 +483,25 @@ def test_ocr_candidate_benchmark_reports_coverage_blocker_without_missing_artifa
     assert result["selection"]["reason"] == "unequal_candidate_coverage"
 
 
+def test_ocr_candidate_benchmark_normalizes_model_keys_for_coverage(tmp_path: Path):
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {"case_id": "case1", "gold_text": "same", "candidates": {" model-a ": "same", "model-b": "same"}},
+                {"case_id": "case2", "gold_text": "same", "candidates": {" model-a ": "same", "model-b": "same"}},
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "succeeded"
+    assert set(result["by_model"]) == {"model-a", "model-b"}
+    assert result["selection"]["primary_model"] in {"model-a", "model-b"}
+
+
 def test_ocr_candidate_benchmark_blocks_duplicate_case_model_rows(tmp_path: Path):
     manifest = tmp_path / "ocr_manifest.jsonl"
     manifest.write_text(
