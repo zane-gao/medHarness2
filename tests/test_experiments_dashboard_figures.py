@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from medharness2.cli import main
-from medharness2.dashboard import build_dashboard
+from medharness2.dashboard import _render_reader_rows, build_dashboard
 from medharness2.figures import build_figures
 from medharness2.workflows.experiments import run_experiments
 
@@ -305,6 +305,18 @@ def test_build_dashboard_includes_catalog_and_run_summary(tmp_path: Path):
     assert "Workflow Development" in html
     assert "workflow.sample-full" in html
     assert output.exists()
+
+
+def test_dashboard_does_not_render_missing_reader_score_as_zero():
+    html = _render_reader_rows([
+        {"reader": "missing", "case_count": "3", "overall_score": "", "percentile": ""},
+        {"reader": "scored", "case_count": "3", "overall_score": "0.75", "percentile": "100"},
+    ])
+
+    assert "scored" in html
+    assert "0.7500" in html
+    assert "missing" not in html
+    assert ">0.0000<" not in html
 
 
 def _write_minimal_run(root: Path) -> Path:

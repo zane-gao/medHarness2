@@ -107,6 +107,13 @@ def test_build_data_exposes_project_meta_and_source_health(tmp_path, monkeypatch
     assert "failure_rate" in data["kpi"]
 
 
+def test_optional_dashboard_float_preserves_missing_values_as_null():
+    assert build_panel._optional_rounded_float("", 3) is None
+    assert build_panel._optional_rounded_float("not-a-score", 3) is None
+    assert build_panel._optional_rounded_float("0", 3) == 0.0
+    assert build_panel._optional_rounded_float("0.756", 2) == 0.76
+
+
 def test_extract_pilot10_uses_annotation_validator_for_completion(tmp_path):
     package = tmp_path / "pilot10"
     cases = package / "cases"
@@ -144,3 +151,10 @@ def test_extract_pilot10_reports_blocked_manifest_without_crashing(tmp_path):
     assert result["validation_status"] == "blocked"
     assert result["done"] == 0
     assert result["validation_errors"]
+
+
+def test_panel_uses_canonical_pilot10_status_labels():
+    template = Path("web/panel_template.html").read_text(encoding="utf-8")
+
+    assert 'complete:"已完成"' in template
+    assert 'blocked:"已阻断"' in template

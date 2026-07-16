@@ -352,9 +352,13 @@ def _format_gate_status(item: dict[str, Any]) -> str:
 
 
 def _render_reader_rows(rows: list[dict[str, str]]) -> str:
-    if not rows:
+    # Reader tables represent the scored population.  Do not render a missing
+    # overall_score as 0, otherwise the dashboard invents a valid-looking
+    # score for readers excluded from the statistics.
+    scored_rows = [row for row in rows if _to_optional_float(row.get("overall_score")) is not None]
+    if not scored_rows:
         return _empty_row(4)
-    ordered = sorted(rows, key=lambda r: -_to_float(r.get("overall_score")))
+    ordered = sorted(scored_rows, key=lambda r: -(_to_optional_float(r.get("overall_score")) or 0.0))
     return "".join(
         "<tr>"
         f'<td class="primary">{_esc(r.get("reader", ""))}</td>'
@@ -708,3 +712,12 @@ def _to_float(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _to_optional_float(value: Any) -> float | None:
+    """Parse a numeric dashboard value without turning missing data into zero."""
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number == number else None

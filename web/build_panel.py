@@ -785,8 +785,8 @@ def build_data(run_dir: Path) -> dict:
             {
                 "reader": r.get("reader"),
                 "case_count": int(r.get("case_count") or 0),
-                "overall_score": round(float(r.get("overall_score") or 0), 3),
-                "percentile": round(float(r.get("percentile") or 0), 1),
+                "overall_score": _optional_rounded_float(r.get("overall_score"), 3),
+                "percentile": _optional_rounded_float(r.get("percentile"), 1),
             }
             for r in readers
         ],
@@ -813,6 +813,15 @@ def build_data(run_dir: Path) -> dict:
         "pilot10": extract_pilot10(PILOT10_MANIFEST),
         "blindspot_audit": extract_blindspot_audit(BLINDSPOT_AUDIT),
     }
+
+
+def _optional_rounded_float(value: object, digits: int) -> float | None:
+    """Preserve missing dashboard metrics as null instead of inventing zero."""
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return round(number, digits) if number == number else None
 
 
 def main() -> None:

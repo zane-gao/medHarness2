@@ -597,13 +597,15 @@
   function renderReaders() {
     var el = document.getElementById("chart-readers");
     var rows = get(P, ["analysis_tables", "readers"], []).map(function (r) {
-      var score = Number(r.overall_score) || 0;
+      var rawScore = Number(r.overall_score);
+      if (!Number.isFinite(rawScore)) return null;
+      var score = rawScore;
       var pct = Math.round(Number(r.percentile) || 0);
       return {
         label: r.reader, value: score, valueLabel: score.toFixed(3) + " · P" + pct,
         tip: r.reader + "\n病例 " + r.case_count + " · 综合得分 " + score.toFixed(4) + "\n本轮百分位 P" + pct
       };
-    });
+    }).filter(Boolean);
     rows.sort(function (a, b) { return b.value - a.value; });
     hbar(el, rows, { labelW: 110, valW: 118 });
   }
