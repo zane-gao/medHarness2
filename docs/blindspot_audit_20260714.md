@@ -1,6 +1,6 @@
 # medHarness2 盲区扫描报告（2026-07-14，2026-07-15 修复增量）
 
-> 本文档只记录问题，**不含任何代码改动**。修复排期见文末。
+> 本文档是 2026-07-14 的历史审计快照，后续增量记录当前修复状态；原始发现保留用于追溯，不应直接当作当前代码事实。
 
 > **2026-07-15 执行增量**：已完成 OCR 逐页管线、可注入的 audit-only 多模态 verifier、三模态软部位路由、Likert 归一化、统计白名单/小样本区间、并列百分位、鲁棒 JSON 解析、fallback/mock 统计过滤、参考图 recall、seed/cache、Retry-After 和非 CXR observation slug 规范化。北川数据集按当前工程约定直接作为金标准数据源；API/敏感产物硬化按用户指示暂不作为本轮阻塞。以下清单仍保留原始审计事实，已修复项以当前代码和测试为准。
 
@@ -24,7 +24,7 @@
 （拒绝任何 `fallback_used=True`、mock provider、校验 SHA-256 链）双重硬门禁，把下面所有 mock/fallback 泄漏路径都挡住了。
 
 **但除它以外的所有工作流**（`reevaluate-run` / `single-case` / `department` / 任何用 `config/default.yaml`
-或缺 model_roles 的配置）**没有这层门禁**，能让伪造分数冒充真评委，且统计层完全不过滤 provenance。
+或缺 model_roles 的配置）**没有这层门禁**，能让伪造分数冒充真评委。该历史问题的统计聚合部分已修复：当前 batch/reevaluate/merge/tool9/tool10/tool12 路径会过滤 fallback/mock provenance；非 benchmark 工作流仍可能使用 mock 配置，因此结果不能自动升级为正式模型质量结论。
 问题不在"流程能不能跑通"，而在"benchmark 之外跑出来的数字能不能作为模型质量结论"。截至 2026-07-16，统计聚合已过滤 fallback/mock 行，单样本 CI 不再伪装为零宽区间；教育工作流也已明确区分真实 LLM、mock judge 与 deterministic fallback。剩余问题仍需按下方门禁继续处理。
 
 ---
@@ -103,20 +103,20 @@ N=11 下 0.72 vs 0.71（差在抽样噪声内）被严格排序，0.72 进 pairw
 
 ### —— mock/fallback 泄漏（2 条，confirmed）——
 
-**H9. mock/确定性 Likert 冒充"非 fallback 判断"漏进所有非 benchmark 工作流**
+**H9.（历史发现，当前已修复标记）mock/确定性 Likert 冒充"非 fallback 判断"漏进所有非 benchmark 工作流**
 `tool1_likert.py:38,61-62,78-117`（+ `tool4` DEFAULT_HAZARD `:20-27`，+ `allow_fallback=True` 默认 `tool1:30`/`tool4:57`）
 `default.yaml` 是 `provider: mock` 无 model_roles → `require_llm=False`。`_deterministic_likert` 纯启发式
-（base 3；≥20 词 +1；同含 finding+impression 再 +1），25 词垃圾报告带俩标题 = 5/5 全维。mock 分标 `fallback_used=False`。
+（base 3；≥20 词 +1；同含 finding+impression 再 +1），25 词垃圾报告带俩标题 = 5/5 全维。历史版本曾把 mock 标为 `fallback_used=False`；当前 Tool1 显式 mock judge 已标记 `fallback_used=true`，并被正式统计过滤。
 CLI `reevaluate-run`/`single-case` 不带 `--config` 默认吃 `default.yaml`（`cli.py:666`）。**权威 benchmark 因双重门禁免疫，其余工作流无门禁。**
 
-**H10. 聚合层丢弃 provenance，fallback/mock 行与真 LLM 行同等平均，benchmark 外无 `fallback_count`**
+**H10.（历史发现，当前已修复聚合部分）聚合层丢弃 provenance，fallback/mock 行与真 LLM 行同等平均，benchmark 外无 `fallback_count`**
 `tool12/tool10/tool9 的 _numeric_metrics` 只留数值，丢 `_metadata`/`fallback_used`；`batch_readers.py:76`/`merge_batches.py:171`
 无 `evidence_tier=='debug_fallback'` 过滤。`single_report.py:122-131` 把 likert 降成裸 float，fallback 标记只留在嵌套 dict，**不进统计**。全 fallback 的 reader 也照样和真分算 percentile。
 
-### —— 科学有效性（1 条，confirmed，从 MEDIUM 升级）——
+### —— 科学有效性（1 条，历史发现；排名口径已修复）——
 
-**H11. `finding_coverage` = 发现数/本体大小，不是召回，却占排序/质量分约 1/3** `tools/tool2_extract.py:294-296`
-coverage = `min(1.0, num_findings/26)`（26=CXR 规则类别数，`rules.py:81`），非对参考报告召回。
+**H11.（历史实现，当前已修复）`finding_coverage` = 发现数/本体大小，不是召回，却占排序/质量分约 1/3** `tools/tool2_extract.py:294-296`
+抽取器仍会保留 `finding_graph.coverage` / `template_coverage.coverage_rate` 作为“模板覆盖诊断”字段，便于解释规则抽取质量；但这些字段不再进入模型排名。`single_case.py` 会在候选与北川参考 finding graph 对齐后，将 `composite_inputs.finding_coverage` 设置为 reference recall，因此排名口径不再是本体大小分母。
 3 发现简洁正确报告=3/26≈0.115；提 10 类（对错不论）冗长报告≈0.385。**系统性奖励啰嗦、惩罚简洁准确**，且幻觉发现类别也计数。
 > 我第一版误标 MEDIUM，验证结论为 HIGH——因为它直接进 `select_top_k`（权重 0.3）与 overall_score，扭曲排名和 reader percentile。
 
@@ -175,7 +175,7 @@ CT/MRI 双方都说"small hepatic cyst"，参考 emit `hepatic_cyst`、候选 em
 - **M6. 传输重试忽略 `Retry-After` / 限流信号，只有固定指数退避**（confirmed，新增）`llm_client.py:131-153,94-104`。
   429/502/503 与硬 4xx 不区分，`max_retries=2` 实际只 1 次 5s 退避。限流突发时优先丢掉高负载时段的 case，偏置聚合。
   > 注："accounts exhausted"作 HTTP≥400 或 200-body-error **能被正确 surface** 并抛 LLMClientError，**无静默 mock 替换**——弱点仅在退避策略。
-- **M7. 单样本评委，全项目无自一致/多数投票**（partly）`tool1_likert.py:41-71`、`tool4:80-102`。
+- **M7.（历史发现，当前已支持配置化重测）单样本评委，全项目无自一致/多数投票**（partly）`tool1_likert.py:41-71`、`tool4:80-102`。
   每个指标是 n=1 抽样，方差从不采样。（`max_retries=1` 时一次调用一抽样。）
 - **M8. 顶层 `provider: mock` 是 strong 配置的隐患**（confirmed）`dmx_strong.yaml:5`。
   任何不传 role override 的调用继承 provider=mock 静默返回伪造 JSON。真评委 role 覆盖了它、且 temp=0 确实生效，但新脚本/notebook 易踩。
