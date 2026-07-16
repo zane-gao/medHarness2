@@ -422,7 +422,19 @@ def test_ocr_candidate_benchmark_scores_and_blocks_missing_artifacts(tmp_path: P
 def test_ocr_candidate_benchmark_blocks_missing_manifest(tmp_path: Path):
     result = evaluate_ocr_candidates(tmp_path / "does-not-exist.json", tmp_path / "summary.json")
     assert result["status"] == "blocked"
+    assert result["blocked_items"] == ["manifest:missing_file"]
     assert result["selection"]["status"] == "blocked"
+
+
+def test_ocr_candidate_benchmark_reports_empty_manifest_reason(tmp_path: Path):
+    manifest = tmp_path / "empty.jsonl"
+    manifest.write_text("", encoding="utf-8")
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "blocked"
+    assert result["blocked_items"] == ["manifest:empty"]
+    assert result["selection"]["reason"] == "invalid_manifest"
 
 
 def test_ocr_candidate_benchmark_blocks_invalid_utf8_jsonl_manifest(tmp_path: Path):

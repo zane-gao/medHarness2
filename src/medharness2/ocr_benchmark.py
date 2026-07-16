@@ -28,6 +28,12 @@ def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) 
     rows: list[dict[str, Any]] = []
     blocked: list[str] = []
     hard_blocked = False
+    if not manifest_file.exists():
+        blocked.append("manifest:missing_file")
+        hard_blocked = True
+    elif not manifest:
+        blocked.append("manifest:empty")
+        hard_blocked = True
     for index, item in enumerate(manifest):
         if not isinstance(item, dict):
             blocked.append(f"manifest:row_{index}:not_an_object")
