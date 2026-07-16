@@ -114,6 +114,14 @@ def test_optional_dashboard_float_preserves_missing_values_as_null():
     assert build_panel._optional_rounded_float("0.756", 2) == 0.76
 
 
+def test_legacy_dashboard_does_not_zero_fill_missing_reader_metrics():
+    legacy = Path("web/legacy/control_panel.html").read_text(encoding="utf-8")
+    assert "if (!Number.isFinite(rawScore)) return null;" in legacy
+    assert "百分位缺失" in legacy
+    assert "var score = Number(r.overall_score) || 0;" not in legacy
+    assert "Math.round(Number(r.percentile) || 0)" not in legacy
+
+
 def test_extract_pilot10_uses_annotation_validator_for_completion(tmp_path):
     package = tmp_path / "pilot10"
     cases = package / "cases"
