@@ -36,6 +36,7 @@ def select_top_k(
         selected = [row for row in ranked if cutoff - row["score"] <= near_cutoff_tolerance]
         for row in selected:
             row["near_cutoff"] = True
+            row["near_cutoff_review"] = not row["selected_top_n"]
             row["near_cutoff_tolerance"] = near_cutoff_tolerance
     return selected
 

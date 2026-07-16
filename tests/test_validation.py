@@ -47,6 +47,33 @@ def test_validate_sample_run_rejects_unknown_vlm_provider(tmp_path: Path):
     assert result["unknown_ocr_count"] == 2
 
 
+def test_validate_sample_run_rejects_mismatched_ocr_case_hash_and_truncation(tmp_path: Path):
+    _write_run(tmp_path, warning_counts={}, failed_case_count=0, ocr_provider="openai")
+    row = json.loads((tmp_path / "manifest.jsonl").read_text(encoding="utf-8").splitlines()[0])
+    pdf = tmp_path / "reports" / "case0.pdf"
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    pdf.write_bytes(b"pdf-source")
+    row["report_pdf"] = str(pdf)
+    manifest_lines = (tmp_path / "manifest.jsonl").read_text(encoding="utf-8").splitlines()
+    manifest_lines[0] = json.dumps(row)
+    (tmp_path / "manifest.jsonl").write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+    sidecar = tmp_path / "ocr" / "case0.ocr.json"
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    payload.update(
+        {
+            "case_id": "wrong-case",
+            "source_pdf_sha256": "0" * 64,
+            "warnings": ["ocr_possible_truncation"],
+        }
+    )
+    sidecar.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    result = validate_sample_run(tmp_path, expected_cases=2, require_real_ocr=True)
+
+    assert result["passed"] is False
+    assert "ocr_provenance_unknown" in result["errors"]
+
+
 def test_validate_sample_run_rejects_missing_ocr_text_when_report_pdf_exists(tmp_path: Path):
     _write_run(tmp_path, warning_counts={}, failed_case_count=0)
     manifest = tmp_path / "manifest.jsonl"

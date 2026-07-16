@@ -77,7 +77,7 @@ def extract_report_text(
                 method="cache",
                 cache_path=str(cache_path),
                 warnings=list(cached_meta.get("warnings") or []),
-                metadata={"cached_ocr": cached_meta},
+                metadata={"cached_ocr": cached_meta, "quality_audit": cached_meta.get("quality_audit")},
             )
 
     warnings: list[str] = []
@@ -166,10 +166,15 @@ def extract_report_text(
                             **effective_verifier_options,
                         )
                         try:
-                            audit = json.loads(str(raw_audit))
+                            if isinstance(raw_audit, dict):
+                                audit = raw_audit
+                            elif isinstance(raw_audit, str):
+                                audit = json.loads(raw_audit)
+                            else:
+                                raise TypeError("verifier response must be a JSON object")
                             if not isinstance(audit, dict):
                                 raise TypeError("verifier response must be a JSON object")
-                        except json.JSONDecodeError:
+                        except (TypeError, ValueError, json.JSONDecodeError):
                             audit = {"status": "invalid_verifier_response", "raw": str(raw_audit)[:500]}
                             warnings.append(f"ocr_verifier_invalid_response:page_{page_index}")
                             warnings.append("ocr_verifier_invalid_response")
@@ -228,7 +233,29 @@ def extract_report_text(
         + "\n",
         encoding="utf-8",
     )
-    return ReportTextResult(case_id=case_id, text=text, method=method, cache_path=str(cache_path), warnings=warnings)
+    return ReportTextResult(
+        case_id=case_id,
+        text=text,
+        method=method,
+        cache_path=str(cache_path),
+        warnings=warnings,
+        metadata={
+            "provider": provider,
+            "model": primary_model if method == "vlm_ocr" else "",
+            "role": ocr_role if method == "vlm_ocr" and primary_options else "default",
+            "source_pdf_sha256": source_pdf_sha256,
+            "source_page_count": source_page_count,
+            "retained_page_count": retained_page_count,
+            "pages": page_meta,
+            "verifier": {
+                "provider": verifier_provider,
+                "model": verifier_model,
+                "role": verifier_role,
+                "configured": verifier_client is not None,
+            },
+            "quality_audit": quality_audit,
+        },
+    )
 
 
 def _extract_pdf_text(pdf: Path) -> str:

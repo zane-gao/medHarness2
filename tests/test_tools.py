@@ -1698,6 +1698,9 @@ def test_tool9_keeps_near_cutoff_candidates_for_review():
     )
     assert [row["model"] for row in ranked] == ["a", "b"]
     assert all(row["near_cutoff"] is True for row in ranked)
+    assert ranked[0]["selected_top_n"] is True
+    assert ranked[1]["selected_top_n"] is False
+    assert ranked[1]["near_cutoff_review"] is True
 
 
 def test_tool1_can_record_retest_consistency_without_replacing_primary_score():

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import fitz
+import pytest
 
 from medharness2.config import AppConfig, LLMConfig, ModelRoleConfig
 from medharness2.ocr import extract_report_text
@@ -199,6 +200,35 @@ def test_ocr_verifier_failure_does_not_fail_primary_ocr(tmp_path: Path):
     assert "ocr_verifier_failed" in result.warnings
     meta = json.loads((tmp_path / "ocr" / "case-verifier-failure.ocr.json").read_text(encoding="utf-8"))
     assert meta["quality_audit"]["status"] == "verifier_failed"
+
+
+@pytest.mark.parametrize("response", [None, [], "not-json"])
+def test_ocr_verifier_invalid_response_is_audit_warning(tmp_path: Path, response):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+
+    class InvalidVerifier:
+        def call(self, *args, **kwargs):
+            return response
+
+    result = extract_report_text(
+        pdf,
+        case_id="case-verifier-invalid",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=PageOCRClient(),
+        verifier_client=InvalidVerifier(),
+        force=True,
+    )
+
+    assert result.text.startswith("FINDINGS: page 1")
+    assert "ocr_verifier_invalid_response" in result.warnings
+    assert "ocr_verifier_failed" not in result.warnings
+    meta = json.loads((tmp_path / "ocr" / "case-verifier-invalid.ocr.json").read_text(encoding="utf-8"))
+    assert meta["quality_audit"]["status"] == "invalid_verifier_response"
 
 
 def test_ocr_verifier_audits_each_retained_page(tmp_path: Path):
