@@ -212,6 +212,17 @@ def test_migrate_run_case_artifacts_writes_report_and_valid_v2_cases(tmp_path: P
     assert json.loads((output / "migration_report.json").read_text())["case_count"] == 1
 
 
+def test_migrate_run_case_artifacts_rejects_missing_or_empty_source(tmp_path: Path):
+    missing = migrate_run_case_artifacts(tmp_path / "missing", tmp_path / "out_missing")
+    assert missing["error_count"] == 1
+    assert missing["errors"][0]["error"] == "source_run_dir_not_found"
+    empty = tmp_path / "empty"
+    (empty / "workflow2_cases").mkdir(parents=True)
+    report = migrate_run_case_artifacts(empty, tmp_path / "out_empty")
+    assert report["error_count"] == 1
+    assert report["errors"][0]["error"] == "no_cases_discovered"
+
+
 def test_migrate_run_case_artifacts_writes_a_directly_validatable_run(tmp_path: Path):
     source = tmp_path / "source"
     case_dir = source / "workflow2_cases"

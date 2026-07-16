@@ -572,7 +572,12 @@ def migrate_run_case_artifacts(source_run_dir: str | Path, output_dir: str | Pat
     warnings: Counter[str] = Counter()
     tiers: Counter[str] = Counter()
     migrated_count = 0
-    for path in sorted(source.glob("*.json")):
+    source_case_paths = sorted(source.glob("*.json")) if source.is_dir() else []
+    if not source_root.is_dir():
+        errors.append({"case_id": "", "error": "source_run_dir_not_found"})
+    elif not source.is_dir() or not source_case_paths:
+        errors.append({"case_id": "", "error": "no_cases_discovered"})
+    for path in source_case_paths:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
             migrated = migrate_case_evaluation_v1(payload, case_id=path.stem)
@@ -604,7 +609,7 @@ def migrate_run_case_artifacts(source_run_dir: str | Path, output_dir: str | Pat
         "schema_version": "2.0",
         "artifact_type": "case_artifact_migration_report",
         "source_run_dir": str(source_root),
-        "source_case_count": len(list(source.glob("*.json"))),
+        "source_case_count": len(source_case_paths),
         "case_count": migrated_count,
         "error_count": len(errors),
         "errors": errors,
