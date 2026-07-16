@@ -59,7 +59,10 @@ def evaluate_likert(
                 if provider.lower() == "mock" and not require_llm
                 else _validate_likert(result, image_path=image_path)
             )
-        except (LLMClientError, ValueError, TypeError) as exc:
+        # Retry only provider/transport and response-validation failures. A
+        # programming error in the client must surface instead of becoming a
+        # misleading deterministic score.
+        except (LLMClientError, ValueError, TypeError, RuntimeError, TimeoutError, ConnectionError, OSError) as exc:
             judge_errors.append(f"{type(exc).__name__}: {exc}")
             continue
         metadata = _metadata(
@@ -92,7 +95,7 @@ def evaluate_likert(
                         if provider.lower() == "mock" and not require_llm
                         else _validate_likert(repeat_result, image_path=image_path)
                     )
-                except (LLMClientError, ValueError, TypeError) as exc:
+                except (LLMClientError, ValueError, TypeError, RuntimeError, TimeoutError, ConnectionError, OSError) as exc:
                     consistency_errors.append(f"{type(exc).__name__}: {exc}")
             metadata["consistency_runs"] = consistency_runs
             metadata["consistency_compared_count"] = len(repeats)

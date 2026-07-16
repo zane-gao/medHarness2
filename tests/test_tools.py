@@ -53,6 +53,37 @@ def test_tool1_likert_normalizes_scores():
     assert result["_metadata"]["fallback_used"] is True
 
 
+def test_tool1_retries_runtime_provider_failures_and_records_fallback():
+    client = _FailingClient(RuntimeError("upstream timeout"))
+
+    result = evaluate_likert(
+        "FINDINGS: Clear lungs.",
+        llm_client=client,
+        max_retries=2,
+        allow_fallback=True,
+        judge_options={"provider": "chat_completions", "model": "gpt-5.6-sol"},
+    )
+
+    assert client.call_count == 2
+    assert result["_metadata"]["backend"] == "deterministic_fallback"
+    assert result["_metadata"]["fallback_used"] is True
+    assert "RuntimeError" in result["_metadata"]["judge_errors"][0]
+
+
+def test_tool1_does_not_turn_client_programming_errors_into_fallbacks():
+    class BrokenClient:
+        def call(self, *args, **kwargs):
+            raise AttributeError("client wiring bug")
+
+    with pytest.raises(AttributeError, match="client wiring bug"):
+        evaluate_likert(
+            "FINDINGS: Clear lungs.",
+            llm_client=BrokenClient(),
+            allow_fallback=True,
+            judge_options={"provider": "chat_completions", "model": "gpt-5.6-sol"},
+        )
+
+
 def test_tool1_prompt_bounds_untrusted_report_text_and_preserves_boundary():
     report = "BEGIN_MARKER " + ("clinical text " * 5000) + " END_MARKER"
     prompt = _judge_prompt(report, image_path=None, previous_errors=[])
