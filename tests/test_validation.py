@@ -161,6 +161,19 @@ def test_validate_sample_run_rejects_empty_workflow_aggregate_objects(tmp_path: 
     assert "workflow3_aggregate:ValidationError" in result["errors"]
 
 
+def test_validate_sample_run_rejects_non_object_manifest_rows(tmp_path: Path):
+    """A JSONL scalar must not disappear from the manifest denominator."""
+    (tmp_path / "manifest.jsonl").write_text('"not-a-case"\n', encoding="utf-8")
+    _write_json(tmp_path / "summary.json", {"case_count": 1})
+    _write_json(tmp_path / "workflow2.json", {"case_count": 1, "failed_case_count": 0})
+    _write_json(tmp_path / "workflow3.json", {"case_count": 1, "reader_count": 0})
+
+    result = validate_sample_run(tmp_path, expected_cases=1)
+
+    assert result["passed"] is False
+    assert "invalid_manifest_jsonl:row_1:not_object" in result["errors"]
+
+
 def test_validate_sample_run_rejects_malformed_aggregate_reader_payload(tmp_path: Path):
     _write_manifest(tmp_path / "manifest.jsonl", 1, with_report_text=True)
     _write_json(tmp_path / "workflow2.json", {
