@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt
 
 from medharness2.catalog import build_capability_catalog
 from medharness2.control_panel import dynamic_control_panel_html
@@ -48,7 +48,7 @@ class SingleCaseRequest(BaseModel):
     image_path: str
     output_path: str
     modality: str | None = None
-    top_n: int | None = None
+    top_n: StrictInt | None = None
     model_keys: list[str] | None = None
     model_sources: list[str] | None = None
     config_path: str | None = None
@@ -57,7 +57,7 @@ class SingleCaseRequest(BaseModel):
 class SampleDataRequest(BaseModel):
     sample_root: str
     output_dir: str
-    limit: int | None = None
+    limit: StrictInt | None = None
     run_ocr: bool = True
     require_real_ocr: bool = False
     force_ocr: bool = False
@@ -67,7 +67,7 @@ class SampleDataRequest(BaseModel):
 class SampleFullRequest(BaseModel):
     sample_root: str
     output_dir: str
-    limit: int | None = None
+    limit: StrictInt | None = None
     model_keys: list[str] | None = None
     model_sources: list[str] | None = None
     all_compatible_local_models: bool = False
@@ -75,7 +75,7 @@ class SampleFullRequest(BaseModel):
     run_ocr: bool = True
     require_real_ocr: bool = False
     force_ocr: bool = False
-    expected_cases: int | None = None
+    expected_cases: StrictInt | None = None
     config_path: str | None = None
 
 
@@ -84,7 +84,7 @@ class BatchReadersRequest(BaseModel):
     output_path: str
     model_keys: list[str] | None = None
     model_sources: list[str] | None = None
-    limit: int | None = None
+    limit: StrictInt | None = None
     config_path: str | None = None
 
 
@@ -97,7 +97,7 @@ class MergeBatchesRequest(BaseModel):
     batch_result_paths: list[str]
     output_dir: str
     manifest_path: str | None = None
-    expected_cases: int | None = None
+    expected_cases: StrictInt | None = None
     require_real_ocr: bool = False
 
 
@@ -108,7 +108,7 @@ class AnalyzeRunRequest(BaseModel):
 
 class ValidateRunRequest(BaseModel):
     output_dir: str
-    expected_cases: int | None = None
+    expected_cases: StrictInt | None = None
     require_real_ocr: bool = False
     require_workflows: bool = True
 
@@ -116,7 +116,7 @@ class ValidateRunRequest(BaseModel):
 class PreflightRequest(BaseModel):
     sample_root: str
     output_path: str
-    limit: int | None = None
+    limit: StrictInt | None = None
     model_keys: list[str] | None = None
     model_sources: list[str] | None = None
     all_compatible_local_models: bool = False

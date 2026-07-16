@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 import medharness2.api as api_module
@@ -664,3 +665,24 @@ def test_api_experiments_run_surfaces_missing_source_as_failed_registry(tmp_path
 def _write_json(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+@pytest.mark.parametrize("field", ["top_n", "limit", "expected_cases"])
+@pytest.mark.parametrize("bad", [True, 1.5, "2"])
+def test_api_request_models_reject_implicit_integer_coercion(field, bad):
+    from medharness2.api import (
+        BatchReadersRequest,
+        MergeBatchesRequest,
+        SampleDataRequest,
+        SampleFullRequest,
+        SingleCaseRequest,
+        ValidateRunRequest,
+    )
+
+    models = {
+        "top_n": (SingleCaseRequest, {"image_path": "x", "output_path": "y"}),
+        "limit": (SampleDataRequest, {"sample_root": "x", "output_dir": "y"}),
+        "expected_cases": (SampleFullRequest, {"sample_root": "x", "output_dir": "y"}),
+    }
+    model, payload = models[field]
+    with pytest.raises(Exception):
+        model.model_validate({**payload, field: bad})
