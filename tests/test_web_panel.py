@@ -5,6 +5,8 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "web"))
 import build_panel
+from medharness2.dashboard import summarize_dashboard_payload
+from medharness2.dashboard import _render_kpis
 
 
 def test_extract_git_state_reports_branch_sha_and_dirty(tmp_path):
@@ -15,6 +17,36 @@ def test_extract_git_state_reports_branch_sha_and_dirty(tmp_path):
     assert len(state["sha"]) == 40
     assert state["short_sha"] == state["sha"][:7]
     assert isinstance(state["dirty"], bool)
+
+
+def test_dashboard_summary_preserves_explicit_zero_counts():
+    summary = summarize_dashboard_payload(
+        {
+            "run_summary": {"summary": {"case_count": 0}},
+            "analysis": {"case_count": 7},
+            "experiments": {"experiment_count": 0},
+            "figures": {"figure_count": 0, "figures": [{"id": "stale"}]},
+        }
+    )
+
+    assert summary["case_count"] == 0
+    assert summary["experiment_count"] == 0
+    assert summary["figure_count"] == 0
+
+
+def test_dashboard_kpis_preserve_explicit_zero_counts():
+    html = _render_kpis(
+        {"case_count": 0, "reader_count": 0},
+        {"real_ocr_count": 0},
+        {"case_count": 9, "reader_count": 8, "generated_report_count": 0, "ranking_count": 0},
+        {"models": [], "tools": [], "workflow_stages": []},
+        {"experiment_count": 0},
+        {"figure_count": 0},
+    )
+
+    assert "病例 Cases" in html
+    assert "读者 Readers" in html
+    assert html.count(">0<") >= 4
 
 
 def test_extract_project_status_uses_real_yaml():

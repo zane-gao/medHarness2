@@ -97,14 +97,32 @@ def summarize_dashboard_payload(payload: dict[str, Any]) -> dict[str, int]:
     figures = payload.get("figures") or {}
     catalog = payload.get("catalog") or {}
     experiments = payload.get("experiments") or {}
+    run_summary_values = run_summary.get("summary") or {}
+    case_count = _first_present(
+        run_summary_values.get("case_count") if "case_count" in run_summary_values else None,
+        analysis.get("case_count") if "case_count" in analysis else None,
+        0,
+    )
+    figure_count = _first_present(
+        figures.get("figure_count") if "figure_count" in figures else None,
+        len(figures.get("figures") or []),
+    )
     return {
-        "case_count": int((run_summary.get("summary") or {}).get("case_count") or analysis.get("case_count") or 0),
+        "case_count": int(case_count),
         "tool_count": len(catalog.get("tools") or []),
         "model_count": len(catalog.get("models") or []),
-        "experiment_count": int(experiments.get("experiment_count") or 0),
-        "figure_count": int(figures.get("figure_count") or len(figures.get("figures") or [])),
+        "experiment_count": int(experiments.get("experiment_count", 0)),
+        "figure_count": int(figure_count),
         "registry_entry_count": len(registry.get("entries") or []),
     }
+
+
+def _first_present(*values: Any) -> Any:
+    """Return the first non-None value, preserving explicit zeroes."""
+    for value in values:
+        if value is not None:
+            return value
+    return 0
 
 
 def _read_optional(path: Path) -> dict[str, Any]:
@@ -238,12 +256,12 @@ def _render_kpis(
     experiments: dict[str, Any],
     figures: dict[str, Any],
 ) -> str:
-    case_count = int(summary.get("case_count") or analysis.get("case_count") or 0)
-    reader_count = int(summary.get("reader_count") or analysis.get("reader_count") or 0)
-    generated = int(analysis.get("generated_report_count") or 0)
-    ranking = int(analysis.get("ranking_count") or 0)
-    qg_pass = int(analysis.get("quality_gate_passed_count") or 0)
-    qg_fail = int(analysis.get("quality_gate_failed_count") or 0)
+    case_count = int(_first_present(summary.get("case_count"), analysis.get("case_count"), 0))
+    reader_count = int(_first_present(summary.get("reader_count"), analysis.get("reader_count"), 0))
+    generated = int(_first_present(analysis.get("generated_report_count"), 0))
+    ranking = int(_first_present(analysis.get("ranking_count"), 0))
+    qg_pass = int(_first_present(analysis.get("quality_gate_passed_count"), 0))
+    qg_fail = int(_first_present(analysis.get("quality_gate_failed_count"), 0))
     qg_total = qg_pass + qg_fail
     pass_rate = f"{qg_pass / qg_total * 100:.0f}%" if qg_total else "—"
     tiles = [
@@ -253,8 +271,8 @@ def _render_kpis(
         ("质量门控通过率", pass_rate, f"{qg_pass} 过 / {qg_fail} 失败"),
         ("注册模型", len(catalog.get("models") or []), "报告生成注册表"),
         ("工具 / 阶段", f"{len(catalog.get('tools') or [])} / {len(catalog.get('workflow_stages') or [])}", "Tool / Workflow stage"),
-        ("实验研究", int(experiments.get("experiment_count") or 0), "Notion 协议映射"),
-        ("图表产物", int(figures.get("figure_count") or 0), "Fig + Table"),
+        ("实验研究", int(_first_present(experiments.get("experiment_count"), 0)), "Notion 协议映射"),
+        ("图表产物", int(_first_present(figures.get("figure_count"), 0)), "Fig + Table"),
     ]
     return "".join(
         '<div class="kpi">'
