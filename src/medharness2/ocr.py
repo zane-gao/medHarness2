@@ -11,6 +11,22 @@ from medharness2.llm_client import LLMClient
 from medharness2.schema import ReportTextResult
 
 
+REAL_OCR_PROVIDERS = frozenset(
+    {
+        "openai",
+        "openai_responses",
+        "chat_completions",
+        "openai_chat",
+        "codex_proxy",
+        "codex",
+        "local_vlm_cli",
+        "medharness_cli_vlm",
+        "local_hf_vlm",
+        "hf_vlm_local",
+    }
+)
+
+
 def extract_report_text(
     report_pdf: str | Path,
     case_id: str,
@@ -51,6 +67,11 @@ def extract_report_text(
         method = "pdf_text_layer"
         provider = "local_pdf_text"
     else:
+        if require_real and cfg.llm.provider.lower() not in REAL_OCR_PROVIDERS:
+            raise RuntimeError(
+                "require_real OCR needs a supported non-mock provider for scanned PDFs; "
+                f"got {cfg.llm.provider!r}"
+            )
         prompt = (
             "Transcribe this single radiology-report page exactly. Return only visible report text; "
             "preserve line order, punctuation, measurements, negation, Findings and Impression headings. "
@@ -198,15 +219,4 @@ def _is_real_ocr_meta(meta: dict[str, Any]) -> bool:
     provider = str(meta.get("provider") or "").lower()
     if method == "pdf_text_layer" or provider == "local_pdf_text":
         return True
-    return method == "vlm_ocr" and provider in {
-        "openai",
-        "openai_responses",
-        "chat_completions",
-        "openai_chat",
-        "codex_proxy",
-        "codex",
-        "local_vlm_cli",
-        "medharness_cli_vlm",
-        "local_hf_vlm",
-        "hf_vlm_local",
-    }
+    return method == "vlm_ocr" and provider in REAL_OCR_PROVIDERS

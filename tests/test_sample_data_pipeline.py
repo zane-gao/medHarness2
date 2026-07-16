@@ -122,6 +122,25 @@ def test_extract_report_text_does_not_trust_unknown_provider_cache(tmp_path: Pat
     assert meta["provider"] == "chat_completions"
 
 
+def test_extract_report_text_require_real_rejects_unsupported_provider(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    _write_blank_pdf(pdf)
+
+    try:
+        extract_report_text(
+            pdf,
+            case_id="case1",
+            output_dir=tmp_path / "ocr",
+            config=AppConfig(llm=LLMConfig(provider="future_magic_provider")),
+            llm_client=StaticOCRClient(),
+            require_real=True,
+        )
+    except RuntimeError as exc:
+        assert "supported non-mock provider" in str(exc)
+    else:
+        raise AssertionError("unsupported provider must not satisfy require_real OCR")
+
+
 def test_extract_report_text_force_refreshes_cache(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     _write_blank_pdf(pdf)
