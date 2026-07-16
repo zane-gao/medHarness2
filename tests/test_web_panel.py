@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "web"))
 import build_panel
-from medharness2.dashboard import _format_gate_status, summarize_dashboard_payload
+from medharness2.dashboard import _format_gate_status, _render_fail_count, _render_modelsrc_rows, summarize_dashboard_payload
 from medharness2.dashboard import _render_kpis, _render_health_strip
 
 
@@ -73,6 +73,21 @@ def test_dashboard_gate_status_rejects_invalid_counts(field, bad):
     item["gate_summary"][field] = bad
     with pytest.raises(ValueError, match=field):
         _format_gate_status(item)
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, "2.5", "oops", -1])
+def test_dashboard_csv_count_renderer_rejects_invalid_values(bad):
+    with pytest.raises(ValueError, match="count"):
+        _render_fail_count(bad)
+
+
+def test_dashboard_csv_count_renderer_accepts_integer_text():
+    assert ">2<" in _render_fail_count("2")
+
+
+def test_dashboard_model_rows_reject_invalid_report_count():
+    with pytest.raises(ValueError, match="count"):
+        _render_modelsrc_rows([{"model": "m", "report_count": "2.5"}])
 
 
 def test_dashboard_kpis_preserve_explicit_zero_counts():

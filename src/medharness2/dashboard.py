@@ -431,7 +431,7 @@ def _render_modbp_rows(rows: list[dict[str, str]]) -> str:
 def _render_modelsrc_rows(rows: list[dict[str, str]]) -> str:
     if not rows:
         return _empty_row(7)
-    ordered = sorted(rows, key=lambda r: -_to_float(r.get("report_count")))
+    ordered = sorted(rows, key=lambda r: -_csv_count(r.get("report_count"), "report_count"))
     return "".join(
         "<tr>"
         f'<td class="primary mono">{_esc(r.get("model", ""))}</td>'
@@ -447,10 +447,23 @@ def _render_modelsrc_rows(rows: list[dict[str, str]]) -> str:
 
 
 def _render_fail_count(value: Any) -> str:
-    n = int(_to_float(value))
+    n = _csv_count(value, "count")
     if n <= 0:
         return '<span style="color:var(--ink-3)">0</span>'
     return f'<span style="color:var(--s-serious);font-weight:600">{n}</span>'
+
+
+def _csv_count(value: Any, label: str) -> int:
+    if value is None or value == "":
+        return 0
+    if isinstance(value, str):
+        text = value.strip()
+        if text.isdigit():
+            return int(text)
+        raise ValueError(f"{label} must be a non-negative integer")
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
 
 
 def _render_qgf_block(rows: list[dict[str, str]]) -> str:
