@@ -338,6 +338,7 @@ def test_reevaluate_run_marks_reconstructed_report_as_fallback(tmp_path: Path):
 
 def test_cli_reevaluate_run_writes_run_registry(tmp_path: Path):
     source = _write_cli_source_run(tmp_path)
+    _write_manifest(source / "manifest.jsonl", [{"case_id": "case1"}])
     output = tmp_path / "reeval_run"
 
     code = main(["workflow", "reevaluate-run", "--source-run-dir", str(source), "--output-dir", str(output)])
@@ -353,6 +354,21 @@ def test_cli_reevaluate_run_writes_run_registry(tmp_path: Path):
     assert entry["metrics"]["case_count"] == 1
     assert entry["metrics"]["reused_generated_report_count"] == 1
     assert entry["metrics"]["new_generation_count"] == 0
+
+
+def test_cli_reevaluate_run_registers_validation_failure_without_manifest(tmp_path: Path):
+    source = _write_cli_source_run(tmp_path)
+    _write_manifest(source / "manifest.jsonl", [{"case_id": "case1"}])
+    (source / "manifest.jsonl").unlink()
+    output = tmp_path / "reeval_missing_manifest"
+
+    code = main(["workflow", "reevaluate-run", "--source-run-dir", str(source), "--output-dir", str(output)])
+
+    assert code == 1
+    payload = json.loads((output / "run_summary.json").read_text(encoding="utf-8"))
+    registry = json.loads((output / "run_registry.json").read_text(encoding="utf-8"))
+    assert payload["validation"]["passed"] is False
+    assert registry["entries"][-1]["status"] == "failed"
 
 
 def test_cli_reevaluate_run_rejects_empty_source_run(tmp_path: Path):

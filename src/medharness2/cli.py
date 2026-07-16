@@ -754,14 +754,19 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"medHarness2 reevaluate-run failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
-        summary = dict(result.get("summary") or {})
+        run_summary = dict(result.get("run_summary") or {})
+        summary = dict(run_summary.get("summary") or result.get("summary") or {})
         failed_case_count = int(summary.get("failed_case_count", 0) or 0)
         workflow_errors = list(summary.get("errors") or [])
+        validation = dict(run_summary.get("validation") or {})
+        validation_failed = validation.get("passed") is False
+        if validation_failed:
+            workflow_errors.extend(str(item) for item in validation.get("errors") or [])
         _record_registry(
             args.output_dir,
             command=command,
             stage="workflow.reevaluate-run",
-            status="failed" if (failed_case_count or workflow_errors) else "passed",
+            status="failed" if (failed_case_count or workflow_errors or validation_failed) else "passed",
             inputs={"source_run_dir": args.source_run_dir, "output_dir": args.output_dir, "config": args.config or ""},
             outputs={
                 "workflow2": str(Path(args.output_dir) / "workflow2.json"),
@@ -784,7 +789,7 @@ def main(argv: list[str] | None = None) -> int:
             f"reused_reports={summary.get('reused_generated_report_count', 0)} "
             f"new_generation={summary.get('new_generation_count', 0)}"
         )
-        return 1 if (failed_case_count or workflow_errors) else 0
+        return 1 if (failed_case_count or workflow_errors or validation_failed) else 0
     if args.command == "workflow" and args.workflow == "validate-run":
         result = validate_sample_run(
             args.output_dir,
