@@ -193,6 +193,9 @@ def reevaluate_run(
             "extractor_backend": cfg.extractor.backend,
         },
     }
+    if result["case_count"] == 0 and result["failed_case_count"] == 0:
+        summary["errors"] = ["no_cases_discovered"]
+        summary["summary"]["errors"] = ["no_cases_discovered"]
     write_json(out / "run_summary.json", summary)
     return {"workflow2": result, "workflow3": workflow3, "run_summary": summary, "summary": summary["summary"]}
 

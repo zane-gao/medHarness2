@@ -80,6 +80,8 @@ def validate_sample_run(
     workflow2_case_count = int(
         _first_present(workflow2.get("case_count") if workflow2 else None, 0)
     )
+    if require_workflows and workflow2 and workflow2_case_count == 0 and failed_case_count == 0:
+        errors.append("no_cases_discovered")
     if workflow2 and workflow2_case_count + failed_case_count != case_count:
         errors.append("workflow2_case_count_mismatch")
     workflow3_case_count = int(

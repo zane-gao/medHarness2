@@ -105,6 +105,19 @@ def test_cli_merge_batches_records_failed_registry_on_exception(tmp_path: Path):
     assert "missing_cases" in entry["warnings"][0]
 
 
+def test_cli_merge_batches_rejects_empty_batch(tmp_path: Path):
+    batch = tmp_path / "empty_batch.json"
+    _write_json(batch, {"cases": [], "failed_cases": [], "case_count": 0, "failed_case_count": 0})
+    output_dir = tmp_path / "merged_empty"
+
+    code = main(["workflow", "merge-batches", "--batch-result", str(batch), "--output-dir", str(output_dir)])
+
+    assert code == 1
+    summary = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
+    assert summary["validation"]["passed"] is False
+    assert "no_cases_discovered" in summary["validation"]["errors"]
+
+
 def _write_manifest(path: Path, case_ids: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = []

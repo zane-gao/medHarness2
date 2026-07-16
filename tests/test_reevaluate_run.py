@@ -310,6 +310,22 @@ def test_cli_reevaluate_run_writes_run_registry(tmp_path: Path):
     assert entry["metrics"]["new_generation_count"] == 0
 
 
+def test_cli_reevaluate_run_rejects_empty_source_run(tmp_path: Path):
+    source = tmp_path / "empty_source"
+    source.mkdir()
+    _write_json(source / "workflow2.json", {"cases": [], "failed_cases": [], "case_count": 0, "failed_case_count": 0})
+    output = tmp_path / "reeval_empty"
+
+    code = main(["workflow", "reevaluate-run", "--source-run-dir", str(source), "--output-dir", str(output)])
+
+    assert code == 1
+    payload = json.loads((output / "run_summary.json").read_text(encoding="utf-8"))
+    assert payload["summary"]["case_count"] == 0
+    assert payload["summary"]["errors"] == ["no_cases_discovered"]
+    registry = json.loads((output / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def _write_cli_source_run(root: Path) -> Path:
     source = root / "cli_source_run"
     source_cases = source / "workflow2_cases"
