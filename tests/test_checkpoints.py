@@ -12,10 +12,18 @@ from medharness2.checkpoints import (
 )
 from medharness2.config import AppConfig, ModelRoleConfig
 from medharness2.modules.pairwise_report import evaluate_pairwise
+from medharness2.modules.pairwise_report import _valid_error_index
 from medharness2.modules.single_report import evaluate_single_report
 from medharness2.schema import GeneratedReport
 from medharness2.tools.tool1_likert import LIKERT_METRICS
 from medharness2.workflows.single_case import run_single_case
+
+
+def test_pairwise_error_index_accepts_nonnegative_nonboolean_ints_only():
+    assert _valid_error_index(0) is True
+    assert _valid_error_index(3) is True
+    assert _valid_error_index(True) is False
+    assert _valid_error_index(-1) is False
 
 
 def _validate_value(payload: dict) -> dict:

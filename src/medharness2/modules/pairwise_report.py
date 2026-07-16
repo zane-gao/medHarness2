@@ -409,12 +409,12 @@ def _validate_hazard_adjudication_checkpoint(
     expected_indices = {
         int(item["error_index"])
         for item in review.get("disagreements") or []
-        if isinstance(item, dict) and isinstance(item.get("error_index"), int)
+        if isinstance(item, dict) and _valid_error_index(item.get("error_index"))
     }
     actual_indices = {
         int(item["error_index"])
         for item in validated.get("decisions") or []
-        if isinstance(item, dict) and isinstance(item.get("error_index"), int)
+        if isinstance(item, dict) and _valid_error_index(item.get("error_index"))
     }
     if actual_indices != expected_indices:
         raise ValueError("T4 adjudicator checkpoint decision coverage mismatch")
@@ -425,6 +425,10 @@ def _validate_hazard_adjudication_checkpoint(
         options=options,
     )
     return validated
+
+
+def _valid_error_index(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
 def _validate_structure_audit_checkpoint(
