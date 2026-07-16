@@ -1231,6 +1231,8 @@ def test_cli_department_rejects_empty_batch(tmp_path: Path):
 
     assert code == 1
     assert json.loads(output.read_text(encoding="utf-8"))["errors"] == ["no_cases_discovered"]
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
 
 
 def test_cli_validate_run_writes_failed_run_registry(tmp_path: Path):

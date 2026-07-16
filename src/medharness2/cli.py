@@ -605,6 +605,7 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.output).parent,
             command=command,
             stage="workflow.department",
+            status="failed" if workflow_errors else "passed",
             inputs={"batch_result": args.batch_result},
             outputs={"workflow3": args.output},
             metrics={
