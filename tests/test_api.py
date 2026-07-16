@@ -187,6 +187,19 @@ def test_api_batch_readers_and_department(tmp_path: Path):
     assert response.json()["summary"]["readers"] == 1
 
 
+def test_api_sample_data_writes_registry_failure_for_empty_sample(tmp_path: Path):
+    output_dir = tmp_path / "sample_run"
+    response = TestClient(app).post(
+        "/workflow/sample-data",
+        json={"sample_root": str(tmp_path / "missing"), "output_dir": str(output_dir)},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["errors"] == ["no_cases_discovered"]
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_api_validate_run(tmp_path: Path):
     _write_json(tmp_path / "summary.json", {"case_count": 1, "warning_counts": {}})
     (tmp_path / "manifest.jsonl").write_text(

@@ -374,19 +374,44 @@ def dashboard_build(request: DashboardBuildRequest) -> dict[str, Any]:
 @app.post("/workflow/sample-data")
 def sample_data(request: SampleDataRequest) -> dict[str, Any]:
     cfg = load_config(request.config_path) if request.config_path else load_config()
-    rows = prepare_sample_dataset(
-        request.sample_root,
+    try:
+        rows = prepare_sample_dataset(
+            request.sample_root,
+            request.output_dir,
+            config=cfg,
+            limit=request.limit,
+            run_ocr=request.run_ocr,
+            require_real_ocr=request.require_real_ocr,
+            force_ocr=request.force_ocr,
+        )
+    except Exception as exc:
+        _record_registry(
+            request.output_dir,
+            stage="workflow.sample-data",
+            status="failed",
+            inputs={"sample_root": request.sample_root},
+            outputs={"manifest": str(Path(request.output_dir) / "manifest.jsonl")},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
+        )
+        raise HTTPException(status_code=500, detail=f"sample_data_failed:{type(exc).__name__}") from exc
+    errors = ["no_cases_discovered"] if not rows else []
+    _record_registry(
         request.output_dir,
-        config=cfg,
-        limit=request.limit,
-        run_ocr=request.run_ocr,
-        require_real_ocr=request.require_real_ocr,
-        force_ocr=request.force_ocr,
+        stage="workflow.sample-data",
+        status="failed" if errors else "passed",
+        inputs={"sample_root": request.sample_root},
+        outputs={
+            "manifest": str(Path(request.output_dir) / "manifest.jsonl"),
+            "summary": str(Path(request.output_dir) / "summary.json"),
+        },
+        metrics={"case_count": len(rows), "warning_count": sum(len(row.warnings) for row in rows)},
+        warnings=errors,
     )
     return {
         "manifest_path": str(Path(request.output_dir) / "manifest.jsonl"),
         "case_count": len(rows),
-        "errors": ["no_cases_discovered"] if not rows else [],
+        "errors": errors,
         "warnings": sorted({warning for row in rows for warning in row.warnings}),
     }
 
