@@ -144,7 +144,8 @@ def test_extract_pilot10_uses_annotation_validator_for_completion(tmp_path):
     result = build_panel.extract_pilot10(package / "manifest.jsonl")
 
     assert result["done"] == 0
-    assert result["validation_status"] == "not_started"
+    assert result["validation_status"] == "blocked"
+    assert any("no_candidate_reports" in error for error in result["validation_errors"])
 
 
 def test_extract_pilot10_reports_blocked_manifest_without_crashing(tmp_path):

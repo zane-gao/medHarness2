@@ -49,6 +49,8 @@ def build_pilot_annotation_package(
             )
             for candidate_index, item in enumerate(payload.get("generated_reports") or [], start=1)
         ]
+        if not candidates:
+            raise ValueError(f"case {source_case_id} has no generated_reports for annotation")
         annotation_case = AnnotationCase(
             pilot_case_id=pilot_case_id,
             source_case_sha256=hashlib.sha256(source_case_id.encode("utf-8")).hexdigest(),
@@ -199,6 +201,8 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
             errors.append(f"case:{pilot_case_id}:invalid_candidate_count")
         elif candidate_count is not None and candidate_count != len(case.candidate_reports):
             errors.append(f"case:{pilot_case_id}:candidate_count_mismatch:{candidate_count}!={len(case.candidate_reports)}")
+        if not case.candidate_reports:
+            errors.append(f"case:{pilot_case_id}:no_candidate_reports")
         expected_slots = ("reader_a", "reader_b", "adjudication")
         missing_slots = [slot for slot in expected_slots if slot not in case.annotations]
         if missing_slots:

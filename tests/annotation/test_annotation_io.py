@@ -274,3 +274,18 @@ def test_build_pilot_annotation_package_rejects_empty_clinical_reference_report(
         assert "reference report is empty" in str(exc)
     else:
         raise AssertionError("empty clinical reference report must fail explicitly")
+
+
+def test_build_pilot_annotation_package_rejects_case_without_candidates(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    for case_path in (run_dir / "workflow2_cases").glob("*.json"):
+        payload = json.loads(case_path.read_text(encoding="utf-8"))
+        payload["generated_reports"] = []
+        case_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    try:
+        build_pilot_annotation_package(run_dir, tmp_path / "pilot10", limit=1)
+    except ValueError as exc:
+        assert "has no generated_reports" in str(exc)
+    else:
+        raise AssertionError("case without candidates must fail explicitly")
