@@ -36,6 +36,7 @@ def evaluate_single_report(
         if judge_role
         else cfg.llm.max_retries
     )
+    judge_consistency_runs = max(1, int(judge_role.consistency_runs)) if judge_role else 1
     def compute_likert() -> dict[str, Any]:
         return evaluate_likert(
             report_text,
@@ -46,6 +47,7 @@ def evaluate_single_report(
             judge_options=judge_options,
             require_llm=judge_role is not None,
             allow_fallback=judge_role is None,
+            consistency_runs=judge_consistency_runs,
         )
 
     likert = (
@@ -59,6 +61,7 @@ def evaluate_single_report(
                 "model_role": "general_judge" if judge_role else "",
                 "require_llm": judge_role is not None,
                 "allow_fallback": judge_role is None,
+                "consistency_runs": judge_consistency_runs,
                 "route": llm_route_fingerprint(client, judge_options),
             },
             compute_likert,

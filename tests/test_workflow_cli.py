@@ -69,6 +69,35 @@ def test_single_report_routes_likert_through_general_judge_role():
     assert result["likert"]["_metadata"]["role"] == "general_judge"
 
 
+def test_single_report_passes_general_judge_consistency_runs():
+    response = {
+        metric: {"score": 4, "explanation": "Evidence-based score."}
+        for metric in [
+            "Completeness and Accuracy",
+            "Conciseness and Clarity",
+            "Terminological Accuracy",
+            "Structure and Style",
+            "Overall Writing Quality",
+        ]
+    }
+    client = _SequenceClient([response, response])
+    cfg = AppConfig(
+        model_roles={
+            "general_judge": ModelRoleConfig(
+                provider="chat_completions",
+                model="gpt-5.6-sol",
+                consistency_runs=2,
+            )
+        }
+    )
+
+    result = evaluate_single_report("FINDINGS: Clear lungs.", modality="cxr", config=cfg, llm_client=client)
+
+    assert client.call_count == 2
+    assert result["likert"]["_metadata"]["consistency_runs"] == 2
+    assert result["likert"]["_metadata"]["consistency_exact"] is True
+
+
 def test_single_report_uses_separate_schema_and_transport_retry_budgets():
     complete = {
         metric: {"score": 4, "explanation": "Evidence-based score."}
