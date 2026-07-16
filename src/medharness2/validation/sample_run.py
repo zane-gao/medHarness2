@@ -72,17 +72,25 @@ def validate_sample_run(
         if missing_ocr_text_count:
             errors.append("ocr_text_missing")
 
-    failed_case_count = int(workflow2.get("failed_case_count", 0) or 0) if workflow2 else 0
+    failed_case_count = int(
+        _first_present(workflow2.get("failed_case_count") if workflow2 else None, 0)
+    )
     if failed_case_count:
         errors.append(f"workflow2_failed_cases:{failed_case_count}")
-    if workflow2 and int(workflow2.get("case_count", 0) or 0) + failed_case_count != case_count:
+    workflow2_case_count = int(
+        _first_present(workflow2.get("case_count") if workflow2 else None, 0)
+    )
+    if workflow2 and workflow2_case_count + failed_case_count != case_count:
         errors.append("workflow2_case_count_mismatch")
-    if workflow3 and int(workflow3.get("case_count", 0) or 0) != int(workflow2.get("case_count", workflow3.get("case_count", 0)) or 0):
+    workflow3_case_count = int(
+        _first_present(workflow3.get("case_count") if workflow3 else None, 0)
+    )
+    if workflow3 and workflow3_case_count != workflow2_case_count:
         errors.append("workflow3_case_count_mismatch")
 
     artifact_contracts = _validate_case_artifact_contracts(root, errors)
     if artifact_contracts["checked"] and workflow2:
-        workflow_case_count = int(workflow2.get("case_count", 0) or 0)
+        workflow_case_count = workflow2_case_count
         if artifact_contracts["case_file_count"] != workflow_case_count:
             errors.append(
                 f"case_artifact_count_mismatch:{artifact_contracts['case_file_count']}!={workflow_case_count}"
