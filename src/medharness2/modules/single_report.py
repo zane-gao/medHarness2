@@ -36,7 +36,7 @@ def evaluate_single_report(
         if judge_role
         else cfg.llm.max_retries
     )
-    judge_consistency_runs = max(1, int(judge_role.consistency_runs)) if judge_role else 1
+    judge_consistency_runs = judge_role.consistency_runs if judge_role else 1
     def compute_likert() -> dict[str, Any]:
         return evaluate_likert(
             report_text,

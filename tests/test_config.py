@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+import math
 
-from medharness2.config import load_config, resolve_existing_path, resolve_project_path
+import pytest
+
+from medharness2.config import LLMConfig, ModelRoleConfig, load_config, resolve_existing_path, resolve_project_path
 
 
 def test_loads_default_config():
@@ -78,6 +81,39 @@ model_roles:
 
     assert role.schema_attempts(default=7) == 3
     assert role.as_call_options()["max_retries"] == 2
+
+
+@pytest.mark.parametrize("bad", [True, False, 0, 1.5, -1, "2"])
+def test_model_role_schema_attempts_rejects_implicit_integer_coercion(bad):
+    with pytest.raises(ValueError, match="schema_max_attempts"):
+        ModelRoleConfig(schema_max_attempts=bad)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("field", ["consistency_runs", "transport_max_retries"])
+@pytest.mark.parametrize("bad", [True, 0, 1.5, -1, "2"])
+def test_model_role_retry_configuration_rejects_invalid_integer_values(field, bad):
+    with pytest.raises(ValueError, match=field):
+        ModelRoleConfig(**{field: bad})  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("field", ["max_retries", "timeout_sec", "chat_max_tokens"])
+@pytest.mark.parametrize("bad", [True, 1.5, 0, -1, "2"])
+def test_llm_retry_transport_configuration_rejects_invalid_integer_values(field, bad):
+    with pytest.raises(ValueError, match=field):
+        LLMConfig(**{field: bad})  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, "2"])
+def test_llm_seed_rejects_implicit_integer_coercion(bad):
+    with pytest.raises(ValueError, match="seed"):
+        LLMConfig(seed=bad)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("field", ["temperature", "retry_initial_sec"])
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), -0.1])
+def test_llm_float_controls_reject_nonfinite_or_negative_values(field, bad):
+    with pytest.raises(ValueError, match=field):
+        LLMConfig(**{field: bad})  # type: ignore[arg-type]
 
 
 def test_resolve_project_path():

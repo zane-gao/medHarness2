@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+import math
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -39,6 +40,20 @@ class LLMConfig:
     local_hf_max_new_tokens: int = 512
     local_hf_pdf_max_pages: int = 3
 
+    def __post_init__(self) -> None:
+        for field_name in ("timeout_sec", "max_retries", "chat_max_tokens"):
+            value = getattr(self, field_name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise ValueError(f"{field_name} must be a positive integer")
+        if self.seed is not None and (
+            not isinstance(self.seed, int) or isinstance(self.seed, bool)
+        ):
+            raise ValueError("seed must be an integer or null")
+        for field_name in ("temperature", "retry_initial_sec"):
+            value = getattr(self, field_name)
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)) or value < 0:
+                raise ValueError(f"{field_name} must be finite and non-negative")
+
 
 @dataclass
 class ModelRoleConfig:
@@ -56,13 +71,34 @@ class ModelRoleConfig:
     omit_temperature: bool = False
     consistency_runs: int = 1
 
+    def __post_init__(self) -> None:
+        for field_name in (
+            "max_retries",
+            "schema_max_attempts",
+            "transport_max_retries",
+            "consistency_runs",
+        ):
+            value = getattr(self, field_name)
+            if value is not None and (
+                not isinstance(value, int) or isinstance(value, bool) or value < 1
+            ):
+                raise ValueError(f"{field_name} must be a positive integer")
+        if self.consistency_runs < 1:
+            raise ValueError("consistency_runs must be a positive integer")
+
     def schema_attempts(self, *, default: int) -> int:
         configured = (
             self.schema_max_attempts
             if self.schema_max_attempts is not None
             else self.max_retries
         )
-        return max(1, int(configured if configured is not None else default))
+        value = configured if configured is not None else default
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            field_name = "schema_max_attempts" if self.schema_max_attempts is not None else (
+                "max_retries" if self.max_retries is not None else "default schema attempts"
+            )
+            raise ValueError(f"{field_name} must be a positive integer")
+        return value
 
     def as_call_options(self) -> dict[str, Any]:
         transport_retries = (
