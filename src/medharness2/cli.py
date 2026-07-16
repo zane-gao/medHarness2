@@ -667,11 +667,11 @@ def main(argv: list[str] | None = None) -> int:
             },
             outputs=dict(result.get("paths") or {}),
             metrics={
-                "case_count": int(result.get("summary", {}).get("case_count", 0) or 0),
-                "workflow2_case_count": int(result.get("summary", {}).get("workflow2_case_count", 0) or 0),
-                "workflow2_failed_case_count": int(result.get("summary", {}).get("workflow2_failed_case_count", 0) or 0),
-                "workflow3_case_count": int(result.get("summary", {}).get("workflow3_case_count", 0) or 0),
-                "reader_count": int(result.get("summary", {}).get("reader_count", 0) or 0),
+                "case_count": _count_or_zero(result.get("summary", {}).get("case_count"), "case_count"),
+                "workflow2_case_count": _count_or_zero(result.get("summary", {}).get("workflow2_case_count"), "workflow2_case_count"),
+                "workflow2_failed_case_count": _count_or_zero(result.get("summary", {}).get("workflow2_failed_case_count"), "workflow2_failed_case_count"),
+                "workflow3_case_count": _count_or_zero(result.get("summary", {}).get("workflow3_case_count"), "workflow3_case_count"),
+                "reader_count": _count_or_zero(result.get("summary", {}).get("reader_count"), "reader_count"),
                 "validation_passed": validation_passed,
                 "validation_error_count": len(result.get("validation", {}).get("errors") or []),
             },
@@ -701,7 +701,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"medHarness2 batch-readers failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
-        failed_case_count = int(result.get("failed_case_count", 0) or 0)
+        failed_case_count = _count_or_zero(result.get("failed_case_count"), "failed_case_count")
         workflow_errors = list(result.get("errors") or [])
         _record_registry(
             Path(args.output).parent,
@@ -720,7 +720,7 @@ def main(argv: list[str] | None = None) -> int:
                 "workflow2_cases": str(Path(args.output).parent / "workflow2_cases"),
             },
             metrics={
-                "case_count": int(result.get("case_count", 0) or 0),
+                "case_count": _count_or_zero(result.get("case_count"), "case_count"),
                 "failed_case_count": failed_case_count,
                 "reader_count": len(result.get("per_reader") or {}),
             },
@@ -739,8 +739,8 @@ def main(argv: list[str] | None = None) -> int:
             inputs={"batch_result": args.batch_result},
             outputs={"workflow3": args.output},
             metrics={
-                "case_count": int(result.get("case_count", 0) or 0),
-                "reader_count": int(result.get("reader_count", 0) or 0),
+                "case_count": _count_or_zero(result.get("case_count"), "case_count"),
+                "reader_count": _count_or_zero(result.get("reader_count"), "reader_count"),
                 "error_count": len(workflow_errors),
             },
         )
@@ -808,8 +808,8 @@ def main(argv: list[str] | None = None) -> int:
             },
             outputs={**summary["paths"], "run_summary": str(Path(args.output_dir) / "run_summary.json")},
             metrics={
-                "case_count": int(result.get("case_count", 0) or 0),
-                "failed_case_count": int(result.get("failed_case_count", 0) or 0),
+                "case_count": _count_or_zero(result.get("case_count"), "case_count"),
+                "failed_case_count": _count_or_zero(result.get("failed_case_count"), "failed_case_count"),
                 "reader_count": len(result.get("per_reader") or {}),
                 "validation_passed": validation_passed,
                 "validation_error_count": len(validation.get("errors") or []),
@@ -847,13 +847,13 @@ def main(argv: list[str] | None = None) -> int:
             inputs={"output_dir": args.output_dir, "analysis_dir": args.analysis_dir or ""},
             outputs={"analysis_dir": result.get("analysis_dir", ""), **dict(result.get("artifacts") or {})},
             metrics={
-                "case_count": int(result.get("case_count", 0) or 0),
-                "failed_case_count": int(result.get("failed_case_count", 0) or 0),
-                "reader_count": int(result.get("reader_count", 0) or 0),
-                "generated_report_count": int(result.get("generated_report_count", 0) or 0),
-                "ranking_count": int(result.get("ranking_count", 0) or 0),
-                "pairwise_count": int(result.get("pairwise_count", 0) or 0),
-                "quality_gate_failed_count": int(result.get("quality_gate_failed_count", 0) or 0),
+                "case_count": _count_or_zero(result.get("case_count"), "case_count"),
+                "failed_case_count": _count_or_zero(result.get("failed_case_count"), "failed_case_count"),
+                "reader_count": _count_or_zero(result.get("reader_count"), "reader_count"),
+                "generated_report_count": _count_or_zero(result.get("generated_report_count"), "generated_report_count"),
+                "ranking_count": _count_or_zero(result.get("ranking_count"), "ranking_count"),
+                "pairwise_count": _count_or_zero(result.get("pairwise_count"), "pairwise_count"),
+                "quality_gate_failed_count": _count_or_zero(result.get("quality_gate_failed_count"), "quality_gate_failed_count"),
                 "error_count": len(result.get("errors") or []),
             },
         )
@@ -888,7 +888,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         run_summary = dict(result.get("run_summary") or {})
         summary = dict(run_summary.get("summary") or result.get("summary") or {})
-        failed_case_count = int(summary.get("failed_case_count", 0) or 0)
+        failed_case_count = _count_or_zero(summary.get("failed_case_count"), "failed_case_count")
         workflow_errors = list(summary.get("errors") or [])
         validation = dict(run_summary.get("validation") or {})
         validation_failed = validation.get("passed") is False
@@ -907,11 +907,11 @@ def main(argv: list[str] | None = None) -> int:
                 "workflow2_cases": str(Path(args.output_dir) / "workflow2_cases"),
             },
             metrics={
-                "case_count": int(summary.get("case_count", 0) or 0),
+                "case_count": _count_or_zero(summary.get("case_count"), "case_count"),
                 "failed_case_count": failed_case_count,
-                "reader_count": int(summary.get("reader_count", 0) or 0),
-                "reused_generated_report_count": int(summary.get("reused_generated_report_count", 0) or 0),
-                "new_generation_count": int(summary.get("new_generation_count", 0) or 0),
+                "reader_count": _count_or_zero(summary.get("reader_count"), "reader_count"),
+                "reused_generated_report_count": _count_or_zero(summary.get("reused_generated_report_count"), "reused_generated_report_count"),
+                "new_generation_count": _count_or_zero(summary.get("new_generation_count"), "new_generation_count"),
             },
         )
         print(f"wrote medHarness2 reevaluated run to {args.output_dir}")
