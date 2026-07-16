@@ -17,7 +17,40 @@ from medharness2.workflows.benchmark_evaluation import (
     _formal_statistical_comparisons,
     evaluate_generation_benchmark,
     verify_real_llm_case_evaluation,
+    _evaluation_config_snapshot,
+    _validate_role_routes,
 )
+
+
+def test_benchmark_snapshots_include_role_retry_and_consistency_parameters():
+    config = AppConfig(
+        model_roles={
+            "general_judge": ModelRoleConfig(
+                provider="chat_completions", model="judge", consistency_runs=2,
+                schema_max_attempts=3, transport_max_retries=4,
+            )
+        }
+    )
+    snapshot = _evaluation_config_snapshot(config)
+    assert snapshot["llm_roles"]["general_judge"] == {
+        "consistency_runs": 2,
+        "schema_attempts": 3,
+        "transport_max_retries": 4,
+    }
+
+    routes = _validate_role_routes(
+        AppConfig(
+            model_roles={
+                role: ModelRoleConfig(provider="chat_completions", model=role, consistency_runs=2)
+                for role in {
+                    "general_judge", "finding_extractor", "alignment_auditor",
+                    "hazard_primary", "hazard_reviewer", "hazard_adjudicator", "structure_auditor",
+                }
+            }
+        ),
+        require_credentials=False,
+    )
+    assert routes["general_judge"]["consistency_runs"] == 2
 
 
 def test_evaluation_summary_excludes_non_finite_metric_values(tmp_path: Path):

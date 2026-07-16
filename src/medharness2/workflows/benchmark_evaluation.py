@@ -654,6 +654,7 @@ def _validate_role_routes(
             else route_options.get("temperature", config.llm.temperature),
             "seed": route_options.get("seed", config.llm.seed),
             "omit_temperature": route.omit_temperature,
+            "consistency_runs": max(1, int(route.consistency_runs)),
         }
     return snapshot
 
@@ -1373,6 +1374,14 @@ def _evaluation_config_snapshot(config: AppConfig) -> dict[str, Any]:
         "alignment": asdict(config.alignment),
         "privacy": asdict(config.privacy),
         "modality_map": dict(sorted(config.modality_map.items())),
+        "llm_roles": {
+            role: {
+                "consistency_runs": max(1, int(route.consistency_runs)),
+                "schema_attempts": route.schema_attempts(default=config.llm.max_retries),
+                "transport_max_retries": route.as_call_options().get("max_retries", config.llm.max_retries),
+            }
+            for role, route in sorted(config.model_roles.items())
+        },
     }
 
 
