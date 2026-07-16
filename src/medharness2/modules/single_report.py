@@ -97,7 +97,7 @@ def evaluate_single_report(
         checkpoint_store.get_or_compute(
             f"{checkpoint_namespace}.tool2_findings",
             {
-                "stage_version": "tool2-hybrid-v2",
+                "stage_version": "tool2-hybrid-v3",
                 "report_text": report_text,
                 "modality": modality_key,
                 "backend": cfg.extractor.backend,

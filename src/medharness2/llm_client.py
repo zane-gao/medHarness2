@@ -10,6 +10,8 @@ import base64
 import mimetypes
 import re
 import tempfile
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +23,17 @@ from medharness2.privacy import ExternalPayloadPolicy
 
 class LLMClientError(RuntimeError):
     """Raised when the configured LLM provider cannot complete a request."""
+
+
+_RETRYABLE_HTTP_STATUS = {408, 409, 425, 429}
+
+
+def _is_retryable_status(status: Any) -> bool:
+    try:
+        code = int(status)
+    except (TypeError, ValueError):
+        return False
+    return code in _RETRYABLE_HTTP_STATUS or 500 <= code <= 599
 
 
 class LLMClient:
@@ -99,7 +112,19 @@ class LLMClient:
             try:
                 with urllib.request.urlopen(request, timeout=timeout_sec) as response:
                     body = json.loads(response.read().decode("utf-8"))
+                body_error = _structured_body_error(body)
+                if body_error:
+                    raise LLMClientError(f"OpenAI Responses API returned an error: {body_error}")
                 return self._extract_text(body)
+            except LLMClientError as exc:
+                # A valid HTTP response carrying an API/schema error is not a
+                # transport failure; retry only when a retryable status is known.
+                last_error = exc
+                status = getattr(response, "status", getattr(response, "status_code", 0))
+                if not _is_retryable_status(status) or attempt + 1 >= max_retries:
+                    break
+                delay = _retry_after_seconds(response)
+                time.sleep(delay if delay is not None else llm.retry_initial_sec * (2**attempt))
             except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
                 last_error = exc
                 if attempt + 1 >= max_retries:
@@ -108,7 +133,9 @@ class LLMClient:
                 if isinstance(exc, urllib.error.HTTPError):
                     retry_response = exc
                 status = getattr(retry_response, "status", getattr(retry_response, "status_code", 0))
-                delay = _retry_after_seconds(retry_response) if status == 429 else None
+                if isinstance(exc, urllib.error.HTTPError) and not _is_retryable_status(status):
+                    break
+                delay = _retry_after_seconds(retry_response) if _is_retryable_status(status) else None
                 time.sleep(delay if delay is not None else llm.retry_initial_sec * (2**attempt))
         raise LLMClientError(f"OpenAI Responses API call failed: {last_error}")
 
@@ -158,12 +185,25 @@ class LLMClient:
                 response.raise_for_status()
                 body = response.json()
                 return self._extract_chat_text(body)
-            except (requests.RequestException, ValueError, LLMClientError) as exc:
+            except LLMClientError as exc:
+                last_error = exc
+                status = getattr(response, "status_code", 0)
+                if not _is_retryable_status(status) or attempt + 1 >= max_retries:
+                    break
+                delay = _retry_after_seconds(response)
+                time.sleep(delay if delay is not None else llm.retry_initial_sec * (2**attempt))
+            except requests.RequestException as exc:
                 last_error = exc
                 if attempt + 1 >= max_retries:
                     break
-                delay = _retry_after_seconds(response) if getattr(response, "status_code", 0) == 429 else None
+                status = getattr(getattr(exc, "response", None), "status_code", 0)
+                delay = _retry_after_seconds(getattr(exc, "response", None)) if _is_retryable_status(status) else None
                 time.sleep(delay if delay is not None else llm.retry_initial_sec * (2**attempt))
+            except ValueError as exc:
+                # Invalid JSON/schema from a successful response is a provider
+                # contract failure, not a safe request to repeat.
+                last_error = exc
+                break
         raise LLMClientError(f"Chat Completions API call failed: {last_error}")
 
     @staticmethod
@@ -435,6 +475,8 @@ def build_mock_client(response_json: dict[str, Any] | None = None) -> LLMClient:
 
 
 def _retry_after_seconds(response: Any) -> float | None:
+    if response is None:
+        return None
     try:
         value = response.headers.get("Retry-After")
     except AttributeError:
@@ -442,7 +484,13 @@ def _retry_after_seconds(response: Any) -> float | None:
     try:
         delay = float(value)
     except (TypeError, ValueError):
-        return None
+        try:
+            parsed = parsedate_to_datetime(str(value))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            delay = parsed.timestamp() - time.time()
+        except (TypeError, ValueError, OverflowError):
+            return None
     return max(0.0, min(delay, 300.0))
 
 
@@ -476,6 +524,21 @@ def _structured_provider_error(response: Any) -> str:
         if value not in (None, ""):
             details.append(f"{label}={_safe_provider_error_text(value)}")
     return "; ".join(details) or "request rejected without structured error fields"
+
+
+def _structured_body_error(payload: Any) -> str:
+    """Return a safe provider error summary for an HTTP-200 error envelope."""
+    if not isinstance(payload, dict) or not payload.get("error"):
+        return ""
+    error = payload.get("error")
+    if isinstance(error, dict):
+        details = []
+        for label in ("code", "type", "message"):
+            value = error.get(label)
+            if value not in (None, ""):
+                details.append(f"{label}={_safe_provider_error_text(value)}")
+        return "; ".join(details) or "provider returned an error object"
+    return _safe_provider_error_text(error)
 
 
 def _safe_provider_error_text(value: Any) -> str:

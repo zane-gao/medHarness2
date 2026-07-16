@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+from datetime import datetime, timedelta, timezone
 
 import fitz
 import pytest
@@ -248,6 +249,83 @@ def test_chat_completions_preserves_structured_provider_error_details(monkeypatc
     assert "quota_error" in message
     assert "Insufficient balance" in message
     assert "test-only-secret" not in message
+
+
+def test_chat_completions_does_not_retry_non_retryable_http_errors(monkeypatch):
+    monkeypatch.setenv("DMX_API_KEY", "test-only-secret")
+    calls = 0
+    sleeps = []
+
+    class _Response:
+        status_code = 403
+        headers = {"Retry-After": "7"}
+
+        def json(self):
+            return {"error": {"code": "forbidden", "message": "not allowed"}}
+
+        def raise_for_status(self):
+            raise AssertionError("structured HTTP errors should be handled before raise_for_status")
+
+    def fake_post(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return _Response()
+
+    monkeypatch.setattr("requests.post", fake_post)
+    monkeypatch.setattr("time.sleep", lambda value: sleeps.append(value))
+    client = LLMClient(AppConfig(llm=LLMConfig(provider="mock", max_retries=3)))
+
+    with pytest.raises(LLMClientError, match="HTTP 403"):
+        client.call(
+            "hello",
+            provider="chat_completions",
+            api_key_env="DMX_API_KEY",
+            max_retries=3,
+            payload_classification="synthetic_test",
+        )
+    assert calls == 1
+    assert sleeps == []
+
+
+def test_openai_responses_surfaces_success_body_error_without_retry(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-only-secret")
+    calls = 0
+
+    class _Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return json.dumps({"error": {"code": "quota", "message": "quota exhausted"}}).encode()
+
+    def fake_urlopen(request, timeout):
+        nonlocal calls
+        calls += 1
+        return _Response()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    client = LLMClient(AppConfig(llm=LLMConfig(provider="openai", max_retries=3)))
+
+    with pytest.raises(LLMClientError, match="quota"):
+        client.call("hello", payload_classification="synthetic_test")
+    assert calls == 1
+
+
+def test_retry_after_accepts_rfc_http_date(monkeypatch):
+    from medharness2.llm_client import _retry_after_seconds
+
+    target = datetime.now(timezone.utc) + timedelta(seconds=20)
+
+    class _Response:
+        headers = {"Retry-After": target.strftime("%a, %d %b %Y %H:%M:%S GMT")}
+
+    monkeypatch.setattr("medharness2.llm_client.time.time", lambda: target.timestamp() - 10)
+    delay = _retry_after_seconds(_Response())
+    assert delay is not None
+    assert 9.0 <= delay <= 11.0
 
 
 def test_openai_multimodal_input_uses_data_urls(tmp_path):
