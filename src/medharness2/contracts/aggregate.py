@@ -28,11 +28,27 @@ class DenominatorAggregate(AggregateCompatModel):
 
     @model_validator(mode="after")
     def validate_counts_and_rates(self) -> "DenominatorAggregate":
-        counts = (self.source_case_count, self.successful_case_count, self.failed_case_count)
+        if (
+            self.source_case_count is not None
+            and self.manifest_case_count is not None
+            and self.source_case_count != self.manifest_case_count
+        ):
+            raise ValueError(
+                "source_case_count must match manifest_case_count when both are provided"
+            )
+
+        # Older workflow files used manifest_case_count while newer files may
+        # use source_case_count. Treat either field as the total denominator.
+        source = (
+            self.source_case_count
+            if self.source_case_count is not None
+            else self.manifest_case_count
+        )
+        counts = (source, self.successful_case_count, self.failed_case_count)
         if all(value is not None for value in counts):
             source, successful, failed = (int(value) for value in counts)
             if successful + failed != source:
-                raise ValueError("denominator counts must sum to source_case_count")
+                raise ValueError("denominator counts must sum to the total case count")
             expected_success = successful / source if source else 0.0
             expected_failure = failed / source if source else 0.0
             if self.success_rate is not None and abs(self.success_rate - expected_success) > 1e-4:

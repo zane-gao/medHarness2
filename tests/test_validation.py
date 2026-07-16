@@ -191,6 +191,47 @@ def test_validate_sample_run_rejects_inconsistent_aggregate_denominators(tmp_pat
     assert "workflow2_aggregate:ValidationError" in result["errors"]
 
 
+def test_validate_sample_run_rejects_manifest_only_denominator_mismatch(tmp_path: Path):
+    _write_manifest(tmp_path / "manifest.jsonl", 2, with_report_text=True)
+    _write_json(tmp_path / "workflow2.json", {
+        "case_count": 0,
+        "failed_case_count": 1,
+        "denominator": {
+            "manifest_case_count": 2,
+            "successful_case_count": 0,
+            "failed_case_count": 1,
+            "success_rate": 0,
+            "failure_rate": 0.5,
+        },
+    })
+    _write_json(tmp_path / "workflow3.json", {"case_count": 0, "reader_count": 0})
+
+    result = validate_sample_run(tmp_path, expected_cases=2)
+
+    assert result["passed"] is False
+    assert "workflow2_aggregate:ValidationError" in result["errors"]
+
+
+def test_validate_sample_run_rejects_conflicting_source_and_manifest_denominators(tmp_path: Path):
+    _write_manifest(tmp_path / "manifest.jsonl", 2, with_report_text=True)
+    _write_json(tmp_path / "workflow2.json", {
+        "case_count": 2,
+        "failed_case_count": 0,
+        "denominator": {
+            "source_case_count": 2,
+            "manifest_case_count": 3,
+            "successful_case_count": 2,
+            "failed_case_count": 0,
+        },
+    })
+    _write_json(tmp_path / "workflow3.json", {"case_count": 2, "reader_count": 0})
+
+    result = validate_sample_run(tmp_path, expected_cases=2)
+
+    assert result["passed"] is False
+    assert "workflow2_aggregate:ValidationError" in result["errors"]
+
+
 def test_validate_sample_run_rejects_invalid_nested_case_artifact_contract(tmp_path: Path):
     _write_run(tmp_path, warning_counts={}, failed_case_count=1)
     _write_json(
