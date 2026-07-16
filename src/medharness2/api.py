@@ -329,15 +329,28 @@ def figures_build(request: FiguresBuildRequest) -> dict[str, Any]:
 
 @app.post("/dashboard/build")
 def dashboard_build(request: DashboardBuildRequest) -> dict[str, Any]:
-    summary = build_dashboard_summary(request.run_dir, registry_entry_count_delta=1)
+    try:
+        result = build_dashboard(request.run_dir, request.output_path)
+        summary = build_dashboard_summary(request.run_dir, registry_entry_count_delta=1)
+    except Exception as exc:
+        _record_registry(
+            request.run_dir,
+            stage="dashboard.build",
+            status="failed",
+            inputs={"run_dir": request.run_dir},
+            outputs={"dashboard": request.output_path},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
+        )
+        raise HTTPException(status_code=500, detail=f"dashboard_build_failed:{type(exc).__name__}") from exc
     _record_registry(
         request.run_dir,
         stage="dashboard.build",
+        status="passed",
         inputs={"run_dir": request.run_dir},
         outputs={"dashboard": request.output_path},
         metrics=summary,
     )
-    result = build_dashboard(request.run_dir, request.output_path)
     return {
         "output_path": request.output_path,
         "summary": result["summary"],

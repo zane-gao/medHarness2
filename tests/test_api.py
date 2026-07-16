@@ -501,6 +501,25 @@ def test_api_outputs_write_run_registry_entries(tmp_path: Path):
     assert education_registry["entries"][-1]["stage"] == "workflow.education"
 
 
+def test_api_dashboard_build_marks_registry_failed_when_render_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    run_dir = tmp_path / "run"
+    _write_json(run_dir / "run_summary.json", {"summary": {"case_count": 1}})
+    output = tmp_path / "dashboard.html"
+
+    def fail_render(*args, **kwargs):
+        raise RuntimeError("render_failed")
+
+    monkeypatch.setattr("medharness2.api.build_dashboard", fail_render)
+    response = TestClient(app).post(
+        "/dashboard/build",
+        json={"run_dir": str(run_dir), "output_path": str(output)},
+    )
+
+    assert response.status_code == 500
+    registry = json.loads((run_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_api_experiments_run_surfaces_missing_source_as_failed_registry(tmp_path: Path):
     output_dir = tmp_path / "experiments"
     response = TestClient(app).post(
