@@ -170,3 +170,21 @@ def test_registry_rejects_malformed_string_list_fields(field, bad):
     )
     with pytest.raises(ValueError, match=field):
         ReportGeneratorRegistry(config)
+
+@pytest.mark.parametrize("field", ["ready", "report_trained", "fresh_inference"])
+@pytest.mark.parametrize("bad", ["false", "true", 1, 0, 1.0])
+def test_registry_rejects_implicit_boolean_coercion(field, bad):
+    config = AppConfig(
+        generator=GeneratorConfig(
+            include_legacy_ready_models=False,
+            local_models=[
+                {
+                    "key": "bad_model",
+                    "source": "artifact_reuse",
+                    field: bad,
+                }
+            ],
+        )
+    )
+    with pytest.raises(ValueError, match=field):
+        ReportGeneratorRegistry(config)

@@ -49,6 +49,14 @@ def _string_list(value: Any, label: str, default: list[str] | None = None) -> li
     return list(value)
 
 
+def _strict_bool(value: Any, label: str, default: bool) -> bool:
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise ValueError(f"{label} must be a boolean")
+    return value
+
+
 @dataclass
 class GeneratorEntry:
     key: str
@@ -638,11 +646,11 @@ class ReportGeneratorRegistry:
                     source=str(row.get("source") or "local"),
                     supported_modalities=_string_list(row.get("supported_modalities"), "supported_modalities", ["unknown"]),
                     supported_body_parts=_string_list(row.get("supported_body_parts"), "supported_body_parts", ["unknown"]),
-                    ready=bool(row.get("ready", str(row.get("source") or "") == "artifact_reuse")),
+                    ready=_strict_bool(row.get("ready"), "ready", str(row.get("source") or "") == "artifact_reuse"),
                     category=str(row.get("category") or _default_category(str(row.get("source") or "local"))),
-                    report_trained=bool(row.get("report_trained", _default_report_trained(str(row.get("source") or "")))),
+                    report_trained=_strict_bool(row.get("report_trained"), "report_trained", _default_report_trained(str(row.get("source") or ""))),
                     report_training=str(row.get("report_training") or ""),
-                    fresh_inference=bool(row.get("fresh_inference", str(row.get("source") or "") == "medharness_cli")),
+                    fresh_inference=_strict_bool(row.get("fresh_inference"), "fresh_inference", str(row.get("source") or "") == "medharness_cli"),
                     notes=str(row.get("notes") or ""),
                     source_generation_jsonl=_resolved_path_text(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(row.get("medharness_model_key") or row.get("model_key") or ""),
@@ -697,7 +705,7 @@ class ReportGeneratorRegistry:
                     supported_body_parts=body_parts,
                     ready=True,
                     category=str(row.get("category") or ""),
-                    report_trained=bool(row.get("report_trained", False)),
+                    report_trained=_strict_bool(row.get("report_trained"), "report_trained", False),
                     report_training=str(row.get("report_training") or ""),
                     fresh_inference=source != "artifact_reuse",
                     notes=str(row.get("notes") or ""),
