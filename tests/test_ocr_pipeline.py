@@ -51,6 +51,17 @@ def test_scanned_pdf_ocr_is_page_ordered_and_records_provenance(tmp_path: Path):
     assert meta["provider"] == "openai"
 
 
+def test_direct_pdf_text_extraction_closes_document_and_preserves_text(tmp_path: Path):
+    pdf = tmp_path / "text-layer.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=200)
+    page.insert_text((30, 60), "FINDINGS: Clear lungs. IMPRESSION: Normal.")
+    doc.save(pdf)
+    result = extract_report_text(pdf, case_id="text-layer", output_dir=tmp_path / "ocr", force=True)
+    assert result.method == "pdf_text_layer"
+    assert "Clear lungs" in result.text
+
+
 def test_scanned_pdf_ocr_skips_deterministic_blank_pages(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()

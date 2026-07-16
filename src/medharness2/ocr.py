@@ -265,10 +265,10 @@ def _extract_pdf_text(pdf: Path) -> str:
     except Exception:
         return ""
     try:
-        doc = fitz.open(pdf)
+        with fitz.open(pdf) as doc:
+            return "\n".join(page.get_text().strip() for page in doc).strip()
     except Exception:
         return ""
-    return "\n".join(page.get_text().strip() for page in doc).strip()
 
 
 def _ocr_role_options(config: AppConfig, role: str) -> dict[str, Any]:
