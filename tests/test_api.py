@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+import medharness2.api as api_module
 from medharness2.api import app
 
 
@@ -216,6 +217,24 @@ def test_api_validate_run(tmp_path: Path):
     body = response.json()
     assert body["summary"]["passed"] is True
     assert body["result"]["case_count"] == 1
+
+
+def test_api_workflow_failures_return_http_500_and_failed_registry(tmp_path: Path, monkeypatch):
+    cases = [
+        ("/workflow/batch-readers", {"manifest_path": str(tmp_path / "manifest.jsonl"), "output_path": str(tmp_path / "batch.json")}, "run_batch_readers", "batch_readers_failed"),
+        ("/workflow/department", {"batch_result_path": str(tmp_path / "batch.json"), "output_path": str(tmp_path / "department.json")}, "run_department_comparison", "department_failed"),
+        ("/workflow/analyze-run", {"output_dir": str(tmp_path / "analyze")}, "analyze_run", "analyze_run_failed"),
+        ("/workflow/validate-run", {"output_dir": str(tmp_path / "validate")}, "validate_sample_run", "validate_run_failed"),
+        ("/workflow/education", {"eval_report_path": str(tmp_path / "eval.json"), "output_path": str(tmp_path / "education.json")}, "run_education_suggestions", "education_failed"),
+    ]
+    for route, payload, function_name, detail_prefix in cases:
+        monkeypatch.setattr(api_module, function_name, lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+        response = TestClient(app, raise_server_exceptions=False).post(route, json=payload)
+        assert response.status_code == 500
+        assert response.json()["detail"] == f"{detail_prefix}:RuntimeError"
+        registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+        assert registry["entries"][-1]["status"] == "failed"
+        assert registry["entries"][-1]["stage"].startswith("workflow.")
 
 
 def test_api_merge_batches(tmp_path: Path):

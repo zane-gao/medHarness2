@@ -480,15 +480,27 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
 
 @app.post("/workflow/batch-readers")
 def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
-    cfg = load_config(request.config_path) if request.config_path else load_config()
-    result = run_batch_readers(
-        request.manifest_path,
-        request.output_path,
-        model_keys=request.model_keys,
-        model_sources=request.model_sources,
-        limit=request.limit,
-        config=cfg,
-    )
+    try:
+        cfg = load_config(request.config_path) if request.config_path else load_config()
+        result = run_batch_readers(
+            request.manifest_path,
+            request.output_path,
+            model_keys=request.model_keys,
+            model_sources=request.model_sources,
+            limit=request.limit,
+            config=cfg,
+        )
+    except Exception as exc:
+        _record_registry(
+            Path(request.output_path).parent,
+            stage="workflow.batch-readers",
+            status="failed",
+            inputs={"manifest": request.manifest_path},
+            outputs={"workflow2": request.output_path},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
+        )
+        raise HTTPException(status_code=500, detail=f"batch_readers_failed:{type(exc).__name__}") from exc
     errors = list(result.get("errors") or [])
     _record_registry(
         Path(request.output_path).parent,
@@ -508,7 +520,19 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
 
 @app.post("/workflow/department")
 def department(request: DepartmentRequest) -> dict[str, Any]:
-    result = run_department_comparison(request.batch_result_path, request.output_path)
+    try:
+        result = run_department_comparison(request.batch_result_path, request.output_path)
+    except Exception as exc:
+        _record_registry(
+            Path(request.output_path).parent,
+            stage="workflow.department",
+            status="failed",
+            inputs={"batch_result": request.batch_result_path},
+            outputs={"workflow3": request.output_path},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
+        )
+        raise HTTPException(status_code=500, detail=f"department_failed:{type(exc).__name__}") from exc
     errors = list(result.get("errors") or [])
     _record_registry(
         Path(request.output_path).parent,
@@ -585,7 +609,19 @@ def merge_batches(request: MergeBatchesRequest) -> dict[str, Any]:
 
 @app.post("/workflow/analyze-run")
 def analyze_run_endpoint(request: AnalyzeRunRequest) -> dict[str, Any]:
-    result = analyze_run(request.output_dir, request.analysis_dir)
+    try:
+        result = analyze_run(request.output_dir, request.analysis_dir)
+    except Exception as exc:
+        _record_registry(
+            request.output_dir,
+            stage="workflow.analyze-run",
+            status="failed",
+            inputs={"output_dir": request.output_dir},
+            outputs={"analysis_dir": request.analysis_dir or str(Path(request.output_dir) / "analysis")},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
+        )
+        raise HTTPException(status_code=500, detail=f"analyze_run_failed:{type(exc).__name__}") from exc
     errors = list(result.get("errors") or [])
     _record_registry(
         request.output_dir,
@@ -610,12 +646,24 @@ def analyze_run_endpoint(request: AnalyzeRunRequest) -> dict[str, Any]:
 
 @app.post("/workflow/validate-run")
 def validate_run(request: ValidateRunRequest) -> dict[str, Any]:
-    result = validate_sample_run(
-        request.output_dir,
-        expected_cases=request.expected_cases,
-        require_real_ocr=request.require_real_ocr,
-        require_workflows=request.require_workflows,
-    )
+    try:
+        result = validate_sample_run(
+            request.output_dir,
+            expected_cases=request.expected_cases,
+            require_real_ocr=request.require_real_ocr,
+            require_workflows=request.require_workflows,
+        )
+    except Exception as exc:
+        _record_registry(
+            request.output_dir,
+            stage="workflow.validate-run",
+            status="failed",
+            inputs={"output_dir": request.output_dir, "expected_cases": request.expected_cases},
+            outputs={"validation": str(Path(request.output_dir) / "run_summary.json")},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
+        )
+        raise HTTPException(status_code=500, detail=f"validate_run_failed:{type(exc).__name__}") from exc
     _record_registry(
         request.output_dir,
         stage="workflow.validate-run",
@@ -679,13 +727,28 @@ def preflight(request: PreflightRequest) -> dict[str, Any]:
 def education(request: EducationRequest) -> dict[str, Any]:
     if bool(request.eval_report_path) == bool(request.eval_radiologist_path):
         raise HTTPException(status_code=400, detail="Provide exactly one of eval_report_path or eval_radiologist_path.")
-    cfg = load_config(request.config_path) if request.config_path else load_config()
-    result = run_education_suggestions(
-        eval_report=request.eval_report_path,
-        eval_radiologist=request.eval_radiologist_path,
-        output_path=request.output_path,
-        config=cfg,
-    )
+    try:
+        cfg = load_config(request.config_path) if request.config_path else load_config()
+        result = run_education_suggestions(
+            eval_report=request.eval_report_path,
+            eval_radiologist=request.eval_radiologist_path,
+            output_path=request.output_path,
+            config=cfg,
+        )
+    except Exception as exc:
+        _record_registry(
+            Path(request.output_path).parent,
+            stage="workflow.education",
+            status="failed",
+            inputs={
+                "eval_report": request.eval_report_path or "",
+                "eval_radiologist": request.eval_radiologist_path or "",
+            },
+            outputs={"education": request.output_path},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
+        )
+        raise HTTPException(status_code=500, detail=f"education_failed:{type(exc).__name__}") from exc
     _record_registry(
         Path(request.output_path).parent,
         stage="workflow.education",
