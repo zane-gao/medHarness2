@@ -44,6 +44,8 @@ def build_dashboard_summary(
 
 def build_dashboard_payload(run_dir: str | Path, *, config: AppConfig | None = None) -> dict[str, Any]:
     root = Path(run_dir)
+    if not root.is_dir():
+        raise ValueError("run_dir_not_found")
     run_summary = _read_optional(root / "run_summary.json")
     analysis = _read_optional(root / "analysis" / "analysis_summary.json")
     workflow3 = _read_optional(root / "workflow3.json")

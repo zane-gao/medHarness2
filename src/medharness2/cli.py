@@ -323,7 +323,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"experiments={result['experiment_count']}")
         return 1 if result.get("errors") else 0
     if args.command == "figures" and args.figures_command == "build":
-        result = build_figures(args.experiment_dir, args.output_dir)
+        try:
+            result = build_figures(args.experiment_dir, args.output_dir)
+        except Exception as exc:
+            _record_registry(
+                args.output_dir,
+                command=command,
+                stage="figures.build",
+                status="failed",
+                inputs={"experiment_dir": args.experiment_dir},
+                outputs={"figure_dir": args.output_dir},
+                metrics={"error_count": 1},
+                warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 figures build failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         metrics = {"figure_count": result["figure_count"]}
         outputs = {
             "figure_dir": args.output_dir,
@@ -357,7 +371,22 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "dashboard" and args.dashboard_command == "build":
         cfg = load_config(args.config)
-        summary = build_dashboard_summary(args.run_dir, registry_entry_count_delta=1, config=cfg)
+        try:
+            summary = build_dashboard_summary(args.run_dir, registry_entry_count_delta=1, config=cfg)
+            result = build_dashboard(args.run_dir, args.output, config=cfg)
+        except Exception as exc:
+            _record_registry(
+                args.run_dir,
+                command=command,
+                stage="dashboard.build",
+                status="failed",
+                inputs={"run_dir": args.run_dir, "config": args.config or "config/default.yaml"},
+                outputs={"dashboard": args.output},
+                metrics={"error_count": 1},
+                warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 dashboard build failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         _record_registry(
             args.run_dir,
             command=command,
@@ -366,7 +395,6 @@ def main(argv: list[str] | None = None) -> int:
             outputs={"dashboard": args.output},
             metrics=summary,
         )
-        result = build_dashboard(args.run_dir, args.output, config=cfg)
         print(f"wrote medHarness2 dashboard to {args.output}")
         print(
             "cases="

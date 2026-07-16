@@ -224,6 +224,14 @@ def test_cli_figures_build_writes_run_registry_entries(tmp_path: Path):
     assert run_registry["entries"][-1]["stage"] == "figures.build"
 
 
+def test_cli_figures_build_rejects_missing_experiment_dir(tmp_path: Path):
+    output = tmp_path / "figures"
+    code = main(["figures", "build", "--experiment-dir", str(tmp_path / "missing"), "--output-dir", str(output)])
+    assert code == 1
+    registry = json.loads((output / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_cli_dashboard_build_writes_static_html(tmp_path: Path):
     run_dir = _write_minimal_run(tmp_path / "run")
     output = tmp_path / "dashboard.html"
@@ -253,6 +261,12 @@ def test_cli_dashboard_build_writes_static_html(tmp_path: Path):
     assert entry["outputs"]["dashboard"] == str(output)
     assert entry["metrics"]["registry_entry_count"] == len(registry["entries"])
     assert "dashboard.build" in html
+
+
+def test_cli_dashboard_build_rejects_missing_run_dir(tmp_path: Path):
+    output = tmp_path / "dashboard.html"
+    code = main(["dashboard", "build", "--run-dir", str(tmp_path / "missing"), "--output", str(output)])
+    assert code == 1
 
 
 def test_cli_dashboard_build_uses_model_roles_from_config(tmp_path: Path):

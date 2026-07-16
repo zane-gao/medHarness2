@@ -8,7 +8,13 @@ from medharness2.utils.io import read_json, write_json
 
 
 def build_figures(experiment_dir: str | Path, output_dir: str | Path) -> dict[str, Any]:
-    exp = read_json(Path(experiment_dir) / "results.json")
+    experiment_root = Path(experiment_dir)
+    if not experiment_root.is_dir():
+        raise ValueError("experiment_dir_not_found")
+    results_path = experiment_root / "results.json"
+    if not results_path.is_file():
+        raise ValueError("experiment_results_not_found")
+    exp = read_json(results_path)
     run_dir = Path(str(exp.get("run_dir") or ""))
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
