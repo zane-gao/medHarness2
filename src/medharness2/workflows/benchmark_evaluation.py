@@ -491,12 +491,12 @@ def verify_real_llm_case_evaluation(
         expected_indices = {
             int(item["error_index"])
             for item in disagreements
-            if isinstance(item, dict) and isinstance(item.get("error_index"), int)
+            if isinstance(item, dict) and _valid_int(item.get("error_index"))
         }
         decision_indices = {
             int(item["error_index"])
             for item in decisions
-            if isinstance(item, dict) and isinstance(item.get("error_index"), int)
+            if isinstance(item, dict) and _valid_int(item.get("error_index"))
         }
         if len(decisions) != len(disagreements) or decision_indices != expected_indices:
             raise ValueError("T4 hazard adjudication decision coverage mismatch")
@@ -915,7 +915,7 @@ def _build_evaluation_summary(
     max_hazard_levels = Counter(
         str(metrics["max_hazard_level"])
         for metrics in case_metrics
-        if isinstance(metrics.get("max_hazard_level"), int)
+        if _valid_int(metrics.get("max_hazard_level"))
     )
     adjudicated_hazard_levels = Counter(
         str(level)
@@ -930,7 +930,7 @@ def _build_evaluation_summary(
     consensus_max_hazard_levels = Counter(
         str(metrics["consensus_max_hazard_level"])
         for metrics in case_metrics
-        if isinstance(metrics.get("consensus_max_hazard_level"), int)
+        if _valid_int(metrics.get("consensus_max_hazard_level"))
         and int(metrics["consensus_max_hazard_level"]) > 0
     )
     hazard_compared_count = sum(int(metrics.get("hazard_compared_count") or 0) for metrics in case_metrics)
@@ -1135,6 +1135,11 @@ def _finite_stat_value(value: Any) -> bool:
     )
 
 
+def _valid_int(value: Any) -> bool:
+    """Return true only for integer values, excluding bool-as-int coercion."""
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
     generated = list(payload.get("generated_evaluations") or [])
     pairwise = list(payload.get("pairwise_comparisons") or [])
@@ -1154,7 +1159,7 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
         int(error["hazard_level"])
         for error in hazard_errors
         if isinstance(error, dict)
-        and isinstance(error.get("hazard_level"), int)
+        and _valid_int(error.get("hazard_level"))
     ]
     consensus_hazard_levels, consensus_unresolved_count = _consensus_hazard_levels(
         hazard_errors,
@@ -1196,7 +1201,7 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
             int(decision["hazard_level"])
             for decision in adjudication_decisions
             if isinstance(decision, dict)
-            and isinstance(decision.get("hazard_level"), int)
+            and _valid_int(decision.get("hazard_level"))
             and not decision.get("abstain")
         ],
         "consensus_hazard_levels": consensus_hazard_levels,
@@ -1234,12 +1239,12 @@ def _consensus_hazard_levels(
     disagreement_indices = {
         int(item["error_index"])
         for item in hazard_review.get("disagreements") or []
-        if isinstance(item, dict) and isinstance(item.get("error_index"), int)
+        if isinstance(item, dict) and _valid_int(item.get("error_index"))
     }
     decisions = {
         int(item["error_index"]): item
         for item in hazard_adjudication.get("decisions") or []
-        if isinstance(item, dict) and isinstance(item.get("error_index"), int)
+        if isinstance(item, dict) and _valid_int(item.get("error_index"))
     }
     levels: list[int] = []
     unresolved = 0
@@ -1249,15 +1254,13 @@ def _consensus_hazard_levels(
             if (
                 not isinstance(decision, dict)
                 or bool(decision.get("abstain"))
-                or not isinstance(decision.get("hazard_level"), int)
+                or not _valid_int(decision.get("hazard_level"))
             ):
                 unresolved += 1
                 continue
             levels.append(int(decision["hazard_level"]))
             continue
-        if not isinstance(primary, dict) or not isinstance(
-            primary.get("hazard_level"), int
-        ):
+        if not isinstance(primary, dict) or not _valid_int(primary.get("hazard_level")):
             unresolved += 1
             continue
         levels.append(int(primary["hazard_level"]))

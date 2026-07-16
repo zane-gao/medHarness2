@@ -680,6 +680,19 @@ def test_case_evaluation_metrics_count_each_abstained_adjudication_once():
     assert metrics["hazard_adjudication_abstained_count"] == 2
 
 
+def test_case_evaluation_metrics_ignore_boolean_hazard_levels():
+    payload = _strict_case_evaluation()
+    comparison = payload["pairwise_comparisons"][0]["comparison"]
+    comparison["hazards"]["errors"] = [{"hazard_level": True}, {"hazard_level": 3}]
+
+    metrics = _case_evaluation_metrics(payload)
+
+    assert metrics["hazard_error_count"] == 2
+    assert metrics["max_hazard_level"] == 3
+    assert metrics["consensus_hazard_levels"] == [3]
+    assert metrics["consensus_unresolved_error_count"] == 1
+
+
 def test_case_evaluation_metrics_require_clinical_validation_without_llm_disagreement():
     metrics = _case_evaluation_metrics(_strict_case_evaluation())
 
