@@ -5,7 +5,7 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: 5daad8d
+  git_sha: 39c8f43
   dirty_worktree: false
   pytest_passed: 590
   pytest_warnings: 18
@@ -66,7 +66,7 @@ workstreams:
     next_gate: Validate a frozen run with nonzero T4/T5/T6 audit artifacts and add contract coverage for any newly introduced aggregate fields.
   tools:
     status: in_progress
-    summary: T1 uses a strict real LLM judge; T2/T4 use deterministic templates plus LLM judgement; T5/T6 preserve deterministic primary results and emit hash-linked LLM audit artifacts. Single-report T1 now propagates general_judge consistency_runs into execution and checkpoint inputs, and its retry/fail-fast exception boundary is aligned with Tool4. Hazard reviewer supports configuration-driven consistency re-runs with contract-bound provenance while preserving the first reviewer result. A pure-DMX 11-case run passed 11/11 with 99 verified role artifacts and zero fallback after fixing the T5 suggested-error-type prompt/schema mismatch. Test-retest instability remains material, so clinical gold-set calibration and repeated-run reliability validation are outstanding.
+    summary: T1 uses a strict real LLM judge; T2/T4 use deterministic templates plus LLM judgement; T5/T6 preserve deterministic primary results and emit hash-linked LLM audit artifacts. Single-report T1 now propagates general_judge consistency_runs into execution and checkpoint inputs, and its retry/fail-fast exception boundary is aligned with Tool4. The strong profile now requests two general_judge calls as well as two hazard_reviewer calls, preserving retest provenance for both judge families. A pure-DMX 11-case run passed 11/11 with 99 verified role artifacts and zero fallback after fixing the T5 suggested-error-type prompt/schema mismatch. Test-retest instability remains material, so clinical gold-set calibration and repeated-run reliability validation are outstanding.
     evidence_paths:
       - docs/llm_tooling_upgrade_20260710.md
       - docs/llm_tools_synthetic_smoke_20260710.json
