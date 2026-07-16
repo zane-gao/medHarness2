@@ -1354,3 +1354,49 @@ def test_cli_ocr_benchmark_returns_blocked_for_missing_candidate(tmp_path: Path)
     code = main(["ocr-benchmark", "--manifest", str(manifest), "--output", str(output)])
     assert code == 2
     assert json.loads(output.read_text(encoding="utf-8"))["status"] == "blocked"
+
+
+def test_cli_single_case_returns_nonzero_and_failed_registry_on_malformed_config(tmp_path: Path):
+    report = tmp_path / "report.txt"
+    image = tmp_path / "image.dcm"
+    output = tmp_path / "single.json"
+    config = tmp_path / "malformed.yaml"
+    report.write_text("FINDINGS: Normal. IMPRESSION: Normal.", encoding="utf-8")
+    image.write_text("dummy", encoding="utf-8")
+    config.write_text("- not-a-mapping\n", encoding="utf-8")
+
+    code = main([
+        "workflow", "single-case",
+        "--report", str(report),
+        "--image", str(image),
+        "--output", str(output),
+        "--config", str(config),
+    ])
+
+    assert code == 1
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "workflow.single-case"
+    assert entry["status"] == "failed"
+    assert entry["metrics"]["exception_type"] == "ValueError"
+
+
+def test_cli_dashboard_returns_nonzero_and_failed_registry_on_malformed_config(tmp_path: Path):
+    config = tmp_path / "malformed.yaml"
+    config.write_text("- not-a-mapping\n", encoding="utf-8")
+    run_dir = tmp_path / "run"
+    output = tmp_path / "dashboard.html"
+
+    code = main([
+        "dashboard", "build",
+        "--run-dir", str(run_dir),
+        "--output", str(output),
+        "--config", str(config),
+    ])
+
+    assert code == 1
+    registry = json.loads((run_dir / "run_registry.json").read_text(encoding="utf-8"))
+    entry = registry["entries"][-1]
+    assert entry["stage"] == "dashboard.build"
+    assert entry["status"] == "failed"
+    assert entry["metrics"]["exception_type"] == "ValueError"

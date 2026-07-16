@@ -371,8 +371,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"figures={result['figure_count']}")
         return 0
     if args.command == "dashboard" and args.dashboard_command == "build":
-        cfg = load_config(args.config)
         try:
+            cfg = load_config(args.config)
             summary = build_dashboard_summary(args.run_dir, registry_entry_count_delta=1, config=cfg)
             result = build_dashboard(args.run_dir, args.output, config=cfg)
         except Exception as exc:
@@ -383,7 +383,7 @@ def main(argv: list[str] | None = None) -> int:
                 status="failed",
                 inputs={"run_dir": args.run_dir, "config": args.config or "config/default.yaml"},
                 outputs={"dashboard": args.output},
-                metrics={"error_count": 1},
+                metrics={"error_count": 1, "exception_type": type(exc).__name__},
                 warnings=[_exception_warning(exc)],
             )
             print(f"medHarness2 dashboard build failed: {type(exc).__name__}: {exc}", file=sys.stderr)
@@ -405,18 +405,38 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
     if args.command == "workflow" and args.workflow == "single-case":
-        config = load_config(args.config) if args.config else load_config()
-        result = run_single_case(
-            report_path=Path(args.report),
-            image_path=Path(args.image),
-            output_path=Path(args.output),
-            case_id=args.case_id,
-            modality=args.modality,
-            top_n=args.top_n,
-            model_keys=_model_keys(args),
-            model_sources=args.model_sources,
-            config=config,
-        )
+        try:
+            config = load_config(args.config) if args.config else load_config()
+            result = run_single_case(
+                report_path=Path(args.report),
+                image_path=Path(args.image),
+                output_path=Path(args.output),
+                case_id=args.case_id,
+                modality=args.modality,
+                top_n=args.top_n,
+                model_keys=_model_keys(args),
+                model_sources=args.model_sources,
+                config=config,
+            )
+        except Exception as exc:
+            _record_registry(
+                Path(args.output).parent,
+                command=command,
+                stage="workflow.single-case",
+                status="failed",
+                inputs={
+                    "report": args.report,
+                    "image": args.image,
+                    "modality": args.modality or "",
+                    "case_id": args.case_id or "",
+                    "config": args.config or "",
+                },
+                outputs={"result": args.output},
+                metrics={"error_count": 1, "exception_type": type(exc).__name__},
+                warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 single-case failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         _record_registry(
             Path(args.output).parent,
             command=command,
