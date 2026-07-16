@@ -61,7 +61,7 @@ def evaluate_likert(
             continue
         metadata = _metadata(
             "mock_judge" if provider.lower() == "mock" else "llm_judge",
-            False,
+            provider.lower() == "mock",
             attempt + 1,
             judge_errors,
             provider,

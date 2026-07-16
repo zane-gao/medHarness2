@@ -49,6 +49,8 @@ def test_tool1_likert_normalizes_scores():
     assert result["Completeness and Accuracy"]["score"] == 5
     assert likert_mean(result) >= 1
     assert result["warning"] == "No image/volume provided"
+    assert result["_metadata"]["backend"] == "mock_judge"
+    assert result["_metadata"]["fallback_used"] is True
 
 
 def test_tool1_uses_real_model_role_and_records_provenance():

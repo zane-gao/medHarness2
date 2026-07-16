@@ -4,7 +4,7 @@
 
 > **2026-07-15 执行增量**：已完成 OCR 逐页管线、可注入的 audit-only 多模态 verifier、三模态软部位路由、Likert 归一化、统计白名单/小样本区间、并列百分位、鲁棒 JSON 解析、fallback/mock 统计过滤、参考图 recall、seed/cache、Retry-After 和非 CXR observation slug 规范化。北川数据集按当前工程约定直接作为金标准数据源；API/敏感产物硬化按用户指示暂不作为本轮阻塞。以下清单仍保留原始审计事实，已修复项以当前代码和测试为准。
 
-> **修复状态**：H5、H9、H10、H11、H12、H14、H15、H17、M1、M2、M3、M6 已有代码与回归测试证据；H7 已完成小样本 t 区间；H8 已接入正式 benchmark summary 的 Welch+Holm 统计，但真实冻结结果仍需执行。H13 已把 seed/route 纳入 checkpoint 输入，并明确 checkpoint reuse 不等于重复实验；仍需真实重复运行验证。M7 已支持 hazard reviewer 的配置化重测摘要（原始 reviewer 保留、重测次数与一致率入合约并进入 checkpoint 指纹）；M12 仍需要 gated live judge smoke；C1/H1-H4 按用户指示暂缓。
+> **修复状态**：H5、H9、H10、H11、H12、H14、H15、H17、M1、M2、M3、M6 已有代码与回归测试证据；Tool1 显式 mock judge 现在也标记 `fallback_used=true`，不会进入正式统计。H7 已完成小样本 t 区间；H8 已接入正式 benchmark summary 的 Welch+Holm 统计，但真实冻结结果仍需执行。H13 已把 seed/route 纳入 checkpoint 输入，并明确 checkpoint reuse 不等于重复实验；仍需真实重复运行验证。M7 已支持 hazard reviewer 的配置化重测摘要（原始 reviewer 保留、重测次数与一致率入合约并进入 checkpoint 指纹）；M12 仍需要 gated live judge smoke；C1/H1-H4 按用户指示暂缓。
 
 > **2026-07-16 增量**：M4（Tool2 宽泛异常）、M5（报告文本 prompt 边界）、M9（失败病例分母）、M10/M11/M13（fallback provenance）和 M7 的 Tool1 重测记录已补代码与测试。H8 新增 Welch 近似比较与 Holm 校正 API，并已接入正式 benchmark summary；样本不足的比较标为 blocked。H6 的排名 cutoff 近似并列候选现在会一并保留并标记 `near_cutoff`；此外，batch/reevaluate/merge 三条 reader 聚合路径已统一使用 `(likert-1)/4`，不再与排名口径漂移；真实分析仍必须在冻结数据上运行并记录方法。
 
