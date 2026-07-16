@@ -864,11 +864,12 @@ def main(argv: list[str] | None = None) -> int:
             metrics={
                 "suggestion_count": len(result.get("suggestions") or []),
                 "general_suggestion_count": len(result.get("general_suggestions") or []),
+                "status": result.get("status", ""),
             },
         )
         print(f"wrote medHarness2 education suggestions to {args.output}")
         print(f"mode={result['mode']} suggestions={len(result.get('suggestions') or [])}")
-        return 0
+        return 0 if result.get("status") not in {"blocked", "blocked_insufficient_data"} else 1
     parser.error("unsupported command")
     return 2
 

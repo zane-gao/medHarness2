@@ -167,6 +167,18 @@ def test_cli_workflow_education_eval_report(tmp_path: Path):
     assert entry["metrics"]["suggestion_count"] >= 1
 
 
+def test_cli_workflow_education_returns_nonzero_when_blocked(tmp_path: Path):
+    workflow2 = tmp_path / "workflow2.json"
+    output = tmp_path / "education.json"
+    workflow2.write_text(json.dumps({"case_count": 1, "per_reader": {"reader_a": {"case_count": 1}}}), encoding="utf-8")
+
+    code = main(["workflow", "education", "--eval-radiologist", str(workflow2), "--output", str(output)])
+
+    assert code == 1
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["status"] == "blocked_insufficient_data"
+
+
 def _workflow1_payload() -> dict:
     return {
         "input": {"modality": "cxr", "body_part": "chest"},
