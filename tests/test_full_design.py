@@ -97,6 +97,22 @@ def test_tool11_excludes_fallback_hazard_rows():
     assert result[0]["metrics"]["error_rate"] == pytest.approx(0.25)
 
 
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+def test_tool11_drops_non_finite_hazard_metrics(bad_value: float):
+    result = hazardwise_weighted(
+        [
+            {
+                "error_type": "false_finding",
+                "hazard_level": 3,
+                "metrics": {"error_rate": bad_value, "valid": 0.2},
+            }
+        ]
+    )
+
+    assert "error_rate" not in result[0]["metrics"]
+    assert result[0]["metrics"]["valid"] == pytest.approx(0.3)
+
+
 def test_tool12_statistics_and_percentile_rank():
     stats = calculate_statistics([{"score": 0.5}, {"score": 0.7}, {"score": 0.9}])
     assert stats["score"]["mean"] == pytest.approx(0.7)

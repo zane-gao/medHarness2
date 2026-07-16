@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 
@@ -35,7 +36,11 @@ def hazardwise_weighted(
         weight = float(weights.get(error_type, {}).get(level, 1.0))
         metrics = dict(item.get("metrics") or {})
         if metrics:
-            item["metrics"] = {key: (value * weight if _is_number(value) else value) for key, value in metrics.items()}
+            item["metrics"] = {
+                key: _weighted_metric_value(value, weight)
+                for key, value in metrics.items()
+                if not _is_number(value) or math.isfinite(float(value))
+            }
         else:
             for key, value in list(item.items()):
                 if key not in {"hazard_level", "hazard_weight"} and _is_number(value):
@@ -61,3 +66,7 @@ def _eligible(row: dict[str, Any]) -> bool:
 
 def _is_number(value: Any) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _weighted_metric_value(value: Any, weight: float) -> Any:
+    return value * weight if _is_number(value) else value
