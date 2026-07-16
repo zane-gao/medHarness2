@@ -87,7 +87,11 @@ def evaluate_hazards(
                 payload_classification="deidentified_structured",
                 **options,
             )
-        except Exception as exc:
+        # Only transport/client failures are retryable here.  A programming
+        # error in the client (for example AttributeError/KeyError) must
+        # surface immediately instead of being mislabeled as an LLM failure
+        # and silently converted into a deterministic fallback.
+        except (LLMClientError, RuntimeError, TimeoutError, ConnectionError, OSError) as exc:
             judge_errors.append(f"{type(exc).__name__}: {exc}")
             continue
         try:

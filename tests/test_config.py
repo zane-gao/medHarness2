@@ -124,6 +124,7 @@ def test_dmx_strong_profile_routes_every_llm_backed_tool_to_verified_strong_mode
     assert cfg.model_roles["hazard_reviewer"].seed == 0
     assert cfg.privacy.enforce_external is False
     assert cfg.generator.cloud_fallback_enabled is False
+    assert cfg.model_roles["hazard_reviewer"].consistency_runs == 2
 
 
 def test_yunwu_profile_is_an_explicit_nonautomatic_backup():

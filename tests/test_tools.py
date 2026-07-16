@@ -1041,6 +1041,20 @@ def test_tool4_adds_hazard_levels():
     assert result["errors"][0]["hazard_level"] == 4
 
 
+def test_tool4_does_not_turn_client_programming_errors_into_fallbacks():
+    class BrokenClient:
+        def call(self, *args, **kwargs):
+            raise AttributeError("client wiring bug")
+
+    with pytest.raises(AttributeError, match="client wiring bug"):
+        evaluate_hazards(
+            [{"error_type": "false_finding"}],
+            llm_client=BrokenClient(),
+            require_llm=False,
+            allow_fallback=True,
+        )
+
+
 def test_tool4_reviewer_can_record_consistency_runs_without_replacing_primary():
     primary = {
         "errors": [{"error_type": "false_finding", "hazard_level": 3, "explanation": "p", "recommended_action": "review_if_relevant", "confidence": 0.8, "evidence_ids": ["e1"], "abstain": False}]

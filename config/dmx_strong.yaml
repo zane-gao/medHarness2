@@ -64,6 +64,9 @@ model_roles:
     timeout_sec: 120
     temperature: 0.0
     seed: 0
+    # Two independent reviewer calls are required for a consistency estimate;
+    # the primary result remains preserved and retest provenance is recorded.
+    consistency_runs: 2
     max_tokens: 2048
   hazard_adjudicator:
     provider: chat_completions
