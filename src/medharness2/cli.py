@@ -208,7 +208,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "annotation" and args.annotation_command == "validate":
         result = validate_pilot_annotation_package(args.package_dir)
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0 if result["status"] != "blocked" else 2
+        if result["status"] == "complete":
+            return 0
+        if result["status"] == "blocked":
+            return 2
+        return 1
     if args.command == "benchmark" and args.benchmark_command == "plan":
         cfg = load_config(args.config) if args.config else load_config("config/formal_benchmark.yaml")
         result = plan_generation_benchmark(args.manifest, config=cfg, model_keys=args.models)

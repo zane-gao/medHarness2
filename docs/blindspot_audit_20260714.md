@@ -25,6 +25,7 @@
 > **2026-07-16 聚合合约增量**：新增 workflow2/workflow3 聚合结果的兼容型 Pydantic 合约，并接入 `validate_sample_run`；reader、denominator、percentile 和计数字段畸形时明确失败，同时允许历史分析字段增量扩展。版本化 schema 已重新导出。全量回归测试为 423 passed、18 warnings。
 > **2026-07-16 聚合一致性增量**：聚合合约进一步校验成功/失败分母、成功率/失败率、病例行数与读者 percentile 数量的一致性，避免“类型正确但统计自相矛盾”的结果进入分析。全量回归测试为 424 passed、18 warnings。
 > **2026-07-16 pilot10 验收增量**：新增 `medharness2 annotation validate`，逐病例校验 annotation contract、manifest 对齐、reader_a/reader_b/adjudication 顺序和真实完成状态；前端改用 validator 结果计算完成数。当前 `annotation/pilot10` 实测为 `not_started`，0/10 完成，不再仅信任 manifest 声明。全量回归测试为 429 passed、18 warnings。
+> **2026-07-16 标注 CLI 门禁增量**：`annotation validate` 退出码现在区分完整（0）、未完成（1）和结构/状态阻断（2）；自动化任务不会再把 `not_started` 当成成功校验。
 > 方法：8 维度并行代码审计（62 个 agent）+ **对抗性验证**（每条发现派独立"怀疑者"读真实代码反驳），关键项由主审人逐行复核。
 > 统计口径：原始 54 条发现 → 验证后 **1 CRITICAL / 17 HIGH（去重后）/ 13 MEDIUM / 6 LOW**，另有 **4 条已核实为非缺陷**、**4 条被驳倒删除**。
 > 严重度以对抗性验证的 `adjusted_severity` 为准——**比"直觉严重度"低**是因为验证者反复确认：多数缺陷真实存在，但**只在 benchmark 之外的路径 / mock 配置 / 误配下触发**，不影响那次权威跑。

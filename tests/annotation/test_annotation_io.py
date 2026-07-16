@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from medharness2.annotation import AnnotationCase, build_pilot_annotation_package, validate_pilot_annotation_package
+from medharness2.cli import main
 from medharness2.privacy import ExternalPayloadPolicy
 
 
@@ -111,6 +112,7 @@ def test_validate_pilot_annotation_package_reports_not_started_without_fabricati
     assert result["complete_case_count"] == 0
     assert result["not_started_case_count"] == 3
     assert result["errors"] == []
+    assert main(["annotation", "validate", "--package-dir", str(output_dir)]) == 1
 
 
 def test_validate_pilot_annotation_package_blocks_adjudication_before_both_readers(tmp_path: Path):
