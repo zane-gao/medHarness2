@@ -336,3 +336,11 @@ def test_migration_warning_lists_reject_non_string_items():
                 "warnings": {"unexpected": True},
             }
         )
+
+@pytest.mark.parametrize("field", ["generated_reports", "generated_evaluations", "pairwise_comparisons", "rankings"])
+@pytest.mark.parametrize("bad", ["not-a-list", {"x": 1}, ["bad-item"]])
+def test_case_migration_rejects_malformed_top_level_object_lists(field, bad):
+    from medharness2.contracts.migrations import migrate_case_evaluation_v1
+
+    with pytest.raises(TypeError, match=field):
+        migrate_case_evaluation_v1({field: bad}, case_id="case-1")

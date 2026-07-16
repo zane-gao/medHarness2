@@ -139,18 +139,20 @@ def migrate_generated_report_v1(
 
 def migrate_case_evaluation_v1(payload: dict[str, Any], *, case_id: str) -> dict[str, Any]:
     source = deepcopy(payload)
+    generated_reports = _dict_list(source.get("generated_reports"), "generated_reports")
+    rankings = _dict_list(source.get("rankings"), "rankings")
     unknown = {key: value for key, value in source.items() if key not in _CASE_FIELDS}
     warnings = _string_list(source.get("migration_warnings"), "migration_warnings")
     if unknown:
         warnings.append("preserved_unknown_top_level_fields")
-    if any(str(item.get("source") or "") == "medharness_cli" for item in source.get("generated_reports") or []):
+    if any(str(item.get("source") or "") == "medharness_cli" for item in generated_reports):
         warnings.append("legacy_reference_assisted_generation_assumed")
     human_evaluation, human_migrated = _migrate_evaluation(source.get("human_evaluation") or {})
     generated_evaluations, generated_migrated = _migrate_generated_evaluations(
-        source.get("generated_evaluations") or []
+        _dict_list(source.get("generated_evaluations"), "generated_evaluations")
     )
     pairwise_comparisons, pairwise_migrated = _migrate_pairwise_comparisons(
-        source.get("pairwise_comparisons") or []
+        _dict_list(source.get("pairwise_comparisons"), "pairwise_comparisons")
     )
     if human_migrated or generated_migrated or pairwise_migrated:
         warnings.append("legacy_nested_contracts_migrated")
@@ -162,10 +164,10 @@ def migrate_case_evaluation_v1(payload: dict[str, Any], *, case_id: str) -> dict
         human_evaluation=human_evaluation,
         generated_reports=[
             migrate_generated_report_v1(item, legacy_reference_assisted=True)
-            for item in source.get("generated_reports") or []
+            for item in generated_reports
         ],
         generated_evaluations=generated_evaluations,
-        rankings=list(source.get("rankings") or []),
+        rankings=rankings,
         pairwise_comparisons=pairwise_comparisons,
         migration_warnings=list(dict.fromkeys(warnings)),
         legacy_extensions=legacy_extensions,
@@ -187,6 +189,14 @@ def _migrate_generated_evaluations(rows: list[Any]) -> tuple[list[dict[str, Any]
         migrated_rows.append(migrated)
         migrated_any = migrated_any or changed
     return migrated_rows, migrated_any
+
+
+def _dict_list(value: Any, label: str) -> list[dict[str, Any]]:
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise TypeError(f"{label} must be a list of objects")
+    return [deepcopy(item) for item in value]
 
 
 def _migrate_pairwise_comparisons(rows: list[Any]) -> tuple[list[dict[str, Any]], bool]:
