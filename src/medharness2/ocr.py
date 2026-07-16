@@ -110,17 +110,26 @@ def extract_report_text(
                     "Return JSON only with status (agree/disagreement), evidence spans, and short reason. "
                     "Do not rewrite or provide a replacement transcription.\n\nOCR:\n" + text
                 )
-                raw_audit = verifier_client.call(
-                    audit_prompt,
-                    image_path=rendered_pages[0],
-                    response_format="json",
-                    payload_classification="raw_medical_document",
-                    **dict(verifier_options or {}),
-                )
                 try:
-                    quality_audit = json.loads(str(raw_audit))
-                except json.JSONDecodeError:
-                    quality_audit = {"status": "invalid_verifier_response", "raw": str(raw_audit)[:500]}
+                    raw_audit = verifier_client.call(
+                        audit_prompt,
+                        image_path=rendered_pages[0],
+                        response_format="json",
+                        payload_classification="raw_medical_document",
+                        **dict(verifier_options or {}),
+                    )
+                    try:
+                        quality_audit = json.loads(str(raw_audit))
+                    except json.JSONDecodeError:
+                        quality_audit = {"status": "invalid_verifier_response", "raw": str(raw_audit)[:500]}
+                        warnings.append("ocr_verifier_invalid_response")
+                except Exception as exc:
+                    quality_audit = {
+                        "status": "verifier_failed",
+                        "error_type": type(exc).__name__,
+                        "error": str(exc)[:500],
+                    }
+                    warnings.append("ocr_verifier_failed")
         method = "vlm_ocr"
         provider = cfg.llm.provider
         if not text:

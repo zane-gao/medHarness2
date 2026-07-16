@@ -103,6 +103,32 @@ def test_ocr_verifier_is_audit_only_and_cannot_change_primary_text(tmp_path: Pat
     assert meta["quality_audit"]["spans"] == ["audit only"]
 
 
+def test_ocr_verifier_failure_does_not_fail_primary_ocr(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    doc.new_page(width=200, height=200)
+    doc.save(pdf)
+
+    class FailingVerifier:
+        def call(self, *args, **kwargs):
+            raise RuntimeError("verifier unavailable")
+
+    result = extract_report_text(
+        pdf,
+        case_id="case-verifier-failure",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=PageOCRClient(),
+        verifier_client=FailingVerifier(),
+        force=True,
+    )
+
+    assert result.text.startswith("FINDINGS: page 1")
+    assert "ocr_verifier_failed" in result.warnings
+    meta = json.loads((tmp_path / "ocr" / "case-verifier-failure.ocr.json").read_text(encoding="utf-8"))
+    assert meta["quality_audit"]["status"] == "verifier_failed"
+
+
 def test_ocr_candidate_benchmark_scores_and_blocks_missing_artifacts(tmp_path: Path):
     manifest = tmp_path / "ocr_manifest.json"
     manifest.write_text(
