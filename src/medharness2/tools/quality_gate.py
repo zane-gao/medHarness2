@@ -65,7 +65,13 @@ def check_generation_quality(text: str, *, modality: str | None, body_part: str 
         conflicts["modality"] = modality_matches
 
     return {
-        "passed": not warnings,
+        # Body-part mentions are intentionally advisory.  The router is
+        # modality-first and body part is a soft ranking signal; making this
+        # conflict fail closed would silently recreate the old hard-routing
+        # behavior and discard otherwise usable candidates.  Modality
+        # conflicts remain blocking because they indicate a different imaging
+        # family.
+        "passed": not modality_matches,
         "warnings": warnings,
         "expected_modality": modality,
         "expected_body_part": body_part,

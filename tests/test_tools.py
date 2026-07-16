@@ -1709,13 +1709,13 @@ def test_quality_gate_allows_chinese_followup_ct_recommendation_for_cxr():
     assert result["passed"] is True
 
 
-def test_quality_gate_blocks_chinese_chest_report_for_head_ct():
+def test_quality_gate_keeps_body_part_mismatch_as_a_soft_warning():
     result = check_generation_quality(
         "检查部位：胸部CT平扫。检查所见：双肺多发结节，右肺上叶实变。",
         modality="ct",
         body_part="head",
     )
-    assert result["passed"] is False
+    assert result["passed"] is True
     assert "body_part_mismatch" in result["warnings"]
 
 
