@@ -87,6 +87,9 @@ model_roles:
     transport_max_retries: 2
     timeout_sec: 120
     temperature: 0.0
+    # Repeat the primary report-quality judge call so T1 stability is
+    # measured alongside the hazard reviewer, not only inferred from one draw.
+    consistency_runs: 2
     max_tokens: 2048
   finding_extractor:
     provider: chat_completions
