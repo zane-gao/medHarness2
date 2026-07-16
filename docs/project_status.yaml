@@ -5,7 +5,7 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: fc18828
+  git_sha: 380fb620
   dirty_worktree: false
   pytest_passed: 585
   pytest_warnings: 18
