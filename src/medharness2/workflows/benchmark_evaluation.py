@@ -518,10 +518,11 @@ def verify_real_llm_case_evaluation(payload: dict[str, Any]) -> dict[str, Any]:
         f"{item['provider']}::{item['model']}::{item['endpoint_host']}"
         for item in evidence
     )
+    fallback_count = sum(1 for item in evidence if bool(item.get("fallback_used")))
     return {
         "passed": True,
         "evidence_count": len(evidence),
-        "fallback_count": 0,
+        "fallback_count": fallback_count,
         "role_counts": dict(sorted(role_counts.items())),
         "validated_attempt_counts": dict(
             sorted(validated_attempt_counts.items())
@@ -628,6 +629,7 @@ def _validate_role_routes(
             "temperature": None
             if route.omit_temperature
             else route_options.get("temperature", config.llm.temperature),
+            "seed": route_options.get("seed", config.llm.seed),
             "omit_temperature": route.omit_temperature,
         }
     return snapshot
@@ -885,7 +887,10 @@ def _build_evaluation_summary(
         "resumed_count": resumed_count,
         "checkpoint_stats": checkpoint_stats,
         "artifact_checkpoint_stats": artifact_checkpoint_stats,
-        "fallback_count": 0,
+        "fallback_count": sum(
+            int((row.get("llm_verification") or {}).get("fallback_count") or 0)
+            for row in succeeded
+        ),
         "role_call_counts": dict(sorted(role_counts.items())),
         "validated_attempt_counts": dict(
             sorted(validated_attempt_counts.items())

@@ -1092,3 +1092,15 @@ def _mock_no_local_config(root: Path) -> Path:
         encoding="utf-8",
     )
     return config_path
+
+
+def test_cli_ocr_benchmark_returns_blocked_for_missing_candidate(tmp_path: Path):
+    manifest = tmp_path / "ocr.json"
+    output = tmp_path / "summary.json"
+    manifest.write_text(
+        json.dumps([{"case_id": "c1", "gold_text": "gold", "candidates": {"model": ""}}]),
+        encoding="utf-8",
+    )
+    code = main(["ocr-benchmark", "--manifest", str(manifest), "--output", str(output)])
+    assert code == 2
+    assert json.loads(output.read_text(encoding="utf-8"))["status"] == "blocked"

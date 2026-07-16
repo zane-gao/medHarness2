@@ -7,6 +7,7 @@ import fitz
 
 from medharness2.config import AppConfig, LLMConfig
 from medharness2.ocr import extract_report_text
+from medharness2.ocr_benchmark import evaluate_ocr_candidates
 
 
 class PageOCRClient:
@@ -100,3 +101,25 @@ def test_ocr_verifier_is_audit_only_and_cannot_change_primary_text(tmp_path: Pat
     meta = json.loads((tmp_path / "ocr" / "case-verifier.ocr.json").read_text(encoding="utf-8"))
     assert meta["quality_audit"]["status"] == "disagreement"
     assert meta["quality_audit"]["spans"] == ["audit only"]
+
+
+def test_ocr_candidate_benchmark_scores_and_blocks_missing_artifacts(tmp_path: Path):
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "case1",
+                    "gold_text": "FINDINGS: No nodule measuring 8 mm.",
+                    "candidates": {"model-a": "FINDINGS: No nodule measuring 8 mm."},
+                },
+                {"case_id": "case2", "gold_text": "gold", "candidates": {"model-a": ""}},
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+    assert result["status"] == "completed_with_blockers"
+    assert result["by_model"]["model-a"]["clinical_cer_mean"] == 0.0
+    assert result["blocked_items"] == ["case2:model-a"]

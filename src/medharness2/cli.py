@@ -23,9 +23,11 @@ from medharness2.workflows.reevaluate_run import reevaluate_run
 from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full
 from medharness2.workflows.single_case import run_single_case
 from medharness2.workflows.education import run_education_suggestions
+from medharness2.ocr_benchmark import evaluate_ocr_candidates
 from medharness2.workflows.experiments import experiment_registry_metrics, run_experiments
 from medharness2.run_registry import record_registry_entry
 from medharness2.validation.preflight import run_sample_preflight
+from medharness2.validation.live_smoke import run_live_judge_smoke
 from medharness2.validation.sample_run import validate_sample_run
 from medharness2.utils.io import write_json
 
@@ -70,6 +72,13 @@ def build_parser() -> argparse.ArgumentParser:
         dest="resume",
         default=True,
     )
+    ocr_benchmark = subparsers.add_parser("ocr-benchmark")
+    ocr_benchmark.add_argument("--manifest", required=True)
+    ocr_benchmark.add_argument("--output", required=True)
+    live_smoke = subparsers.add_parser("live-smoke")
+    live_smoke.add_argument("--output", required=True)
+    live_smoke.add_argument("--config")
+    live_smoke.add_argument("--role", default="general_judge")
     models = subparsers.add_parser("models")
     models_sub = models.add_subparsers(dest="models_command", required=True)
     models_list = models_sub.add_parser("list")
@@ -200,6 +209,15 @@ def main(argv: list[str] | None = None) -> int:
         write_json(args.output, result)
         print(f"wrote benchmark plan to {args.output}; status={result['status']}")
         return 0
+    if args.command == "ocr-benchmark":
+        result = evaluate_ocr_candidates(args.manifest, args.output)
+        print(f"wrote OCR benchmark to {args.output}; status={result['status']} evaluated={result['evaluated_count']}")
+        return 0 if result["status"] == "succeeded" else 2
+    if args.command == "live-smoke":
+        cfg = load_config(args.config) if args.config else load_config("config/dmx_strong.yaml")
+        result = run_live_judge_smoke(args.output, config=cfg, role=args.role)
+        print(f"wrote live judge smoke to {args.output}; status={result['status']}")
+        return 0 if result["status"] == "succeeded" else 2
     if args.command == "benchmark" and args.benchmark_command == "run":
         cfg = load_config(args.config) if args.config else load_config("config/formal_benchmark.yaml")
         result = run_generation_benchmark(

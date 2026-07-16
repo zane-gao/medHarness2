@@ -9,6 +9,8 @@
 > **2026-07-16 增量**：M4（Tool2 宽泛异常）、M5（报告文本 prompt 边界）、M9（失败病例分母）、M10/M11/M13（fallback provenance）和 M7 的 Tool1 重测记录已补代码与测试。H8 新增 Welch 近似比较与 Holm 校正 API；真实分析仍必须在冻结数据上运行并记录方法。
 
 > **当前未完成门禁**：真实北川 OCR 候选 benchmark、真实多模态 verifier smoke、临床 pilot10 标注、正式显著性分析和 gated live judge smoke。它们需要外部模型/临床数据/凭据，当前环境没有可安全替代的证据，因此不能标记为已完成。
+
+> **门禁实现增量（2026-07-16）**：新增 `medharness2 ocr-benchmark` 和 `medharness2 live-smoke`。前者在 gold/candidate 缺失时返回 `blocked`，后者在凭据缺失时返回 `blocked`；两者都不会把缺失、mock 或 fallback 计为成功。
 > 方法：8 维度并行代码审计（62 个 agent）+ **对抗性验证**（每条发现派独立"怀疑者"读真实代码反驳），关键项由主审人逐行复核。
 > 统计口径：原始 54 条发现 → 验证后 **1 CRITICAL / 17 HIGH（去重后）/ 13 MEDIUM / 6 LOW**，另有 **4 条已核实为非缺陷**、**4 条被驳倒删除**。
 > 严重度以对抗性验证的 `adjusted_severity` 为准——**比"直觉严重度"低**是因为验证者反复确认：多数缺陷真实存在，但**只在 benchmark 之外的路径 / mock 配置 / 误配下触发**，不影响那次权威跑。

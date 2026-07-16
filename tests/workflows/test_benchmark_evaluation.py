@@ -84,6 +84,7 @@ def test_evaluate_generation_benchmark_writes_hash_bound_resumable_artifacts(
     }
     assert artifact["llm_verification"]["passed"] is True
     assert artifact["llm_verification"]["fallback_count"] == 0
+    assert summary["fallback_count"] == 0
     assert artifact["checkpointing"]["stats"] == {"hits": 0, "misses": 0, "writes": 0}
     assert artifact["benchmark_result_sha256"] == _stable_sha256(
         json.loads((benchmark_dir / "benchmark_results.jsonl").read_text().splitlines()[0])

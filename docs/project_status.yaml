@@ -5,9 +5,9 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: pending-local-final-remediation
+  git_sha: pending-local-gated-benchmarks
   dirty_worktree: true
-  pytest_passed: 361
+  pytest_passed: 365
   pytest_warnings: 17
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -113,6 +113,15 @@ workstreams:
       - src/medharness2/contracts/migrations.py
       - src/medharness2/tools/tool4_hazard.py
     next_gate: 在北川冻结集上重跑候选模型和双次重复调用，验证 fallback_count、recall、seed/cache、评委一致性和临床错误率，再决定 formal benchmark promotion。
+  benchmark_gates:
+    status: implemented_blocked_until_artifacts
+    summary: 已提供 `ocr-benchmark` 冻结集评测 CLI（CER、数字/否定词、截断率、provisional winner）和 `live-smoke` 真实评委连通性/JSON 门禁。缺少 gold、candidate 或凭据时返回 blocked，不会用 0 分或 mock 结果冒充完成。
+    evidence_paths:
+      - src/medharness2/ocr_benchmark.py
+      - src/medharness2/validation/live_smoke.py
+      - tests/test_ocr_pipeline.py
+      - tests/test_live_smoke.py
+    next_gate: 生成北川 10 例视觉核验 manifest，运行至少两个 OCR 候选各两次，并执行 `medharness2 live-smoke --config config/dmx_strong.yaml`。
   generation:
     status: in_progress
     summary: Every report has an evidence tier. Benchmark planning separates eligible/rejected models, formal candidate coverage, and modality-aware image/volume assets. Eleven frozen CXR chest cases completed true Qwen3-VL 8B fresh inference with do_sample=false and seed 20260710. The reports remain exploratory_fresh, contain only five unique outputs, and the 52-case legacy run contains no formal_fresh report.
