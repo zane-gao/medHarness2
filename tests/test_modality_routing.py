@@ -152,3 +152,21 @@ def test_recognize_modality_normalizes_vlm_result_and_empty_reply(monkeypatch, t
 def test_non_cxr_observation_codes_are_stable_slugs_for_alignment():
     assert _canonical_observation_code("Small hepatic cyst", "small hepatic cyst") == "small_hepatic_cyst"
     assert _canonical_observation_code("liver-cyst", "liver cyst") == "liver_cyst"
+
+@pytest.mark.parametrize("field", ["supported_modalities", "supported_body_parts", "python_paths"])
+@pytest.mark.parametrize("bad", ["cxr", {"x": 1}, ["cxr", 2]])
+def test_registry_rejects_malformed_string_list_fields(field, bad):
+    config = AppConfig(
+        generator=GeneratorConfig(
+            include_legacy_ready_models=False,
+            local_models=[
+                {
+                    "key": "bad_model",
+                    "source": "artifact_reuse",
+                    field: bad,
+                }
+            ],
+        )
+    )
+    with pytest.raises(ValueError, match=field):
+        ReportGeneratorRegistry(config)

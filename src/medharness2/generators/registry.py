@@ -41,6 +41,14 @@ def _strict_positive_int(value: Any, label: str, default: int) -> int:
     return value
 
 
+def _string_list(value: Any, label: str, default: list[str] | None = None) -> list[str]:
+    if value is None:
+        return list(default or [])
+    if isinstance(value, str) or not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{label} must be a list of strings")
+    return list(value)
+
+
 @dataclass
 class GeneratorEntry:
     key: str
@@ -588,7 +596,7 @@ class ReportGeneratorRegistry:
                     source=entry.source,
                     report=str(report),
                     modality=str(row.get("modality") or modality),
-                    warnings=list(row.get("warnings") or []),
+                    warnings=_string_list(row.get("warnings"), "warnings"),
                     metadata=_legacy_output_metadata(row, cmd),
                     evidence_tier=entry.evidence_tier,
                 )
@@ -628,8 +636,8 @@ class ReportGeneratorRegistry:
                     key=str(row.get("key") or row.get("name") or ""),
                     title=str(row.get("title") or row.get("key") or ""),
                     source=str(row.get("source") or "local"),
-                    supported_modalities=list(row.get("supported_modalities") or ["unknown"]),
-                    supported_body_parts=list(row.get("supported_body_parts") or ["unknown"]),
+                    supported_modalities=_string_list(row.get("supported_modalities"), "supported_modalities", ["unknown"]),
+                    supported_body_parts=_string_list(row.get("supported_body_parts"), "supported_body_parts", ["unknown"]),
                     ready=bool(row.get("ready", str(row.get("source") or "") == "artifact_reuse")),
                     category=str(row.get("category") or _default_category(str(row.get("source") or "local"))),
                     report_trained=bool(row.get("report_trained", _default_report_trained(str(row.get("source") or "")))),
@@ -639,7 +647,7 @@ class ReportGeneratorRegistry:
                     source_generation_jsonl=_resolved_path_text(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(row.get("medharness_model_key") or row.get("model_key") or ""),
                     python_bin=str(row.get("python_bin") or "python"),
-                    python_paths=[str(path) for path in row.get("python_paths") or []],
+                    python_paths=_string_list(row.get("python_paths"), "python_paths"),
                     script_path=_resolved_path_text(row.get("script_path") or "/data/isbi/gzp/medHarness/scripts/run_report_generation.py"),
                     config_path=_resolved_path_text(row.get("config_path") or "/data/isbi/gzp/medHarness/configs/reportgen_models.yaml"),
                     output_jsonl=str(row.get("output_jsonl") or ""),
