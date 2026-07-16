@@ -404,8 +404,8 @@ def dashboard_build(request: DashboardBuildRequest) -> dict[str, Any]:
 
 @app.post("/workflow/sample-data")
 def sample_data(request: SampleDataRequest) -> dict[str, Any]:
-    cfg = load_config(request.config_path) if request.config_path else load_config()
     try:
+        cfg = load_config(request.config_path) if request.config_path else load_config()
         rows = prepare_sample_dataset(
             request.sample_root,
             request.output_dir,
@@ -724,9 +724,9 @@ def validate_run(request: ValidateRunRequest) -> dict[str, Any]:
 
 @app.post("/workflow/preflight")
 def preflight(request: PreflightRequest) -> dict[str, Any]:
-    cfg = load_config(request.config_path) if request.config_path else load_config()
-    model_keys = ["*"] if request.all_compatible_local_models else request.model_keys
     try:
+        cfg = load_config(request.config_path) if request.config_path else load_config()
+        model_keys = ["*"] if request.all_compatible_local_models else request.model_keys
         result = run_sample_preflight(
             request.sample_root,
             request.output_path,

@@ -203,6 +203,24 @@ def test_api_sample_data_writes_registry_failure_for_empty_sample(tmp_path: Path
     assert registry["entries"][-1]["status"] == "failed"
 
 
+def test_api_sample_data_returns_structured_failure_for_malformed_config(tmp_path: Path):
+    config_path = tmp_path / "malformed.yaml"
+    config_path.write_text("- not-a-mapping\n", encoding="utf-8")
+    output_dir = tmp_path / "sample_run"
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/workflow/sample-data",
+        json={
+            "sample_root": str(tmp_path / "sample"),
+            "output_dir": str(output_dir),
+            "config_path": str(config_path),
+        },
+    )
+    assert response.status_code == 500
+    assert response.json()["detail"] == "sample_data_failed:ValueError"
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_api_validate_run(tmp_path: Path):
     _write_json(tmp_path / "summary.json", {"case_count": 1, "warning_counts": {}})
     (tmp_path / "manifest.jsonl").write_text(
@@ -365,6 +383,24 @@ def test_api_preflight_returns_structured_failure_for_missing_sample_root(tmp_pa
     )
 
     assert response.status_code == 500
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
+def test_api_preflight_returns_structured_failure_for_malformed_config(tmp_path: Path):
+    config_path = tmp_path / "malformed.yaml"
+    config_path.write_text("- not-a-mapping\n", encoding="utf-8")
+    output = tmp_path / "preflight.json"
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/workflow/preflight",
+        json={
+            "sample_root": str(tmp_path / "sample"),
+            "output_path": str(output),
+            "config_path": str(config_path),
+        },
+    )
+    assert response.status_code == 500
+    assert response.json()["detail"] == "preflight_failed:ValueError"
     registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
     assert registry["entries"][-1]["status"] == "failed"
 
