@@ -312,7 +312,7 @@ def _image_to_text_models(run_dir: Path, analysis: dict[str, Any]) -> dict[str, 
         "inputs": ["analysis/model_source_summary.csv", "workflow2_cases/*.json"],
         "outputs": ["model_source_counts", "quality_pass_rate", "top_n_selection_count"],
         "metrics": {
-            "model_count": model_count or len({row.get("model") for row in rows}),
+            "model_count": model_count,
             "source_counts": source_counts,
             "evidence_tier_counts": evidence_tier_counts,
             "formal_fresh_count": int(evidence_tier_counts.get("formal_fresh") or 0),

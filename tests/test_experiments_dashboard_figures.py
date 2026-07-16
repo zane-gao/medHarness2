@@ -8,7 +8,7 @@ from medharness2.cli import main
 from medharness2.dashboard import _render_reader_rows, build_dashboard
 from medharness2.figures import build_figures
 from medharness2.workflows.experiments import run_experiments
-from medharness2.workflows.experiments import _radiologist_evaluation
+from medharness2.workflows.experiments import _image_to_text_models, _radiologist_evaluation
 
 
 def test_run_experiments_builds_six_study_results(tmp_path: Path):
@@ -38,6 +38,22 @@ def test_radiologist_evaluation_preserves_explicit_zero_counts():
 
     assert result["metrics"]["case_count"] == 0
     assert result["metrics"]["reader_count"] == 0
+
+
+def test_image_to_text_models_preserves_explicit_zero_model_count(tmp_path: Path):
+    (tmp_path / "analysis").mkdir()
+    (tmp_path / "analysis" / "model_source_summary.csv").write_text(
+        "model,source\nmodel-a,artifact\n", encoding="utf-8"
+    )
+
+    result = _image_to_text_models(
+        tmp_path,
+        {"generated_report_model_counts": {}, "generated_report_source_counts": {"artifact": 1}},
+    )
+
+    # Empty model-count mapping is an explicit zero from analysis; the CSV is
+    # retained as evidence but must not silently change the summary count.
+    assert result["metrics"]["model_count"] == 0
 
 
 def test_run_experiments_writes_protocol_mapping_artifacts(tmp_path: Path):
