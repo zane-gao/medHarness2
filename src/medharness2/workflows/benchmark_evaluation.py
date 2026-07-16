@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 from collections import Counter
@@ -841,11 +842,15 @@ def _build_evaluation_summary(
         float(metrics["candidate_likert_mean"])
         for metrics in case_metrics
         if isinstance(metrics.get("candidate_likert_mean"), (int, float))
+        and not isinstance(metrics.get("candidate_likert_mean"), bool)
+        and math.isfinite(float(metrics["candidate_likert_mean"]))
     ]
     alignment_f1 = [
         float(metrics["alignment_f1"])
         for metrics in case_metrics
         if isinstance(metrics.get("alignment_f1"), (int, float))
+        and not isinstance(metrics.get("alignment_f1"), bool)
+        and math.isfinite(float(metrics["alignment_f1"]))
     ]
     alignment_verdicts = Counter(
         str(metrics["alignment_audit_verdict"])

@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -12,10 +13,53 @@ from medharness2.checkpoints import StageCheckpointStore
 from medharness2.utils.io import write_json
 from medharness2.workflows.benchmark_evaluation import (
     _case_evaluation_metrics,
+    _build_evaluation_summary,
     _formal_statistical_comparisons,
     evaluate_generation_benchmark,
     verify_real_llm_case_evaluation,
 )
+
+
+def test_evaluation_summary_excludes_non_finite_metric_values(tmp_path: Path):
+    summary = _build_evaluation_summary(
+        [
+            {
+                "status": "succeeded",
+                "model": "a",
+                "metrics": {
+                    "candidate_likert_mean": math.nan,
+                    "alignment_f1": math.inf,
+                },
+                "llm_verification": {},
+            },
+            {
+                "status": "succeeded",
+                "model": "a",
+                "metrics": {
+                    "candidate_likert_mean": 4.0,
+                    "alignment_f1": 0.8,
+                },
+                "llm_verification": {},
+            },
+        ],
+        source_mode="synthetic",
+        resumed_count=0,
+        results_path=tmp_path / "results.jsonl",
+        historical_failure_count=0,
+    )
+
+    assert summary["metrics"]["candidate_likert_mean"] == {
+        "count": 1,
+        "mean": 4.0,
+        "min": 4.0,
+        "max": 4.0,
+    }
+    assert summary["metrics"]["alignment_f1"] == {
+        "count": 1,
+        "mean": 0.8,
+        "min": 0.8,
+        "max": 0.8,
+    }
 
 
 def test_formal_statistical_comparisons_apply_holm_and_block_small_groups():
