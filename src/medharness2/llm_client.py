@@ -365,17 +365,17 @@ class LLMClient:
             import fitz
         except Exception as exc:
             raise LLMClientError("PyMuPDF is required for local VLM PDF OCR") from exc
-        try:
-            doc = fitz.open(pdf)
-        except Exception as exc:
-            raise LLMClientError(f"Could not open PDF for local VLM OCR: {pdf}") from exc
         paths: list[str] = []
         page_limit = max(1, int(max_pages if max_pages is not None else self.config.llm.local_cli_pdf_max_pages))
-        for index, page in enumerate(doc[:page_limit]):
-            pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
-            out = tmp / f"pdf_page_{index + 1}.png"
-            pixmap.save(out)
-            paths.append(str(out))
+        try:
+            with fitz.open(pdf) as doc:
+                for index, page in enumerate(doc[:page_limit]):
+                    pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+                    out = tmp / f"pdf_page_{index + 1}.png"
+                    pixmap.save(out)
+                    paths.append(str(out))
+        except Exception as exc:
+            raise LLMClientError(f"Could not open PDF for local VLM OCR: {pdf}") from exc
         return paths
 
     def _generate_local_hf_vlm(self, prompt: str, image_paths: list[str], max_new_tokens: int) -> str:
@@ -446,7 +446,13 @@ class LLMClient:
             from PIL import Image
         except Exception as exc:
             raise LLMClientError("Pillow is required for local_hf_vlm image loading") from exc
-        return [Image.open(path).convert("RGB") for path in image_paths]
+        images: list[Any] = []
+        for path in image_paths:
+            with Image.open(path) as image:
+                # Copy the converted pixels before leaving the context so the
+                # returned image no longer owns the source file descriptor.
+                images.append(image.convert("RGB").copy())
+        return images
 
     @staticmethod
     def _read_local_vlm_output(output_jsonl: Path) -> str:
