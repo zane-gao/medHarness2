@@ -242,6 +242,7 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
         "pairwise_count": pairwise_count,
         "quality_gate_passed_count": quality_passed,
         "quality_gate_failed_count": quality_failed,
+        "errors": ["no_cases_discovered"] if int(_first_present(workflow2.get("case_count"), len(case_rows))) == 0 and failed_case_count == 0 else [],
         "generated_report_model_counts": dict(sorted(model_counts.items())),
         "generated_report_source_counts": dict(sorted(source_counts.items())),
         "generated_report_evidence_tier_counts": dict(sorted(evidence_tier_counts.items())),

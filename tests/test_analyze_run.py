@@ -63,6 +63,37 @@ def test_cli_analyze_run(tmp_path: Path):
     assert entry["metrics"]["generated_report_count"] == 3
 
 
+def test_cli_analyze_run_rejects_empty_workflow_inputs(tmp_path: Path):
+    run_dir = tmp_path / "empty-run"
+    run_dir.mkdir()
+    (run_dir / "workflow2.json").write_text(
+        json.dumps(
+            {
+                "case_count": 0,
+                "failed_case_count": 0,
+                "cases": [],
+                "failed_cases": [],
+                "denominator": {
+                    "manifest_case_count": 0,
+                    "successful_case_count": 0,
+                    "failed_case_count": 0,
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (run_dir / "workflow3.json").write_text(
+        json.dumps({"case_count": 0, "reader_count": 0, "reader_percentiles": []}),
+        encoding="utf-8",
+    )
+
+    code = main(["workflow", "analyze-run", "--output-dir", str(run_dir)])
+
+    assert code == 1
+    summary = json.loads((run_dir / "analysis" / "analysis_summary.json").read_text(encoding="utf-8"))
+    assert summary["errors"] == ["no_cases_discovered"]
+
+
 def test_analyze_reader_summary_keeps_missing_overall_score_empty(tmp_path: Path):
     run_dir = _write_run(tmp_path / "run")
     workflow2 = json.loads((run_dir / "workflow2.json").read_text(encoding="utf-8"))

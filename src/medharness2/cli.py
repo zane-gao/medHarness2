@@ -686,6 +686,7 @@ def main(argv: list[str] | None = None) -> int:
                 "ranking_count": int(result.get("ranking_count", 0) or 0),
                 "pairwise_count": int(result.get("pairwise_count", 0) or 0),
                 "quality_gate_failed_count": int(result.get("quality_gate_failed_count", 0) or 0),
+                "error_count": len(result.get("errors") or []),
             },
         )
         print(f"wrote medHarness2 run analysis to {result['analysis_dir']}")
@@ -695,7 +696,7 @@ def main(argv: list[str] | None = None) -> int:
             f"generated_reports={result['generated_report_count']} "
             f"quality_failed={result['quality_gate_failed_count']}"
         )
-        return 0
+        return 1 if result.get("errors") else 0
     if args.command == "workflow" and args.workflow == "reevaluate-run":
         config = load_config(args.config) if args.config else load_config()
         try:
