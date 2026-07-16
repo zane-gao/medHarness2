@@ -122,6 +122,18 @@ class CaseManifest:
 
     @classmethod
     def from_json(cls, payload: dict[str, Any]) -> "CaseManifest":
+        if not isinstance(payload, dict):
+            raise ValueError("case manifest payload must be an object")
+
+        def _string_list(value: Any, label: str) -> list[str]:
+            if value is None:
+                return []
+            if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+                raise ValueError(f"{label} must be a list of strings")
+            return list(value)
+
+        image_paths = _string_list(payload.get("image_paths"), "image_paths")
+        warnings = _string_list(payload.get("warnings"), "warnings")
         return cls(
             case_id=str(payload.get("case_id") or payload.get("id") or ""),
             reader=str(payload.get("reader") or payload.get("radiologist_id") or "unknown"),
@@ -129,10 +141,10 @@ class CaseManifest:
             body_part=str(payload.get("body_part") or "unknown"),
             report_pdf=str(payload.get("report_pdf") or ""),
             report_text=str(payload.get("report_text") or payload.get("report_text_path") or ""),
-            image_paths=[str(path) for path in payload.get("image_paths") or []],
+            image_paths=image_paths,
             volume_path=str(payload["volume_path"]) if payload.get("volume_path") else None,
             derived_assets=dict(payload.get("derived_assets") or {}),
-            warnings=list(payload.get("warnings") or []),
+            warnings=warnings,
             metadata=dict(payload.get("metadata") or {}),
         )
 
