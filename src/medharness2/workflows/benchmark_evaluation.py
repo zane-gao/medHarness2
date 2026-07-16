@@ -850,9 +850,9 @@ def _build_evaluation_summary(
     failed = [row for row in result_rows if row.get("status") == "failed"]
     checkpoint_stats = {
         key: sum(
-            int(
-                ((row.get("checkpointing") or {}).get("stats") or {}).get(key)
-                or 0
+            _count_or_zero(
+                ((row.get("checkpointing") or {}).get("stats") or {}).get(key),
+                f"checkpointing.stats.{key}",
             )
             for row in result_rows
         )
@@ -860,17 +860,15 @@ def _build_evaluation_summary(
     }
     artifact_checkpoint_stats = {
         key: sum(
-            int(
+            _count_or_zero(
                 (
                     (
-                        read_json(Path(row["evaluation_artifact"])).get(
-                            "checkpointing"
-                        )
+                        read_json(Path(row["evaluation_artifact"])).get("checkpointing")
                         or {}
                     ).get("stats")
                     or {}
-                ).get(key)
-                or 0
+                ).get(key),
+                f"artifact_checkpointing.stats.{key}",
             )
             for row in succeeded
             if row.get("evaluation_artifact")
@@ -935,10 +933,10 @@ def _build_evaluation_summary(
         if _valid_int(metrics.get("consensus_max_hazard_level"))
         and int(metrics["consensus_max_hazard_level"]) > 0
     )
-    hazard_compared_count = sum(int(metrics.get("hazard_compared_count") or 0) for metrics in case_metrics)
-    hazard_exact_agreement_count = sum(int(metrics.get("hazard_exact_agreement_count") or 0) for metrics in case_metrics)
-    hazard_within_one_count = sum(int(metrics.get("hazard_within_one_count") or 0) for metrics in case_metrics)
-    hazard_action_agreement_count = sum(int(metrics.get("hazard_action_agreement_count") or 0) for metrics in case_metrics)
+    hazard_compared_count = sum(_count_or_zero(metrics.get("hazard_compared_count"), "hazard_compared_count") for metrics in case_metrics)
+    hazard_exact_agreement_count = sum(_count_or_zero(metrics.get("hazard_exact_agreement_count"), "hazard_exact_agreement_count") for metrics in case_metrics)
+    hazard_within_one_count = sum(_count_or_zero(metrics.get("hazard_within_one_count"), "hazard_within_one_count") for metrics in case_metrics)
+    hazard_action_agreement_count = sum(_count_or_zero(metrics.get("hazard_action_agreement_count"), "hazard_action_agreement_count") for metrics in case_metrics)
     return {
         "schema_version": "2.0",
         "artifact_type": "generation_benchmark_evaluation_summary",
@@ -952,7 +950,7 @@ def _build_evaluation_summary(
         "checkpoint_stats": checkpoint_stats,
         "artifact_checkpoint_stats": artifact_checkpoint_stats,
         "fallback_count": sum(
-            int((row.get("llm_verification") or {}).get("fallback_count") or 0)
+            _count_or_zero((row.get("llm_verification") or {}).get("fallback_count"), "llm_verification.fallback_count")
             for row in succeeded
         ),
         "role_call_counts": dict(sorted(role_counts.items())),
@@ -965,32 +963,32 @@ def _build_evaluation_summary(
             "candidate_likert_mean": _numeric_summary(candidate_likert),
             "alignment_f1": _numeric_summary(alignment_f1),
             "hazard_error_count": sum(
-                int(metrics.get("hazard_error_count") or 0)
+                _count_or_zero(metrics.get("hazard_error_count"), "hazard_error_count")
                 for metrics in case_metrics
             ),
             "deterministic_alignment_error_count": sum(
-                int(metrics.get("deterministic_alignment_error_count") or 0)
+                _count_or_zero(metrics.get("deterministic_alignment_error_count"), "deterministic_alignment_error_count")
                 for metrics in case_metrics
             ),
             "t5_retained_error_count": sum(
-                int(metrics.get("t5_retained_error_count") or 0)
+                _count_or_zero(metrics.get("t5_retained_error_count"), "t5_retained_error_count")
                 for metrics in case_metrics
             ),
             "t5_rejected_error_count": sum(
-                int(metrics.get("t5_rejected_error_count") or 0)
+                _count_or_zero(metrics.get("t5_rejected_error_count"), "t5_rejected_error_count")
                 for metrics in case_metrics
             ),
             "t5_modified_error_count": sum(
-                int(metrics.get("t5_modified_error_count") or 0)
+                _count_or_zero(metrics.get("t5_modified_error_count"), "t5_modified_error_count")
                 for metrics in case_metrics
             ),
             "t5_abstained_error_count": sum(
-                int(metrics.get("t5_abstained_error_count") or 0)
+                _count_or_zero(metrics.get("t5_abstained_error_count"), "t5_abstained_error_count")
                 for metrics in case_metrics
             ),
             "max_hazard_level_counts": dict(sorted(max_hazard_levels.items())),
             "hazard_disagreement_count": sum(
-                int(metrics.get("hazard_disagreement_count") or 0)
+                _count_or_zero(metrics.get("hazard_disagreement_count"), "hazard_disagreement_count")
                 for metrics in case_metrics
             ),
             "hazard_agreement": {
@@ -1004,11 +1002,11 @@ def _build_evaluation_summary(
                 "source": "hazard_review.agreement_summary",
             },
             "hazard_adjudication_decision_count": sum(
-                int(metrics.get("hazard_adjudication_decision_count") or 0)
+                _count_or_zero(metrics.get("hazard_adjudication_decision_count"), "hazard_adjudication_decision_count")
                 for metrics in case_metrics
             ),
             "hazard_adjudication_abstained_count": sum(
-                int(metrics.get("hazard_adjudication_abstained_count") or 0)
+                _count_or_zero(metrics.get("hazard_adjudication_abstained_count"), "hazard_adjudication_abstained_count")
                 for metrics in case_metrics
             ),
             "adjudicated_hazard_level_counts": dict(
@@ -1021,15 +1019,15 @@ def _build_evaluation_summary(
                 sorted(consensus_max_hazard_levels.items())
             ),
             "consensus_nontrivial_error_count": sum(
-                int(metrics.get("consensus_nontrivial_error_count") or 0)
+                _count_or_zero(metrics.get("consensus_nontrivial_error_count"), "consensus_nontrivial_error_count")
                 for metrics in case_metrics
             ),
             "consensus_material_error_count": sum(
-                int(metrics.get("consensus_material_error_count") or 0)
+                _count_or_zero(metrics.get("consensus_material_error_count"), "consensus_material_error_count")
                 for metrics in case_metrics
             ),
             "consensus_unresolved_error_count": sum(
-                int(metrics.get("consensus_unresolved_error_count") or 0)
+                _count_or_zero(metrics.get("consensus_unresolved_error_count"), "consensus_unresolved_error_count")
                 for metrics in case_metrics
             ),
             "third_hazard_adjudication_required_count": sum(
@@ -1146,6 +1144,11 @@ def _strict_nonnegative_int(value: Any, label: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"{label} must be a non-negative integer")
     return value
+
+
+def _count_or_zero(value: Any, label: str) -> int:
+    """Read optional aggregate counts without coercing invalid values."""
+    return 0 if value is None else _strict_nonnegative_int(value, label)
 
 
 def _valid_hazard_level(value: Any) -> bool:

@@ -719,6 +719,18 @@ def test_evaluation_summary_filters_invalid_hazard_level_lists():
     assert summary["metrics"]["consensus_hazard_level_counts"] == {"2": 1}
 
 
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
+def test_evaluation_summary_rejects_invalid_numeric_counts(bad):
+    with pytest.raises(ValueError, match="hazard_error_count"):
+        _build_evaluation_summary(
+            [{"status": "succeeded", "metrics": {"hazard_error_count": bad}}],
+            source_mode="test",
+            results_path="results.json",
+            resumed_count=0,
+            historical_failure_count=0,
+        )
+
+
 def test_case_evaluation_metrics_require_clinical_validation_without_llm_disagreement():
     metrics = _case_evaluation_metrics(_strict_case_evaluation())
 
