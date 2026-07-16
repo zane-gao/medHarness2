@@ -89,7 +89,7 @@ workstreams:
     next_gate: 冻结 10 例（CR4/CT4/MRI2）视觉核验文本，接入豆包/PaddleOCR/Qwen 候选并做双次重复调用；按 clinical CER 和 material-error rate 选择 primary，verifier 仅输出 disagreement artifact。
   routing:
     status: validated
-    summary: 路由器已改为三种主要模态（cxr/ct/mri）硬约束；body_part 不再阻塞兼容模型，只作为候选排序信号。配置中的 `default_models: ["*"]` 现在会按模态展开全部兼容候选，不再把 wildcard 当作普通模型名；完整 52 例 dmx_strong preflight 已验证 52/52 有本地候选、0 fallback。VLM 模态识别补充 MRI/CT/X-ray 常见句式归一化，并覆盖 DICOM、图片扩展名和 unknown 路径测试。
+    summary: "路由器已改为三种主要模态（cxr/ct/mri）硬约束；body_part 不再阻塞兼容模型，只作为候选排序信号。配置中的 default_models wildcard 现在会按模态展开全部兼容候选，不再把 wildcard 当作普通模型名；完整 52 例 dmx_strong preflight 已验证 52/52 有本地候选、0 fallback。VLM 模态识别补充 MRI/CT/X-ray 常见句式归一化，并覆盖 DICOM、图片扩展名和 unknown 路径测试。"
     evidence_paths:
       - src/medharness2/generators/registry.py
       - src/medharness2/tools/tool7_modality.py
