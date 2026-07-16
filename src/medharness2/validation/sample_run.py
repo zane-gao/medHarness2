@@ -366,9 +366,11 @@ def _count_real_ocr_provenance(root: Path, rows: list[dict[str, Any]]) -> tuple[
     mock_count = 0
     missing_text_count = 0
     for row in rows:
+        case_id = str(row.get("case_id") or "")
         report_text = str(row.get("report_text") or "")
+        report_pdf = str(row.get("report_pdf") or "").strip()
         if not report_text:
-            if str(row.get("report_pdf") or "").strip():
+            if report_pdf:
                 missing_text_count += 1
             continue
         row_warnings = {str(warning) for warning in row.get("warnings") or []}
@@ -377,18 +379,32 @@ def _count_real_ocr_provenance(root: Path, rows: list[dict[str, Any]]) -> tuple[
             continue
         meta = _read_ocr_meta(root, report_text)
         text_path = _resolve_path(root, report_text)
-        # Legacy manifests may retain only the OCR provenance sidecar.  Keep
-        # that artifact compatible; enforce text presence when the manifest
-        # explicitly carries a source PDF, where an empty text would otherwise
-        # falsely satisfy the real-OCR gate.
-        if str(row.get("report_pdf") or "").strip() and (
-            not text_path.is_file() or not text_path.read_text(encoding="utf-8").strip()
-        ):
-            unknown_count += 1
-            continue
         if not meta:
             unknown_count += 1
             continue
+        # A manifest with a source PDF is a strict, reproducible OCR artifact:
+        # require non-empty text and bind the sidecar to this case and exact
+        # source bytes.  Text-only legacy manifests keep their historical
+        # sidecar compatibility because no source hash can be recomputed.
+        if report_pdf:
+            if not text_path.is_file() or not text_path.read_text(encoding="utf-8").strip():
+                unknown_count += 1
+                continue
+            pdf_path = _resolve_path(root, report_pdf)
+            if not pdf_path.is_file() or str(meta.get("case_id") or "") != case_id:
+                unknown_count += 1
+                continue
+            try:
+                source_hash = _sha256_file(pdf_path)
+            except OSError:
+                unknown_count += 1
+                continue
+            if str(meta.get("source_pdf_sha256") or "") != source_hash:
+                unknown_count += 1
+                continue
+            if _ocr_pages_have_quality_blockers(meta):
+                unknown_count += 1
+                continue
         method = str(meta.get("method") or "").lower()
         provider = str(meta.get("provider") or "").lower()
         warnings = {str(warning) for warning in meta.get("warnings") or []}
@@ -404,6 +420,37 @@ def _count_real_ocr_provenance(root: Path, rows: list[dict[str, Any]]) -> tuple[
         else:
             unknown_count += 1
     return real_count, unknown_count, mock_count, missing_text_count
+
+
+def _ocr_pages_have_quality_blockers(meta: dict[str, Any]) -> bool:
+    warnings = {str(warning) for warning in meta.get("warnings") or []}
+    if any(
+        warning == "ocr_possible_truncation"
+        or warning.startswith("ocr_possible_truncation:")
+        or warning == "empty_vlm_ocr_result"
+        or warning.startswith("ocr_empty_page_response:")
+        for warning in warnings
+    ):
+        return True
+    pages = meta.get("pages")
+    if not isinstance(pages, list):
+        return True
+    for page in pages:
+        if not isinstance(page, dict):
+            return True
+        if not page.get("skipped") and int(page.get("char_count") or 0) <= 0:
+            return True
+    source_count = meta.get("source_page_count")
+    retained_count = meta.get("retained_page_count", meta.get("page_count"))
+    if source_count is not None and retained_count is not None:
+        try:
+            if int(retained_count) > int(source_count) or int(retained_count) != sum(
+                1 for page in pages if not page.get("skipped")
+            ):
+                return True
+        except (TypeError, ValueError):
+            return True
+    return False
 
 
 def _read_ocr_meta(root: Path, report_text: str) -> dict[str, Any]:
@@ -425,3 +472,11 @@ def _resolve_path(root: Path, value: str) -> Path:
     if path.exists():
         return path
     return root / path
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
