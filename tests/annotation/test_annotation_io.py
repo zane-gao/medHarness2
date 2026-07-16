@@ -237,3 +237,40 @@ def test_build_pilot_annotation_package_rejects_unreadable_workflow1_reference(t
         assert "invalid.json" in message
     else:
         raise AssertionError("unreadable workflow1 reference must fail explicitly")
+
+
+def test_build_pilot_annotation_package_rejects_missing_clinical_reference_report(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    missing = run_dir / "reports" / "missing.txt"
+    for case_path in (run_dir / "workflow2_cases").glob("*.json"):
+        payload = json.loads(case_path.read_text(encoding="utf-8"))
+        payload["input"]["report_path"] = str(missing)
+        case_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    try:
+        build_pilot_annotation_package(run_dir, tmp_path / "pilot10", limit=1)
+    except ValueError as exc:
+        message = str(exc)
+        assert "REAL_CASE_" in message
+        assert "reference report does not exist" in message
+        assert "missing.txt" in message
+    else:
+        raise AssertionError("missing clinical reference report must fail explicitly")
+
+
+def test_build_pilot_annotation_package_rejects_empty_clinical_reference_report(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    empty_report = run_dir / "reports" / "empty.txt"
+    empty_report.write_text("\n", encoding="utf-8")
+    for case_path in (run_dir / "workflow2_cases").glob("*.json"):
+        payload = json.loads(case_path.read_text(encoding="utf-8"))
+        payload["input"]["report_path"] = str(empty_report)
+        case_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    try:
+        build_pilot_annotation_package(run_dir, tmp_path / "pilot10", limit=1)
+    except ValueError as exc:
+        assert "REAL_CASE_" in str(exc)
+        assert "reference report is empty" in str(exc)
+    else:
+        raise AssertionError("empty clinical reference report must fail explicitly")

@@ -118,6 +118,41 @@ def test_scanned_pdf_ocr_uses_configured_primary_role_and_records_route(tmp_path
     assert meta["role"] == "ocr_primary"
 
 
+def test_require_real_ocr_does_not_reuse_default_cache_after_model_change(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+
+    class RecordingClient(PageOCRClient):
+        pass
+
+    first = RecordingClient()
+    extract_report_text(
+        pdf,
+        case_id="case-model-cache",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai", model="model-a")),
+        llm_client=first,
+        require_real=True,
+        force=True,
+    )
+    second = RecordingClient()
+    result = extract_report_text(
+        pdf,
+        case_id="case-model-cache",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai", model="model-b")),
+        llm_client=second,
+        require_real=True,
+    )
+
+    assert result.method == "vlm_ocr"
+    assert len(first.paths) == 1
+    assert len(second.paths) == 1
+
+
 def test_truncated_page_response_is_marked_in_metadata(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()
@@ -408,3 +443,27 @@ def test_ocr_candidate_benchmark_blocks_missing_declared_text_paths(
     assert result["status"] == "blocked"
     assert result["selection"]["status"] == "blocked"
     assert any("missing" in item for item in result["blocked_items"])
+
+
+def test_ocr_benchmark_ignores_clinical_history_when_scoring_clinical_sections(tmp_path: Path):
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "case-history",
+                    "gold_text": "FINDINGS: nodule.\nCLINICAL HISTORY: patient one\nIMPRESSION: stable.",
+                    "candidates": {
+                        "model-a": "FINDINGS: nodule.\nCLINICAL HISTORY: patient two\nIMPRESSION: stable."
+                    },
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "succeeded"
+    assert result["metrics"][0]["clinical_cer"] == 0.0
+    assert result["metrics"][0]["clinical_text_source"] == "sections"

@@ -40,7 +40,7 @@ def build_pilot_annotation_package(
     for index, (source_case_id, payload) in enumerate(selected, start=1):
         pilot_case_id = f"pilot-{index:03d}"
         input_payload = dict(payload.get("input") or {})
-        reference_text = _reference_report(root, input_payload, payload, policy)
+        reference_text = _reference_report(root, input_payload, payload, policy, case_id=source_case_id)
         candidates = [
             CandidateReportForAnnotation(
                 candidate_id=f"candidate-{candidate_index:02d}",
@@ -334,24 +334,24 @@ def _reference_report(
     input_payload: dict[str, Any],
     case_payload: dict[str, Any],
     policy: ExternalPayloadPolicy,
+    *,
+    case_id: str,
 ) -> str:
-    report_path = Path(str(input_payload.get("report_path") or ""))
+    raw_report_path = str(input_payload.get("report_path") or "").strip()
+    if not raw_report_path:
+        raise ValueError(f"case {case_id} is missing input.report_path for clinical reference report")
+    report_path = Path(raw_report_path)
     if not report_path.is_absolute():
         report_path = run_root / report_path
-    if report_path.exists():
-        return policy.deidentify_clinical_text(report_path.read_text(encoding="utf-8", errors="ignore"))
-    findings = ((case_payload.get("human_evaluation") or {}).get("finding_graph") or {}).get("findings") or []
-    fallback = "\n".join(
-        str(
-            finding.get("source_text")
-            or finding.get("text")
-            or finding.get("observation_text")
-            or finding.get("observation")
-            or ""
-        )
-        for finding in findings
-    )
-    return policy.deidentify_clinical_text(fallback)
+    if not report_path.is_file():
+        raise ValueError(f"case {case_id} reference report does not exist: {report_path}")
+    try:
+        raw_text = report_path.read_text(encoding="utf-8", errors="ignore")
+    except (OSError, UnicodeError) as exc:
+        raise ValueError(f"case {case_id} reference report is unreadable: {report_path}") from exc
+    if not raw_text.strip():
+        raise ValueError(f"case {case_id} reference report is empty: {report_path}")
+    return policy.deidentify_clinical_text(raw_text)
 
 
 def _package_readme(case_count: int) -> str:

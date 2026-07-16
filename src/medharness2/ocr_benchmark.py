@@ -290,7 +290,7 @@ def _is_declared_text_path(value: Any, *, base_dir: Path | None = None) -> bool:
 
 
 _CLINICAL_HEADING_RE = re.compile(
-    r"(?:findings?|impression|conclusion|所见|影像所见|印象|诊断意见|诊断结论)\s*[:：]",
+    r"(?:findings?|impression|conclusion|clinical\s+history|history|所见|影像所见|印象|诊断意见|诊断结论|临床资料|病史)\s*[:：]",
     re.IGNORECASE,
 )
 
@@ -303,6 +303,9 @@ def _clinical_text(text: str) -> str:
     sections: list[str] = []
     for index, match in enumerate(matches):
         end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        heading = match.group(0).split(":", 1)[0].strip().lower().replace("：", "")
+        if heading in {"clinical history", "history", "临床资料", "病史"}:
+            continue
         content = text[match.end() : end].strip()
         if content:
             sections.append(content)

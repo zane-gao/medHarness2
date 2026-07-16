@@ -305,12 +305,14 @@ def _cache_is_compatible(
     if str(meta.get("provider") or "").lower() != provider:
         return False
     cached_model = str(meta.get("model") or "")
-    # Legacy/default OCR caches predate configurable role model routing.  Keep
-    # them reusable when the provider and source hash are still trustworthy;
-    # role-specific caches remain strict about the selected model.
-    if cached_model != model and not (role == "default" and str(meta.get("role") or "") == "default"):
+    cached_role = str(meta.get("role") or "")
+    if cached_role != role:
         return False
-    if str(meta.get("role") or "") != role:
+    # Minimal pre-v2 default sidecars did not record rendered-page metadata;
+    # preserve their historical provider/source compatibility. Modern OCR
+    # sidecars are route-bound and a model change must force recomputation.
+    legacy_default_sidecar = role == "default" and cached_role == "default" and "pages" not in meta
+    if cached_model != model and not legacy_default_sidecar:
         return False
     if str(meta.get("prompt_version") or "") != "ocr-page-v2":
         return False

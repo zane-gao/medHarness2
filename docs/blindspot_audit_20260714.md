@@ -35,6 +35,7 @@
 > **2026-07-16 pilot 输入增量**：`build_pilot_annotation_package` 现在严格校验 `workflow2.json` 中每个 `workflow1_output` 引用：缺失文件或非法 JSON 会带病例 ID 和路径明确失败，不再静默跳过或冒泡无上下文解析异常。全量回归测试为 452 passed、18 warnings。
 > **2026-07-16 legacy 面板增量**：旧版 `web/legacy/control_panel.html` 也统一修正 reader 的缺失分数/百分位展示，避免历史入口继续把缺失值渲染成 0 或 P0；新增静态回归测试。
 > **2026-07-16 OCR benchmark 输入增量**：冻结 OCR manifest 中若 `gold_text` 或 candidate 声明了文件路径但文件不存在/不可读，现在会记录 `missing_gold:*` 或 `missing_candidate:*` 并将 benchmark 标记为 `blocked`；内联文本仍按文本处理。补充 4 个回归场景，全量回归测试为 457 passed、18 warnings。
+> **2026-07-16 OCR/标注/面板闭环增量**：pilot10 现在拒绝缺失、不可读或空的临床参考报告，不再用 finding graph 片段替代参考文本；OCR 旧 default sidecar 仅在缺少现代页级元数据时保持历史兼容，现代 sidecar 仍严格绑定模型；盲区解析器兼容当前“修复进度与剩余优先级”标题及 MEDIUM 列表格式。全量回归测试为 462 passed、18 warnings。
 > **2026-07-16 reader 计数增量**：department 输出的 `reader_count` 现在只统计有有效 `overall_score` 的 reader，并单独记录 `excluded_reader_count`，避免 reader 总数与 percentile/统计群体不一致。
 > **2026-07-16 兼容/标注安全增量**：恢复 `run_single_case` 历史第四个位置参数作为 `report_text` 的兼容语义；pilot 包重建在已有标注或无效包时拒绝删除旧病例文件；损坏 manifest 继续以 blocked 状态展示。全量回归测试为 443 passed、18 warnings。
 > **2026-07-16 hazard 聚合增量**：`tool11_hazardwise` 不再把缺失 `error_type`/`hazard_level` 的记录默认成未知权重或最低风险；不完整记录会被排除并等待补齐。全量回归测试为 444 passed、18 warnings。

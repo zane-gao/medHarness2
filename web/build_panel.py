@@ -586,13 +586,15 @@ def extract_blindspot_audit(path: Path) -> dict | None:
     # 解析问题的辅助函数
     def parse_issues(section_content: str, prefix: str) -> list[dict]:
         issues = []
-        # 匹配 **H1. ... | ... | ...** 或 **M1. ... (...)**
-        pattern = rf'\*\*{prefix}(\d+)\.\s+([^*]+?)\*\*'
-        matches = re.finditer(pattern, section_content, re.MULTILINE)
+        # Support headings (C1) and bold/list entries (H1/M1), stopping at the
+        # next issue marker so nested emphasis in the body cannot truncate it.
+        pattern = rf'(?m)^(?:###\s+|[-*]\s+)?(?:\*\*)?{prefix}(\d+)\.\s*(.*?)(?=\n(?:###\s+|[-*]\s+)?(?:\*\*)?{prefix}\d+\.\s*|\Z)'
+        matches = re.finditer(pattern, section_content, re.DOTALL)
 
         for match in matches:
             issue_num = match.group(1)
             full_text = match.group(2).strip()
+            full_text = re.sub(r'\*\*', '', full_text).strip()
 
             # 分割标题和详情（用 | 分隔）
             parts = [p.strip() for p in full_text.split('|')]
@@ -643,19 +645,7 @@ def extract_blindspot_audit(path: Path) -> dict | None:
     medium_section = re.search(r'## 4\. 🟡 MEDIUM.*?(?=## 5\.|\Z)', content, re.DOTALL)
     medium_issues = []
     if medium_section:
-        m_text = medium_section.group(0)
-        # MEDIUM 是列表形式，需要不同的解析
-        m_items = re.findall(r'- \*\*M(\d+)\.\s+([^*]+?)\*\*[^-]*?\([^)]+\)', m_text)
-        for num, title in m_items:
-            # 提取位置信息
-            location_match = re.search(rf'M{num}\.\s+{re.escape(title[:30])}.*?\(([^)]+)\)', m_text)
-            location = location_match.group(1) if location_match else ""
-            medium_issues.append({
-                "id": f"M{num}",
-                "title": title.strip(),
-                "location": location,
-                "full_text": f"{title} ({location})"[:300],
-            })
+        medium_issues = parse_issues(medium_section.group(0), "M")
 
     # 提取核心结论
     core_conclusion = ""
@@ -669,23 +659,27 @@ def extract_blindspot_audit(path: Path) -> dict | None:
         "tier2": [],
         "tier3": [],
     }
-    priority_section = re.search(r'## 8\. 建议修复优先级.*?(?=---|\Z)', content, re.DOTALL)
+    priority_section = re.search(
+        r'## 8\.\s+(?:建议修复优先级|修复进度与剩余优先级).*?(?=---|\Z)',
+        content,
+        re.DOTALL,
+    )
     if priority_section:
         p_text = priority_section.group(0)
         # 提取第一梯队
-        tier1_match = re.search(r'\*\*第一梯队[^*]*?\*\*(.*?)(?=\*\*第二梯队|\Z)', p_text, re.DOTALL)
+        tier1_match = re.search(r'\*\*第一梯队.*?\*\*(.*?)(?=\*\*第二梯队|\Z)', p_text, re.DOTALL)
         if tier1_match:
             tier1_items = re.findall(r'\d+\.\s+\*\*([HCM]\d+)[^*]*?\*\*([^\n]+)', tier1_match.group(1))
             fix_priority["tier1"] = [{"id": id, "desc": desc.strip()} for id, desc in tier1_items]
 
         # 提取第二梯队
-        tier2_match = re.search(r'\*\*第二梯队[^*]*?\*\*(.*?)(?=\*\*第三梯队|\Z)', p_text, re.DOTALL)
+        tier2_match = re.search(r'\*\*第二梯队.*?\*\*(.*?)(?=\*\*第三梯队|\Z)', p_text, re.DOTALL)
         if tier2_match:
             tier2_items = re.findall(r'\d+\.\s+\*\*([HCM]\d+)[^*]*?\*\*([^\n]+)', tier2_match.group(1))
             fix_priority["tier2"] = [{"id": id, "desc": desc.strip()} for id, desc in tier2_items]
 
         # 提取第三梯队
-        tier3_match = re.search(r'\*\*第三梯队[^*]*?\*\*(.*?)(?=---|\Z)', p_text, re.DOTALL)
+        tier3_match = re.search(r'\*\*第三梯队.*?\*\*(.*?)(?=---|\Z)', p_text, re.DOTALL)
         if tier3_match:
             tier3_items = re.findall(r'\d+\.\s+\*\*([HCM]\d+)[^*]*?\*\*([^\n]+)', tier3_match.group(1))
             fix_priority["tier3"] = [{"id": id, "desc": desc.strip()} for id, desc in tier3_items]
