@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -326,8 +327,10 @@ def _peer_means(readers: dict[str, dict[str, Any]], *, exclude: str) -> dict[str
             continue
         stats = payload or {}
         for metric, item in stats.items():
-            if isinstance(item, dict) and isinstance(item.get("mean"), (int, float)):
-                values.setdefault(str(metric), []).append(float(item["mean"]))
+            if isinstance(item, dict):
+                mean = _finite_stat_mean(item.get("mean"))
+                if mean is not None:
+                    values.setdefault(str(metric), []).append(mean)
     return {metric: sum(rows) / len(rows) for metric, rows in values.items() if rows}
 
 
@@ -351,11 +354,15 @@ def _weakest_available_metrics(stats: dict[str, Any]) -> list[str]:
 
 def _stat_mean(stats: dict[str, Any], metric: str) -> float | None:
     item = stats.get(metric) or {}
-    try:
-        value = item.get("mean")
-        return None if value is None else float(value)
-    except (TypeError, ValueError):
+    return _finite_stat_mean(item.get("mean")) if isinstance(item, dict) else None
+
+
+def _finite_stat_mean(value: Any) -> float | None:
+    """Accept only finite numeric means; bool/NaN/Inf are not measurements."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
+    parsed = float(value)
+    return parsed if math.isfinite(parsed) else None
 
 
 def _report_prompt(payload: dict[str, Any], default: dict[str, Any]) -> str:

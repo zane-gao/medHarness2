@@ -367,7 +367,7 @@ def verify_real_llm_case_evaluation(
             "Real LLM verification requires one reference evaluation, one candidate evaluation, and one pairwise comparison"
         )
 
-    required_consistency_runs = max(1, int(required_general_judge_consistency_runs))
+    required_consistency_runs = max(1, _strict_nonnegative_int(required_general_judge_consistency_runs, "required_general_judge_consistency_runs"))
     _verify_likert_consistency(
         (human.get("likert") or {}).get("_metadata"),
         label="T1.reference",
@@ -431,7 +431,7 @@ def verify_real_llm_case_evaluation(
     )
     if adjudication_summary.get("complete") is not True:
         raise ValueError("T5 adjudication is incomplete")
-    if int(adjudication_summary.get("deterministic_error_count", -1)) != deterministic_error_count:
+    if _strict_nonnegative_int(adjudication_summary.get("deterministic_error_count"), "T5 deterministic_error_count") != deterministic_error_count:
         raise ValueError("T5 deterministic error count mismatch")
     if int(adjudication_summary.get("retained_error_count", -1)) != len(
         adjudicated_candidates
@@ -586,7 +586,7 @@ def _load_verified_benchmark_source(
         raise ValueError("Benchmark case manifest SHA-256 mismatch")
     results = _read_jsonl(results_path)
     source_summary = read_json(summary_path)
-    if int(source_summary.get("result_count", len(results))) != len(results):
+    if _strict_nonnegative_int(source_summary.get("result_count", len(results)), "benchmark result_count") != len(results):
         raise ValueError("Benchmark result count does not match its summary")
     return {
         "benchmark_manifest": benchmark_manifest,
@@ -735,9 +735,9 @@ def _normalize_verified_evidence(
     if bool(source.get("fallback_used")):
         raise ValueError(f"{label} used a fallback")
     try:
-        attempts = int(attempt_count)
-    except (TypeError, ValueError):
-        attempts = 0
+        attempts = _strict_nonnegative_int(attempt_count, f"{label} attempt_count")
+    except ValueError:
+        raise ValueError(f"{label} has invalid attempt_count") from None
     if attempts < 1:
         raise ValueError(f"{label} did not record a completed LLM attempt")
     return {
@@ -764,9 +764,9 @@ def _verify_likert_consistency(
     if not isinstance(metadata, dict):
         raise ValueError(f"{label} is missing Likert consistency metadata")
     try:
-        actual_runs = int(metadata.get("consistency_runs"))
-        compared_count = int(metadata.get("consistency_compared_count"))
-    except (TypeError, ValueError):
+        actual_runs = _strict_nonnegative_int(metadata.get("consistency_runs"), f"{label} consistency_runs")
+        compared_count = _strict_nonnegative_int(metadata.get("consistency_compared_count"), f"{label} consistency_compared_count")
+    except ValueError:
         raise ValueError(f"{label} has invalid Likert consistency metadata") from None
     if actual_runs != required_runs:
         raise ValueError(f"{label} consistency_runs mismatch: {actual_runs} != {required_runs}")
@@ -1140,6 +1140,12 @@ def _finite_stat_value(value: Any) -> bool:
 def _valid_int(value: Any) -> bool:
     """Return true only for integer values, excluding bool-as-int coercion."""
     return isinstance(value, int) and not isinstance(value, bool)
+
+
+def _strict_nonnegative_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
 
 
 def _valid_hazard_level(value: Any) -> bool:

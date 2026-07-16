@@ -589,6 +589,14 @@ def test_verify_real_llm_case_evaluation_rejects_any_fallback():
         verify_real_llm_case_evaluation(payload)
 
 
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
+def test_verify_real_llm_case_evaluation_rejects_invalid_attempt_count(bad):
+    payload = _strict_case_evaluation()
+    payload["human_evaluation"]["likert"]["_metadata"]["attempt_count"] = bad
+    with pytest.raises(ValueError, match="attempt_count"):
+        verify_real_llm_case_evaluation(payload)
+
+
 def test_verify_real_llm_case_evaluation_counts_validated_attempts_by_role():
     verification = verify_real_llm_case_evaluation(_strict_case_evaluation())
 

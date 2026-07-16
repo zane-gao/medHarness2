@@ -6,6 +6,18 @@ from pathlib import Path
 from medharness2.cli import main
 from medharness2.config import AppConfig, GeneratorConfig
 from medharness2.workflows.education import run_education_suggestions
+from medharness2.workflows.education import _peer_means, _stat_mean
+
+
+def test_education_peer_means_reject_boolean_and_nonfinite_values():
+    readers = {
+        "reader_a": {"Completeness": {"mean": True}, "Clarity": {"mean": float("nan")}},
+        "reader_b": {"Completeness": {"mean": 4.0}, "Clarity": {"mean": float("inf")}},
+        "reader_c": {"Completeness": {"mean": 2.0}, "Clarity": {"mean": 3.0}},
+    }
+    assert _peer_means(readers, exclude="reader_c") == {"Completeness": 4.0}
+    assert _stat_mean(readers["reader_a"], "Completeness") is None
+    assert _stat_mean(readers["reader_c"], "Clarity") == 3.0
 
 
 def test_run_education_suggestions_from_workflow1(tmp_path: Path):
