@@ -652,6 +652,19 @@ def test_case_evaluation_metrics_include_third_hazard_adjudication():
     assert metrics["clinical_validation_required"] is True
 
 
+def test_case_evaluation_metrics_count_each_abstained_adjudication_once():
+    payload = _strict_case_evaluation()
+    _add_hazard_disagreement(payload, include_adjudication=True)
+    decisions = payload["pairwise_comparisons"][0]["comparison"]["hazard_adjudication"]["decisions"]
+    decisions[0]["abstain"] = True
+    decisions.append({"error_index": 1, "abstain": True})
+
+    metrics = _case_evaluation_metrics(payload)
+
+    assert metrics["hazard_adjudication_decision_count"] == 2
+    assert metrics["hazard_adjudication_abstained_count"] == 2
+
+
 def test_case_evaluation_metrics_require_clinical_validation_without_llm_disagreement():
     metrics = _case_evaluation_metrics(_strict_case_evaluation())
 
