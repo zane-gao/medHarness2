@@ -8,7 +8,7 @@ import fitz
 import pytest
 
 from medharness2.config import AppConfig, LLMConfig
-from medharness2.llm_client import LLMClient, LLMClientError, build_mock_client
+from medharness2.llm_client import LLMClient, LLMClientError, _strict_call_int, build_mock_client
 from medharness2.utils.io import parse_json_object
 
 
@@ -17,6 +17,18 @@ def test_mock_client_returns_text():
     result = client.call("hello", image_path="img.dcm")
     assert "mock response" in result
     assert "img.dcm" in result
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, 0, -1, "2"])
+def test_per_call_integer_controls_reject_implicit_coercion(bad):
+    with pytest.raises(LLMClientError, match="max_retries"):
+        _strict_call_int(bad, "max_retries")
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, 0, -1, "2"])
+def test_per_call_max_new_tokens_rejects_implicit_coercion(bad):
+    with pytest.raises(LLMClientError, match="max_new_tokens"):
+        _strict_call_int(bad, "max_new_tokens")
 
 
 def test_build_mock_client_returns_json():

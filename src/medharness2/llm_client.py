@@ -25,6 +25,13 @@ class LLMClientError(RuntimeError):
     """Raised when the configured LLM provider cannot complete a request."""
 
 
+def _strict_call_int(value: Any, label: str, *, minimum: int = 1) -> int:
+    """Validate per-call integer controls without bool/fraction coercion."""
+    if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+        raise LLMClientError(f"{label} must be an integer >= {minimum}")
+    return value
+
+
 _RETRYABLE_HTTP_STATUS = {408, 409, 425, 429}
 
 
@@ -90,7 +97,7 @@ class LLMClient:
             payload["temperature"] = kwargs.get("temperature", llm.temperature)
         seed = kwargs.get("seed", llm.seed)
         if seed is not None:
-            payload["seed"] = int(seed)
+            payload["seed"] = _strict_call_int(seed, "seed", minimum=0)
         if kwargs.get("response_format") == "json":
             payload["text"] = {"format": {"type": "json_object"}}
         data = json.dumps(payload).encode("utf-8")
@@ -105,8 +112,14 @@ class LLMClient:
             method="POST",
         )
         last_error: Exception | None = None
-        max_retries = max(1, int(kwargs.get("max_retries") or llm.max_retries))
-        timeout_sec = int(kwargs.get("timeout_sec") or llm.timeout_sec)
+        max_retries = _strict_call_int(
+            kwargs["max_retries"] if "max_retries" in kwargs else llm.max_retries,
+            "max_retries",
+        )
+        timeout_sec = _strict_call_int(
+            kwargs["timeout_sec"] if "timeout_sec" in kwargs else llm.timeout_sec,
+            "timeout_sec",
+        )
         for attempt in range(max_retries):
             response = None
             try:
@@ -157,16 +170,22 @@ class LLMClient:
             payload["temperature"] = kwargs.get("temperature", llm.temperature)
         seed = kwargs.get("seed", llm.seed)
         if seed is not None:
-            payload["seed"] = int(seed)
-        max_tokens = kwargs.get("max_tokens") or llm.chat_max_tokens
+            payload["seed"] = _strict_call_int(seed, "seed", minimum=0)
+        max_tokens = kwargs["max_tokens"] if "max_tokens" in kwargs else llm.chat_max_tokens
         if max_tokens:
-            payload["max_tokens"] = int(max_tokens)
+            payload["max_tokens"] = _strict_call_int(max_tokens, "max_tokens")
         if kwargs.get("response_format") == "json":
             payload["response_format"] = {"type": "json_object"}
         endpoint = str(kwargs.get("base_url") or llm.base_url).rstrip("/") + "/chat/completions"
         last_error: Exception | None = None
-        max_retries = max(1, int(kwargs.get("max_retries") or llm.max_retries))
-        timeout_sec = int(kwargs.get("timeout_sec") or llm.timeout_sec)
+        max_retries = _strict_call_int(
+            kwargs["max_retries"] if "max_retries" in kwargs else llm.max_retries,
+            "max_retries",
+        )
+        timeout_sec = _strict_call_int(
+            kwargs["timeout_sec"] if "timeout_sec" in kwargs else llm.timeout_sec,
+            "timeout_sec",
+        )
         for attempt in range(max_retries):
             response = None
             try:
@@ -276,7 +295,7 @@ class LLMClient:
                 "--dtype",
                 llm.local_cli_dtype,
                 "--max-new-tokens",
-                str(kwargs.get("max_new_tokens") or llm.local_cli_max_new_tokens),
+                str(_strict_call_int(kwargs.get("max_new_tokens", llm.local_cli_max_new_tokens), "max_new_tokens")),
             ]
             try:
                 subprocess.run(
@@ -300,7 +319,7 @@ class LLMClient:
             return self._generate_local_hf_vlm(
                 prompt,
                 image_paths,
-                int(kwargs.get("max_new_tokens") or llm.local_hf_max_new_tokens),
+                _strict_call_int(kwargs.get("max_new_tokens", llm.local_hf_max_new_tokens), "max_new_tokens"),
             )
 
     @staticmethod
