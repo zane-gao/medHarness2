@@ -21,6 +21,8 @@ def build_pilot_annotation_package(
         raise ValueError("limit must be positive")
     root = Path(run_dir)
     output = Path(output_dir)
+    if not root.is_dir():
+        raise ValueError("run_dir_not_found")
     cases_dir = output / "cases"
     cases_dir.mkdir(parents=True, exist_ok=True)
     for stale in cases_dir.glob("*.json"):
@@ -36,6 +38,8 @@ def build_pilot_annotation_package(
         stale.unlink()
     policy = ExternalPayloadPolicy()
     selected = _stratified_cases(_load_case_payloads(root), limit=limit)
+    if not selected:
+        raise ValueError("no_cases_discovered")
     manifest_rows = []
     for index, (source_case_id, payload) in enumerate(selected, start=1):
         pilot_case_id = f"pilot-{index:03d}"

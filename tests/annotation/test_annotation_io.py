@@ -89,6 +89,16 @@ def test_build_pilot_annotation_package_is_blinded_valid_and_deidentified(tmp_pa
         assert set(case.annotations) == {"reader_a", "reader_b", "adjudication"}
 
 
+def test_cli_build_pilot_rejects_missing_or_empty_source_run(tmp_path: Path):
+    output_dir = tmp_path / "pilot10"
+    code = main(["annotation", "build-pilot", "--run-dir", str(tmp_path / "missing"), "--output-dir", str(output_dir)])
+    assert code == 1
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    code = main(["annotation", "build-pilot", "--run-dir", str(empty), "--output-dir", str(output_dir)])
+    assert code == 1
+
+
 def test_pilot_privacy_scan_ignores_cryptographic_provenance_hash(tmp_path: Path, monkeypatch):
     run_dir = _write_run(tmp_path / "run")
     monkeypatch.setattr(

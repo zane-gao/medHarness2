@@ -203,9 +203,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"migrated {result['case_count']} case artifacts; errors={result['error_count']}")
         return 0 if result["error_count"] == 0 else 1
     if args.command == "annotation" and args.annotation_command == "build-pilot":
-        result = build_pilot_annotation_package(args.run_dir, args.output_dir, limit=args.limit)
+        try:
+            result = build_pilot_annotation_package(args.run_dir, args.output_dir, limit=args.limit)
+        except Exception as exc:
+            print(f"medHarness2 annotation build-pilot failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         print(f"wrote {result['case_count']} blinded annotation cases to {args.output_dir}")
-        return 0
+        return 0 if result["case_count"] else 1
     if args.command == "annotation" and args.annotation_command == "validate":
         result = validate_pilot_annotation_package(args.package_dir)
         print(json.dumps(result, ensure_ascii=False, indent=2))
