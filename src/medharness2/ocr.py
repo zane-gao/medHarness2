@@ -46,6 +46,13 @@ def extract_report_text(
     primary_options = _ocr_role_options(cfg, ocr_role)
     primary_provider = str(primary_options.get("provider") or cfg.llm.provider).lower()
     primary_model = str(primary_options.get("model") or cfg.llm.model)
+    verifier_route = cfg.model_roles.get("ocr_verifier")
+    effective_verifier_options = dict(verifier_options or {})
+    if verifier_route is not None and not effective_verifier_options:
+        effective_verifier_options = verifier_route.as_call_options()
+    verifier_provider = str(effective_verifier_options.get("provider") or "").lower()
+    verifier_model = str(effective_verifier_options.get("model") or "")
+    verifier_role = "ocr_verifier" if verifier_route is not None or verifier_options else ""
     pdf = Path(report_pdf)
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -84,6 +91,7 @@ def extract_report_text(
         page_results: list[str] = []
         page_meta: list[dict[str, Any]] = []
         retained_rendered_pages: list[str] = []
+        retained_page_indices: list[int] = []
         with tempfile.TemporaryDirectory(prefix=f"{case_id}-ocr-") as tmp_dir:
             rendered_pages = _render_pdf_pages(pdf, Path(tmp_dir))
             for page_index, image_path in enumerate(rendered_pages, start=1):
@@ -102,6 +110,7 @@ def extract_report_text(
                     )
                     continue
                 retained_rendered_pages.append(image_path)
+                retained_page_indices.append(page_index)
                 page_text = str(
                     client.call(
                         prompt,
@@ -129,8 +138,8 @@ def extract_report_text(
                 warnings.append("ocr_possible_truncation")
             if verifier_client is not None and page_results and retained_rendered_pages:
                 page_audits: list[dict[str, Any]] = []
-                for page_index, (page_text, image_path) in enumerate(
-                    zip(page_results, retained_rendered_pages), start=1
+                for page_index, page_text, image_path in zip(
+                    retained_page_indices, page_results, retained_rendered_pages
                 ):
                     audit_prompt = (
                         "Audit this OCR transcription against the supplied report page. "
@@ -143,7 +152,7 @@ def extract_report_text(
                             image_path=image_path,
                             response_format="json",
                             payload_classification="raw_medical_document",
-                            **dict(verifier_options or {}),
+                            **effective_verifier_options,
                         )
                         try:
                             audit = json.loads(str(raw_audit))
@@ -181,6 +190,12 @@ def extract_report_text(
                 "provider": provider,
                 "model": primary_model if method == "vlm_ocr" else "",
                 "role": ocr_role if method == "vlm_ocr" and primary_options else "default",
+                "verifier": {
+                    "provider": verifier_provider,
+                    "model": verifier_model,
+                    "role": verifier_role,
+                    "configured": verifier_client is not None,
+                },
                 "source_pdf": str(pdf),
                 "warnings": warnings,
                 "page_count": page_count,

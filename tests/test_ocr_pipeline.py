@@ -228,6 +228,41 @@ def test_ocr_verifier_audits_each_retained_page(tmp_path: Path):
     assert [item["page_index"] for item in meta["quality_audit"]["pages"]] == [1, 2]
 
 
+def test_ocr_verifier_preserves_original_page_numbers_across_blank_pages(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    for text in ("page one", None, "page three"):
+        page = doc.new_page(width=300, height=200)
+        # Draw marks rather than a text layer so the scanned-PDF OCR path runs.
+        if text:
+            page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+
+    class Verifier:
+        def call(self, prompt, image_path=None, **kwargs):
+            return '{"status":"agree"}'
+
+    meta_path = tmp_path / "ocr" / "case-page-numbers.ocr.json"
+    extract_report_text(
+        pdf,
+        case_id="case-page-numbers",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=PageOCRClient(),
+        verifier_client=Verifier(),
+        verifier_options={"provider": "chat_completions", "model": "qwen-vl-ocr-latest"},
+        force=True,
+    )
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert [item["page_index"] for item in meta["quality_audit"]["pages"]] == [1, 3]
+    assert meta["verifier"] == {
+        "provider": "chat_completions",
+        "model": "qwen-vl-ocr-latest",
+        "role": "ocr_verifier",
+        "configured": True,
+    }
+
+
 def test_ocr_candidate_benchmark_scores_and_blocks_missing_artifacts(tmp_path: Path):
     manifest = tmp_path / "ocr_manifest.json"
     manifest.write_text(
