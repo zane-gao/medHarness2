@@ -181,6 +181,10 @@ def extract_report_text(
                                 raise TypeError("verifier response must be a JSON object")
                             if not isinstance(audit, dict):
                                 raise TypeError("verifier response must be a JSON object")
+                            status = str(audit.get("status") or "").strip().lower()
+                            if status not in {"agree", "disagreement"}:
+                                raise ValueError("verifier status must be agree or disagreement")
+                            audit["status"] = status
                         except (TypeError, ValueError, json.JSONDecodeError):
                             audit = {"status": "invalid_verifier_response", "raw": str(raw_audit)[:500]}
                             warnings.append(f"ocr_verifier_invalid_response:page_{page_index}")

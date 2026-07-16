@@ -370,6 +370,31 @@ def test_ocr_verifier_invalid_response_is_audit_warning(tmp_path: Path, response
     assert meta["quality_audit"]["status"] == "invalid_verifier_response"
 
 
+def test_ocr_verifier_unknown_status_is_invalid_audit_response(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+
+    class UnknownVerifier:
+        def call(self, *args, **kwargs):
+            return '{"status":"maybe","reason":"unclear"}'
+
+    result = extract_report_text(
+        pdf,
+        case_id="case-verifier-unknown-status",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=PageOCRClient(),
+        verifier_client=UnknownVerifier(),
+        force=True,
+    )
+
+    assert "ocr_verifier_invalid_response" in result.warnings
+    assert result.metadata["quality_status"] == "review_required"
+
+
 def test_ocr_verifier_audits_each_retained_page(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()
