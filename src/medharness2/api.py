@@ -178,6 +178,8 @@ def get_run(run_id: str) -> dict[str, Any]:
         return _control_store().get_run(run_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Run not found") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"run_get_failed:{type(exc).__name__}") from exc
 
 
 @app.post("/runs/{run_id}/cancel")
@@ -188,6 +190,8 @@ def cancel_run(run_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Run not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"run_cancel_failed:{type(exc).__name__}") from exc
 
 
 @app.post("/runs/{run_id}/retry")
@@ -198,6 +202,8 @@ def retry_run(run_id: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Run not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"run_retry_failed:{type(exc).__name__}") from exc
 
 
 @app.get("/runs/{run_id}/stages")

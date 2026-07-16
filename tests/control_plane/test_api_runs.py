@@ -88,3 +88,26 @@ def test_control_panel_returns_structured_failure(monkeypatch):
     response = TestClient(app, raise_server_exceptions=False).get("/control-panel")
     assert response.status_code == 500
     assert response.json()["detail"] == "control_panel_failed:RuntimeError"
+
+
+def test_run_lookup_and_mutation_return_structured_storage_failures(monkeypatch):
+    class BrokenStore:
+        def get_run(self, *args, **kwargs):
+            raise RuntimeError("get boom")
+
+        def cancel_run(self, *args, **kwargs):
+            raise RuntimeError("cancel boom")
+
+        def retry_run(self, *args, **kwargs):
+            raise RuntimeError("retry boom")
+
+    monkeypatch.setattr(api_module, "_control_store", lambda: BrokenStore())
+    client = TestClient(app, raise_server_exceptions=False)
+    for path, detail in (
+        ("/runs/run-1", "run_get_failed:RuntimeError"),
+        ("/runs/run-1/cancel", "run_cancel_failed:RuntimeError"),
+        ("/runs/run-1/retry", "run_retry_failed:RuntimeError"),
+    ):
+        response = client.get(path) if path.count("/") == 2 else client.post(path)
+        assert response.status_code == 500
+        assert response.json()["detail"] == detail
