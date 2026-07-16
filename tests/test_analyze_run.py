@@ -92,6 +92,8 @@ def test_cli_analyze_run_rejects_empty_workflow_inputs(tmp_path: Path):
     assert code == 1
     summary = json.loads((run_dir / "analysis" / "analysis_summary.json").read_text(encoding="utf-8"))
     assert summary["errors"] == ["no_cases_discovered"]
+    registry = json.loads((run_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
 
 
 def test_analyze_reader_summary_keeps_missing_overall_score_empty(tmp_path: Path):

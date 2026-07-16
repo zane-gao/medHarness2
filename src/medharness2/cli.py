@@ -713,6 +713,7 @@ def main(argv: list[str] | None = None) -> int:
             args.output_dir,
             command=command,
             stage="workflow.analyze-run",
+            status="failed" if result.get("errors") else "passed",
             inputs={"output_dir": args.output_dir, "analysis_dir": args.analysis_dir or ""},
             outputs={"analysis_dir": result.get("analysis_dir", ""), **dict(result.get("artifacts") or {})},
             metrics={
