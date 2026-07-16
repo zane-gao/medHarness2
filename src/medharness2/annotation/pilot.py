@@ -278,18 +278,34 @@ def _annotation_status(statuses: dict[str, str]) -> str:
 
 
 def _load_case_payloads(root: Path) -> list[tuple[str, dict[str, Any]]]:
-    workflow2 = read_json(root / "workflow2.json") if (root / "workflow2.json").exists() else {}
-    rows: list[tuple[str, dict[str, Any]]] = []
-    for case in workflow2.get("cases") or []:
-        source_case_id = str(case.get("case_id") or "")
-        path = Path(str(case.get("workflow1_output") or ""))
-        candidates = [path] if path.is_absolute() else [root / path, path]
-        for candidate in candidates:
-            if candidate.exists():
-                rows.append((source_case_id or candidate.stem, read_json(candidate)))
-                break
-    if rows:
+    workflow2_path = root / "workflow2.json"
+    workflow2 = read_json(workflow2_path) if workflow2_path.exists() else {}
+    manifest_cases = workflow2.get("cases") or []
+    if manifest_cases:
+        rows: list[tuple[str, dict[str, Any]]] = []
+        for index, case in enumerate(manifest_cases, start=1):
+            source_case_id = str(case.get("case_id") or "")
+            raw_reference = str(case.get("workflow1_output") or "").strip()
+            case_label = source_case_id or f"row_{index}"
+            if not raw_reference:
+                raise ValueError(f"workflow2 case {case_label} is missing workflow1_output")
+            path = Path(raw_reference)
+            candidates = [path] if path.is_absolute() else [root / path, path]
+            candidate = next((item for item in candidates if item.exists()), None)
+            if candidate is None:
+                raise ValueError(
+                    f"workflow2 case {case_label} workflow1_output does not exist: {raw_reference}"
+                )
+            try:
+                payload = read_json(candidate)
+            except (OSError, UnicodeError, ValueError) as exc:
+                raise ValueError(
+                    f"workflow2 case {case_label} workflow1_output is unreadable: {candidate}"
+                ) from exc
+            rows.append((source_case_id or candidate.stem, payload))
         return rows
+
+    # Older runs may only contain workflow2_cases/*.json and no manifest rows.
     case_dir = root / "workflow2_cases"
     return [(path.stem, read_json(path)) for path in sorted(case_dir.glob("*.json"))]
 

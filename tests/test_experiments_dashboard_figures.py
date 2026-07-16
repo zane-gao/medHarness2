@@ -319,6 +319,16 @@ def test_dashboard_does_not_render_missing_reader_score_as_zero():
     assert ">0.0000<" not in html
 
 
+def test_dashboard_does_not_render_missing_percentile_as_p0():
+    html = _render_reader_rows([
+        {"reader": "scored", "case_count": "3", "overall_score": "0.75", "percentile": ""},
+    ])
+
+    assert "0.7500" in html
+    assert "—" in html
+    assert "P0" not in html
+
+
 def _write_minimal_run(root: Path) -> Path:
     analysis = root / "analysis"
     cases = root / "workflow2_cases"

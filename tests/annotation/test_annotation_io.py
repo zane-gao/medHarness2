@@ -199,3 +199,41 @@ def test_build_pilot_annotation_package_refuses_rebuild_after_annotation_started
         raise AssertionError("rebuild must not delete started annotation work")
 
     assert case_path.exists()
+
+
+def test_build_pilot_annotation_package_rejects_missing_workflow1_reference(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    workflow2_path = run_dir / "workflow2.json"
+    workflow2 = json.loads(workflow2_path.read_text(encoding="utf-8"))
+    workflow2["cases"][0]["workflow1_output"] = str(run_dir / "workflow2_cases" / "missing.json")
+    workflow2_path.write_text(json.dumps(workflow2), encoding="utf-8")
+
+    try:
+        build_pilot_annotation_package(run_dir, tmp_path / "pilot10", limit=1)
+    except ValueError as exc:
+        message = str(exc)
+        assert "REAL_CASE_000" in message
+        assert "workflow1_output" in message
+        assert "missing.json" in message
+    else:
+        raise AssertionError("missing workflow1 reference must fail explicitly")
+
+
+def test_build_pilot_annotation_package_rejects_unreadable_workflow1_reference(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    workflow2_path = run_dir / "workflow2.json"
+    workflow2 = json.loads(workflow2_path.read_text(encoding="utf-8"))
+    invalid_path = run_dir / "workflow2_cases" / "invalid.json"
+    invalid_path.write_text("not json", encoding="utf-8")
+    workflow2["cases"][0]["workflow1_output"] = str(invalid_path)
+    workflow2_path.write_text(json.dumps(workflow2), encoding="utf-8")
+
+    try:
+        build_pilot_annotation_package(run_dir, tmp_path / "pilot10", limit=1)
+    except ValueError as exc:
+        message = str(exc)
+        assert "REAL_CASE_000" in message
+        assert "workflow1_output" in message
+        assert "invalid.json" in message
+    else:
+        raise AssertionError("unreadable workflow1 reference must fail explicitly")

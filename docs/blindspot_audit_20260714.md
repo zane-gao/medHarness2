@@ -31,6 +31,8 @@
 > **2026-07-16 教育/兼容性增量**：教育反馈优先使用 reader 统计，缺失时从病例级 `human_metrics` 重建；没有可用统计才 blocked，不再用 0 伪造同行基线。pilot 包重建会清理 stale 病例文件；legacy 单行 artifact 无 case_id 时保持兼容，多行歧义则阻断；损坏 pilot manifest 在前端显示 blocked。全量回归测试为 441 passed、18 warnings。
 > **2026-07-16 教育 Likert 增量**：Workflow 4 报告级教育反馈不再把缺失、空值或非法 Likert 分数当作 0；部分有效分数只基于有效项计算，完全缺失时返回 `blocked_insufficient_data`，避免虚构最低弱项和总分。新增缺失/非法输入回归测试。
 > **2026-07-16 面板证据增量**：后端已排除缺失 `overall_score` 的 reader 后，发现控制面板模板仍会用 `Number(value) || 0` 把缺失分数显示为 0。现已统一保留 `null`，并让 reader 表格和图表只展示有效分数；真实 0 分仍保留。新增 dashboard 回归测试；当前全量回归为 449 passed、18 warnings。
+> **2026-07-16 百分位展示增量**：继续发现有效综合分但缺失 `percentile` 时会被模板渲染为 `P0`。现已改为显示不可用标记，真实百分位（包括真实 0）仍保留，新增回归测试。
+> **2026-07-16 pilot 输入增量**：`build_pilot_annotation_package` 现在严格校验 `workflow2.json` 中每个 `workflow1_output` 引用：缺失文件或非法 JSON 会带病例 ID 和路径明确失败，不再静默跳过或冒泡无上下文解析异常。全量回归测试为 452 passed、18 warnings。
 > **2026-07-16 reader 计数增量**：department 输出的 `reader_count` 现在只统计有有效 `overall_score` 的 reader，并单独记录 `excluded_reader_count`，避免 reader 总数与 percentile/统计群体不一致。
 > **2026-07-16 兼容/标注安全增量**：恢复 `run_single_case` 历史第四个位置参数作为 `report_text` 的兼容语义；pilot 包重建在已有标注或无效包时拒绝删除旧病例文件；损坏 manifest 继续以 blocked 状态展示。全量回归测试为 443 passed、18 warnings。
 > **2026-07-16 hazard 聚合增量**：`tool11_hazardwise` 不再把缺失 `error_type`/`hazard_level` 的记录默认成未知权重或最低风险；不完整记录会被排除并等待补齐。全量回归测试为 444 passed、18 warnings。

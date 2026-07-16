@@ -364,7 +364,7 @@ def _render_reader_rows(rows: list[dict[str, str]]) -> str:
         f'<td class="primary">{_esc(r.get("reader", ""))}</td>'
         f'<td class="num">{_esc(r.get("case_count", ""))}</td>'
         f'<td class="num">{_to_float(r.get("overall_score")):.4f}</td>'
-        f'<td class="num">P{_to_float(r.get("percentile")):.0f}</td>'
+        f'<td class="num">{_format_percentile(r.get("percentile"))}</td>'
         "</tr>"
         for r in ordered
     )
@@ -721,3 +721,8 @@ def _to_optional_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return number if number == number else None
+
+
+def _format_percentile(value: Any) -> str:
+    number = _to_optional_float(value)
+    return "—" if number is None else f"P{number:.0f}"
