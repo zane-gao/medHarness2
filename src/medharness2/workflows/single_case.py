@@ -21,7 +21,6 @@ def run_single_case(
     report_path: str | Path | None = None,
     image_path: str | Path | None = None,
     output_path: str | Path | None = None,
-    case_id: str | None = None,
     report_text: str | None = None,
     prepared_assets: dict[str, Any] | None = None,
     modality: str | None = None,
@@ -33,6 +32,8 @@ def run_single_case(
     config: AppConfig | None = None,
     llm_client: LLMClient | None = None,
     checkpoint_store: StageCheckpointStore | None = None,
+    *,
+    case_id: str | None = None,
 ) -> dict[str, Any]:
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)

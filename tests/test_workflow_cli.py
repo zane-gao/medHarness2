@@ -653,6 +653,26 @@ def test_single_case_workflow_writes_json(tmp_path: Path):
     assert result["pairwise_comparisons"]
 
 
+def test_single_case_preserves_legacy_fourth_positional_report_text(tmp_path: Path):
+    image = tmp_path / "dummy.dcm"
+    output = tmp_path / "result.json"
+    image.write_text("dummy", encoding="utf-8")
+
+    run_single_case(
+        None,
+        image,
+        output,
+        "FINDINGS: Positional report text. IMPRESSION: Normal.",
+        modality="cxr",
+        top_n=1,
+        llm_client=build_mock_client(),
+        config=load_config(),
+    )
+
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert "Positional report text" in payload["human_evaluation"]["finding_graph"]["findings"][0]["source_text"]
+
+
 def test_cli_single_case(tmp_path: Path):
     report = tmp_path / "human.txt"
     image = tmp_path / "dummy.dcm"

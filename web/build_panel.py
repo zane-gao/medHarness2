@@ -531,11 +531,13 @@ def extract_pilot10(path: Path) -> dict | None:
     if not path.exists():
         return None
     rows = []
+    manifest_line_count = 0
     parse_errors: list[str] = []
     with path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:
+                manifest_line_count += 1
                 try:
                     row = json.loads(line)
                 except json.JSONDecodeError:
@@ -545,13 +547,11 @@ def extract_pilot10(path: Path) -> dict | None:
                     parse_errors.append(f"manifest:row_{len(rows) + 1}:not_an_object")
                     continue
                 rows.append(row)
-    if not rows:
+    if not rows and not manifest_line_count:
         return None
     status_counts: dict[str, int] = {}
     modality_counts: dict[str, int] = {}
     for r in rows:
-        st = str(r.get("status") or "unknown")
-        status_counts[st] = status_counts.get(st, 0) + 1
         mod = str(r.get("modality") or "unknown")
         modality_counts[mod] = modality_counts.get(mod, 0) + 1
     validation = validate_pilot_annotation_package(path.parent)
@@ -559,8 +559,13 @@ def extract_pilot10(path: Path) -> dict | None:
         validation = dict(validation)
         validation["status"] = "blocked"
         validation["errors"] = list(dict.fromkeys([*parse_errors, *validation.get("errors", [])]))
+    status_counts = {
+        "not_started": int(validation.get("not_started_case_count", 0) or 0),
+        "in_progress": int(validation.get("in_progress_case_count", 0) or 0),
+        "complete": int(validation.get("complete_case_count", 0) or 0),
+    }
     return {
-        "total": len(rows),
+        "total": max(manifest_line_count, int(validation.get("case_count", 0) or 0)),
         "status_counts": status_counts,
         "modality_counts": modality_counts,
         "done": validation.get("complete_case_count", 0),

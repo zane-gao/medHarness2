@@ -180,3 +180,22 @@ def test_build_pilot_annotation_package_cleans_stale_case_files_on_rebuild(tmp_p
     assert result["case_count"] == 1
     assert result["errors"] == []
     assert sorted(path.name for path in (output_dir / "cases").glob("*.json")) == ["pilot-001.json"]
+
+
+def test_build_pilot_annotation_package_refuses_rebuild_after_annotation_started(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    output_dir = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, output_dir, limit=1)
+    case_path = output_dir / "cases" / "pilot-001.json"
+    payload = json.loads(case_path.read_text(encoding="utf-8"))
+    payload["annotations"]["reader_a"]["status"] = "in_progress"
+    case_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    try:
+        build_pilot_annotation_package(run_dir, output_dir, limit=1)
+    except ValueError as exc:
+        assert "annotation started" in str(exc)
+    else:
+        raise AssertionError("rebuild must not delete started annotation work")
+
+    assert case_path.exists()

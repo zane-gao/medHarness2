@@ -24,6 +24,15 @@ def build_pilot_annotation_package(
     cases_dir = output / "cases"
     cases_dir.mkdir(parents=True, exist_ok=True)
     for stale in cases_dir.glob("*.json"):
+        try:
+            existing_case = AnnotationCase.model_validate_json(stale.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise ValueError(f"Refusing to rebuild annotation package with invalid case: {stale}") from exc
+        if any(annotation.status != "not_started" for annotation in existing_case.annotations.values()):
+            raise ValueError(
+                "Refusing to rebuild annotation package after annotation started; "
+                f"use a new output directory: {stale}"
+            )
         stale.unlink()
     policy = ExternalPayloadPolicy()
     selected = _stratified_cases(_load_case_payloads(root), limit=limit)
@@ -31,7 +40,7 @@ def build_pilot_annotation_package(
     for index, (source_case_id, payload) in enumerate(selected, start=1):
         pilot_case_id = f"pilot-{index:03d}"
         input_payload = dict(payload.get("input") or {})
-        reference_text = _reference_report(input_payload, payload, policy)
+        reference_text = _reference_report(root, input_payload, payload, policy)
         candidates = [
             CandidateReportForAnnotation(
                 candidate_id=f"candidate-{candidate_index:02d}",
@@ -304,8 +313,15 @@ def _stratified_cases(rows: list[tuple[str, dict[str, Any]]], *, limit: int) -> 
     return selected
 
 
-def _reference_report(input_payload: dict[str, Any], case_payload: dict[str, Any], policy: ExternalPayloadPolicy) -> str:
+def _reference_report(
+    run_root: Path,
+    input_payload: dict[str, Any],
+    case_payload: dict[str, Any],
+    policy: ExternalPayloadPolicy,
+) -> str:
     report_path = Path(str(input_payload.get("report_path") or ""))
+    if not report_path.is_absolute():
+        report_path = run_root / report_path
     if report_path.exists():
         return policy.deidentify_clinical_text(report_path.read_text(encoding="utf-8", errors="ignore"))
     findings = ((case_payload.get("human_evaluation") or {}).get("finding_graph") or {}).get("findings") or []
