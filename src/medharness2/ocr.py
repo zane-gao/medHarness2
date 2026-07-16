@@ -79,9 +79,25 @@ def extract_report_text(
         )
         page_results: list[str] = []
         page_meta: list[dict[str, Any]] = []
+        retained_rendered_pages: list[str] = []
         with tempfile.TemporaryDirectory(prefix=f"{case_id}-ocr-") as tmp_dir:
             rendered_pages = _render_pdf_pages(pdf, Path(tmp_dir))
             for page_index, image_path in enumerate(rendered_pages, start=1):
+                ink_ratio = _image_ink_ratio(Path(image_path))
+                if _is_deterministic_blank_page(Path(image_path), ink_ratio):
+                    page_meta.append(
+                        {
+                            "page_index": page_index,
+                            "image_sha256": _sha256(Path(image_path)),
+                            "text_sha256": _text_sha256(""),
+                            "char_count": 0,
+                            "ink_ratio": ink_ratio,
+                            "skipped": True,
+                            "skip_reason": "blank_page",
+                        }
+                    )
+                    continue
+                retained_rendered_pages.append(image_path)
                 page_text = str(
                     client.call(
                         prompt,
@@ -97,6 +113,8 @@ def extract_report_text(
                         "image_sha256": _sha256(Path(image_path)),
                         "text_sha256": _text_sha256(page_text),
                         "char_count": len(page_text),
+                        "ink_ratio": ink_ratio,
+                        "skipped": False,
                     }
                 )
                 if _looks_truncated(page_text):
@@ -104,7 +122,7 @@ def extract_report_text(
             text = "\n\n".join(item for item in page_results if item).strip()
             if any(item.startswith("ocr_possible_truncation:") for item in warnings):
                 warnings.append("ocr_possible_truncation")
-            if verifier_client is not None and page_results:
+            if verifier_client is not None and page_results and retained_rendered_pages:
                 audit_prompt = (
                     "Audit this OCR transcription against the supplied report page. "
                     "Return JSON only with status (agree/disagreement), evidence spans, and short reason. "
@@ -113,7 +131,7 @@ def extract_report_text(
                 try:
                     raw_audit = verifier_client.call(
                         audit_prompt,
-                        image_path=rendered_pages[0],
+                        image_path=retained_rendered_pages[0],
                         response_format="json",
                         payload_classification="raw_medical_document",
                         **dict(verifier_options or {}),
@@ -201,6 +219,39 @@ def _sha256(path: Path) -> str:
 
 def _text_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _image_ink_ratio(path: Path) -> float:
+    """Return the fraction of visibly dark pixels in a rendered page."""
+    try:
+        import fitz
+    except Exception:
+        return 1.0
+    try:
+        pixmap = fitz.Pixmap(str(path))
+        channels = pixmap.n
+        samples = pixmap.samples
+        total = max(1, pixmap.width * pixmap.height)
+        if channels == 1:
+            dark = sum(1 for value in samples if value < 245)
+        else:
+            dark = sum(
+                1
+                for index in range(0, len(samples), channels)
+                if max(samples[index : index + 3]) < 245
+            )
+        return round(dark / total, 6)
+    except Exception:
+        return 1.0
+
+
+def _is_deterministic_blank_page(path: Path, ink_ratio: float) -> bool:
+    """Skip only pages that are safely blank, preserving sparse small pages."""
+    # A fixed 0.01 ratio incorrectly drops sparse but clinically valid pages
+    # (for example a short one-line impression). Only an exactly white render
+    # is deterministic evidence of a blank page; low-ink pages remain eligible
+    # for OCR and can be flagged by the normal truncation/quality checks.
+    return ink_ratio == 0.0
 
 
 def _looks_truncated(text: str) -> bool:

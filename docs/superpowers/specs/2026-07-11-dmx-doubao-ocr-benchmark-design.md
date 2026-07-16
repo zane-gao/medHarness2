@@ -72,7 +72,7 @@ annotation status.
 
 1. Hash the source PDF and resolve a versioned OCR route.
 2. Render every page and compute page-level image and ink-density metadata.
-3. Skip deterministic blank pages.
+3. Skip deterministic all-white pages; retain sparse pages and record page-level ink ratio plus skip reason.
 4. Call the selected model once per retained page with an exact-transcription
    prompt: do not summarize, correct, translate, infer, or add Markdown; preserve
    section headers, punctuation, negation, measurements, dates, and line order.

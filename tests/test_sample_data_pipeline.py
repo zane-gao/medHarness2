@@ -30,7 +30,8 @@ class StaticOCRClient:
 def test_extract_report_text_uses_vlm_for_scanned_pdf(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()
-    doc.new_page(width=200, height=200)
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
     doc.save(pdf)
     result = extract_report_text(
         pdf,
@@ -433,7 +434,10 @@ def test_prepare_sample_dataset_refreshes_mock_cache_when_real_ocr_required(tmp_
 
 def _write_blank_pdf(path: Path) -> None:
     doc = fitz.open()
-    doc.new_page(width=200, height=200)
+    page = doc.new_page(width=200, height=200)
+    # A scanned-page fixture: no extractable text layer, but a tiny raster-like
+    # mark so the production blank-page gate does not skip the page.
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
     doc.save(path)
 
 

@@ -48,10 +48,37 @@ def test_scanned_pdf_ocr_is_page_ordered_and_records_provenance(tmp_path: Path):
     assert meta["provider"] == "openai"
 
 
+def test_scanned_pdf_ocr_skips_deterministic_blank_pages(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=200)
+    page.insert_text((30, 60), "visible page")
+    doc.new_page(width=300, height=200)
+    doc.save(pdf)
+
+    client = PageOCRClient()
+    result = extract_report_text(
+        pdf,
+        case_id="case-blank-page",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=client,
+        force=True,
+    )
+
+    assert len(client.paths) == 1
+    assert result.text.startswith("FINDINGS: page 1")
+    meta = json.loads((tmp_path / "ocr" / "case-blank-page.ocr.json").read_text(encoding="utf-8"))
+    assert meta["page_count"] == 1
+    assert meta["pages"][1]["skipped"] is True
+    assert meta["pages"][1]["skip_reason"] == "blank_page"
+
+
 def test_truncated_page_response_is_marked_in_metadata(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()
-    doc.new_page(width=200, height=200)
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
     doc.save(pdf)
 
     class TruncatedClient:
@@ -74,7 +101,8 @@ def test_truncated_page_response_is_marked_in_metadata(tmp_path: Path):
 def test_ocr_verifier_is_audit_only_and_cannot_change_primary_text(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()
-    doc.new_page(width=200, height=200)
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
     doc.save(pdf)
     primary = PageOCRClient()
 
@@ -106,7 +134,8 @@ def test_ocr_verifier_is_audit_only_and_cannot_change_primary_text(tmp_path: Pat
 def test_ocr_verifier_failure_does_not_fail_primary_ocr(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()
-    doc.new_page(width=200, height=200)
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
     doc.save(pdf)
 
     class FailingVerifier:
