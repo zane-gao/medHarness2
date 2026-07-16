@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Any
 
@@ -18,9 +19,12 @@ def run_department_comparison(batch_result_path: str | Path, output_path: str | 
             excluded_readers[reader] = "missing_overall_score"
             continue
         try:
-            reader_scores[reader] = float(raw_score)
+            score = float(raw_score)
+            if not math.isfinite(score):
+                raise ValueError("non_finite_overall_score")
+            reader_scores[reader] = score
         except (TypeError, ValueError):
-            excluded_readers[reader] = "invalid_overall_score"
+            excluded_readers[reader] = "non_finite_overall_score" if str(raw_score).lower() in {"nan", "inf", "+inf", "-inf", "infinity", "+infinity", "-infinity"} else "invalid_overall_score"
     population = list(reader_scores.values())
     reader_percentiles = {
         reader: {

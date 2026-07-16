@@ -378,6 +378,27 @@ def test_department_excludes_reader_with_missing_overall_score_instead_of_zero_f
     assert result["comparisons"]["excluded_readers"] == {"missing": "missing_overall_score"}
 
 
+def test_department_excludes_non_finite_overall_scores(tmp_path: Path):
+    batch = tmp_path / "workflow2.json"
+    batch.write_text(
+        json.dumps(
+            {
+                "case_count": 1,
+                "failed_case_count": 0,
+                "per_reader": {
+                    "nan_reader": {"case_count": 1, "overall_score": float("nan")},
+                    "valid_reader": {"case_count": 1, "overall_score": 0.5},
+                },
+                "cases": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = run_department_comparison(batch, tmp_path / "workflow3.json")
+    assert result["comparisons"]["excluded_readers"] == {"nan_reader": "non_finite_overall_score"}
+    assert result["reader_count"] == 1
+
+
 def test_department_preserves_explicit_zero_denominator_values(tmp_path: Path):
     batch_path = tmp_path / "workflow2.json"
     batch_path.write_text(
