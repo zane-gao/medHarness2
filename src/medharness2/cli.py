@@ -847,8 +847,8 @@ def main(argv: list[str] | None = None) -> int:
         print(__import__("json").dumps(result, ensure_ascii=False, indent=2))
         return 0 if result["passed"] else 1
     if args.command == "workflow" and args.workflow == "preflight":
-        config = load_config(args.config) if args.config else load_config()
         try:
+            config = load_config(args.config) if args.config else load_config()
             result = run_sample_preflight(
                 args.sample_root,
                 args.output,
@@ -913,13 +913,27 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if result["passed"] else 1
     if args.command == "workflow" and args.workflow == "education":
-        config = load_config(args.config) if args.config else load_config()
-        result = run_education_suggestions(
-            eval_report=args.eval_report,
-            eval_radiologist=args.eval_radiologist,
-            output_path=args.output,
-            config=config,
-        )
+        try:
+            config = load_config(args.config) if args.config else load_config()
+            result = run_education_suggestions(
+                eval_report=args.eval_report,
+                eval_radiologist=args.eval_radiologist,
+                output_path=args.output,
+                config=config,
+            )
+        except Exception as exc:
+            _record_registry(
+                Path(args.output).parent,
+                command=command,
+                stage="workflow.education",
+                status="failed",
+                inputs={"eval_report": args.eval_report or "", "eval_radiologist": args.eval_radiologist or "", "config": args.config or ""},
+                outputs={"education": args.output},
+                metrics={"error_count": 1, "exception_type": type(exc).__name__},
+                warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 education failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         _record_registry(
             Path(args.output).parent,
             command=command,

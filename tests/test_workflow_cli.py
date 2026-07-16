@@ -1400,3 +1400,37 @@ def test_cli_dashboard_returns_nonzero_and_failed_registry_on_malformed_config(t
     assert entry["stage"] == "dashboard.build"
     assert entry["status"] == "failed"
     assert entry["metrics"]["exception_type"] == "ValueError"
+
+
+def test_cli_preflight_returns_nonzero_and_failed_registry_on_malformed_config(tmp_path: Path):
+    config = tmp_path / "malformed.yaml"
+    config.write_text("- not-a-mapping\n", encoding="utf-8")
+    output = tmp_path / "preflight.json"
+    code = main([
+        "workflow", "preflight",
+        "--sample-root", str(tmp_path / "sample"),
+        "--output", str(output),
+        "--config", str(config),
+    ])
+    assert code == 1
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+    assert registry["entries"][-1]["metrics"]["exception_type"] == "ValueError"
+
+
+def test_cli_education_returns_nonzero_and_failed_registry_on_malformed_config(tmp_path: Path):
+    config = tmp_path / "malformed.yaml"
+    config.write_text("- not-a-mapping\n", encoding="utf-8")
+    output = tmp_path / "education.json"
+    eval_report = tmp_path / "eval.json"
+    eval_report.write_text("{}", encoding="utf-8")
+    code = main([
+        "workflow", "education",
+        "--eval-report", str(eval_report),
+        "--output", str(output),
+        "--config", str(config),
+    ])
+    assert code == 1
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+    assert registry["entries"][-1]["metrics"]["exception_type"] == "ValueError"
