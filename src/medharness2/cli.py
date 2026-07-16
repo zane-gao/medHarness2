@@ -241,8 +241,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote OCR benchmark to {args.output}; status={result['status']} evaluated={result['evaluated_count']}")
         return 0 if result["status"] == "succeeded" else 2
     if args.command == "live-smoke":
-        cfg = load_config(args.config) if args.config else load_config("config/dmx_strong.yaml")
-        result = run_live_judge_smoke(args.output, config=cfg, role=args.role)
+        try:
+            cfg = load_config(args.config) if args.config else load_config("config/dmx_strong.yaml")
+            result = run_live_judge_smoke(args.output, config=cfg, role=args.role)
+        except Exception as exc:
+            result = {
+                "schema_version": "1.0",
+                "artifact_type": "live_judge_smoke",
+                "status": "failed",
+                "error_type": type(exc).__name__,
+                "error": _exception_warning(exc),
+            }
+            write_json(args.output, result)
+            print(f"medHarness2 live-smoke failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 2
         print(f"wrote live judge smoke to {args.output}; status={result['status']}")
         return 0 if result["status"] == "succeeded" else 2
     if args.command == "benchmark" and args.benchmark_command == "run":
@@ -304,8 +316,12 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if result["failure_count"] == 0 else 1
     if args.command == "models" and args.models_command == "list":
-        config = load_config(args.config) if args.config else load_config()
-        registry = ReportGeneratorRegistry(config)
+        try:
+            config = load_config(args.config) if args.config else load_config()
+            registry = ReportGeneratorRegistry(config)
+        except Exception as exc:
+            print(f"medHarness2 models list failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         entries = registry.compatible_entries(args.modality, body_part=args.body_part) if args.modality else list(registry.entries.values())
         print("key\tsource\tmodalities\tbody_parts\tready\ttitle")
         for entry in entries:
@@ -315,8 +331,31 @@ def main(argv: list[str] | None = None) -> int:
             )
         return 0
     if args.command == "tools" and args.tools_command == "catalog":
-        config = load_config(args.config) if args.config else load_config()
-        result = build_capability_catalog(config)
+        try:
+            config = load_config(args.config) if args.config else load_config()
+            result = build_capability_catalog(config)
+        except Exception as exc:
+            result = {
+                "schema_version": "1.0",
+                "artifact_type": "capability_catalog",
+                "status": "failed",
+                "error_type": type(exc).__name__,
+                "error": _exception_warning(exc),
+            }
+            if args.output:
+                write_json(args.output, result)
+                _record_registry(
+                    Path(args.output).parent,
+                    command=command,
+                    stage="tools.catalog",
+                    status="failed",
+                    inputs={"config": args.config or ""},
+                    outputs={"catalog": args.output},
+                    metrics={"error_count": 1, "exception_type": type(exc).__name__},
+                    warnings=[_exception_warning(exc)],
+                )
+            print(f"medHarness2 tools catalog failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         if args.output:
             write_json(args.output, result)
             _record_registry(

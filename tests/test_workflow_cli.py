@@ -1511,3 +1511,33 @@ def test_cli_workflow_config_failures_are_recorded(tmp_path: Path, workflow_args
     assert entry["stage"] == stage
     assert entry["status"] == "failed"
     assert entry["metrics"]["exception_type"] == "ValueError"
+
+
+def test_cli_live_smoke_writes_failed_artifact_on_malformed_config(tmp_path: Path):
+    config = tmp_path / "malformed.yaml"
+    output = tmp_path / "smoke.json"
+    config.write_text("- not-a-mapping\n", encoding="utf-8")
+    code = main(["live-smoke", "--output", str(output), "--config", str(config)])
+    assert code == 2
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["status"] == "failed"
+    assert payload["error_type"] == "ValueError"
+
+
+def test_cli_models_list_returns_nonzero_on_malformed_config(tmp_path: Path):
+    config = tmp_path / "malformed.yaml"
+    config.write_text("- not-a-mapping\n", encoding="utf-8")
+    code = main(["models", "list", "--config", str(config)])
+    assert code == 1
+
+
+def test_cli_tools_catalog_writes_failed_registry_on_malformed_config(tmp_path: Path):
+    config = tmp_path / "malformed.yaml"
+    output = tmp_path / "catalog.json"
+    config.write_text("- not-a-mapping\n", encoding="utf-8")
+    code = main(["tools", "catalog", "--config", str(config), "--output", str(output)])
+    assert code == 1
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["status"] == "failed"
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
