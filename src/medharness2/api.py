@@ -429,9 +429,19 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
             model_keys=model_keys,
             model_sources=request.model_sources,
         )
+        summary = {"dry_run": True, **result["summary"], "errors": list(result.get("errors") or [])}
+        _record_registry(
+            request.output_dir,
+            stage="workflow.sample-full.dry-run",
+            status="passed" if summary.get("case_count") and not summary.get("errors") else "failed",
+            inputs={"sample_root": request.sample_root, "limit": request.limit, "models": model_keys or []},
+            outputs=result.get("paths") or {"route_plan": str(Path(request.output_dir) / "route_plan.json")},
+            metrics=summary,
+            warnings=list(summary.get("errors") or []),
+        )
         return {
             "output_dir": request.output_dir,
-            "summary": {"dry_run": True, **result["summary"], "errors": list(result.get("errors") or [])},
+            "summary": summary,
             "result": result,
         }
     result = run_sample_full(
@@ -445,6 +455,16 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
         require_real_ocr=request.require_real_ocr,
         force_ocr=request.force_ocr,
         expected_cases=request.expected_cases,
+    )
+    validation = dict(result.get("validation") or {})
+    _record_registry(
+        request.output_dir,
+        stage="workflow.sample-full",
+        status="passed" if validation.get("passed") else "failed",
+        inputs={"sample_root": request.sample_root, "limit": request.limit, "models": model_keys or []},
+        outputs=dict(result.get("paths") or {}),
+        metrics={**dict(result.get("summary") or {}), "validation_passed": bool(validation.get("passed"))},
+        warnings=list(validation.get("errors") or []),
     )
     return {
         "output_dir": request.output_dir,

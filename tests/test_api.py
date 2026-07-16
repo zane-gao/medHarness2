@@ -385,6 +385,9 @@ def test_api_sample_full_dry_run_all_compatible(tmp_path: Path):
     assert body["summary"]["cases_with_local_candidates"] == 1
     assert "maira_2" in body["result"]["cases"][0]["compatible_model_keys"]
     assert not (output_dir / "workflow2.json").exists()
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["stage"] == "workflow.sample-full.dry-run"
+    assert registry["entries"][-1]["status"] == "passed"
 
 
 def test_api_sample_full_dry_run_filters_model_source(tmp_path: Path):
