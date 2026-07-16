@@ -1434,3 +1434,29 @@ def test_cli_education_returns_nonzero_and_failed_registry_on_malformed_config(t
     registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
     assert registry["entries"][-1]["status"] == "failed"
     assert registry["entries"][-1]["metrics"]["exception_type"] == "ValueError"
+
+
+def test_cli_benchmark_run_writes_failed_summary_on_malformed_config(tmp_path: Path):
+    manifest = tmp_path / "manifest.jsonl"
+    output_dir = tmp_path / "benchmark"
+    config = tmp_path / "malformed.yaml"
+    manifest.write_text("{}\n", encoding="utf-8")
+    config.write_text("- not-a-mapping\n", encoding="utf-8")
+    code = main(["benchmark", "run", "--manifest", str(manifest), "--output-dir", str(output_dir), "--config", str(config)])
+    assert code == 1
+    payload = json.loads((output_dir / "benchmark_summary.json").read_text(encoding="utf-8"))
+    assert payload["status"] == "failed"
+    assert payload["error_type"] == "ValueError"
+
+
+def test_cli_benchmark_evaluate_writes_failed_summary_on_malformed_config(tmp_path: Path):
+    benchmark_dir = tmp_path / "benchmark"
+    manifest = tmp_path / "manifest.jsonl"
+    output_dir = tmp_path / "evaluation"
+    config = tmp_path / "malformed.yaml"
+    config.write_text("- not-a-mapping\n", encoding="utf-8")
+    code = main(["benchmark", "evaluate", "--benchmark-dir", str(benchmark_dir), "--manifest", str(manifest), "--output-dir", str(output_dir), "--config", str(config)])
+    assert code == 1
+    payload = json.loads((output_dir / "benchmark_evaluation_summary.json").read_text(encoding="utf-8"))
+    assert payload["status"] == "failed"
+    assert payload["error_type"] == "ValueError"

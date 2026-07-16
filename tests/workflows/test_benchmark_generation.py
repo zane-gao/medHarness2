@@ -627,3 +627,17 @@ def _file_sha256(path: Path) -> str:
     import hashlib
 
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_cli_benchmark_plan_writes_failed_artifact_on_malformed_config(tmp_path: Path):
+    manifest = _manifest(tmp_path / "manifest.jsonl")
+    config = tmp_path / "malformed.yaml"
+    output = tmp_path / "plan.json"
+    config.write_text("- not-a-mapping\n", encoding="utf-8")
+
+    code = main(["benchmark", "plan", "--manifest", str(manifest), "--output", str(output), "--config", str(config)])
+
+    assert code == 1
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["status"] == "failed"
+    assert payload["error_type"] == "ValueError"

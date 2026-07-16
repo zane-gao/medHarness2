@@ -219,8 +219,20 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         return 1
     if args.command == "benchmark" and args.benchmark_command == "plan":
-        cfg = load_config(args.config) if args.config else load_config("config/formal_benchmark.yaml")
-        result = plan_generation_benchmark(args.manifest, config=cfg, model_keys=args.models)
+        try:
+            cfg = load_config(args.config) if args.config else load_config("config/formal_benchmark.yaml")
+            result = plan_generation_benchmark(args.manifest, config=cfg, model_keys=args.models)
+        except Exception as exc:
+            result = {
+                "schema_version": "1.0",
+                "artifact_type": "generation_benchmark_plan",
+                "status": "failed",
+                "error_type": type(exc).__name__,
+                "error": _exception_warning(exc),
+            }
+            write_json(args.output, result)
+            print(f"medHarness2 benchmark plan failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         write_json(args.output, result)
         print(f"wrote benchmark plan to {args.output}; status={result['status']}")
         return 0 if result["status"] == "ready" else 1
@@ -234,29 +246,57 @@ def main(argv: list[str] | None = None) -> int:
         print(f"wrote live judge smoke to {args.output}; status={result['status']}")
         return 0 if result["status"] == "succeeded" else 2
     if args.command == "benchmark" and args.benchmark_command == "run":
-        cfg = load_config(args.config) if args.config else load_config("config/formal_benchmark.yaml")
-        result = run_generation_benchmark(
-            args.manifest,
-            args.output_dir,
-            config=cfg,
-            model_keys=args.models,
-            formal=not args.exploratory,
-        )
+        try:
+            cfg = load_config(args.config) if args.config else load_config("config/formal_benchmark.yaml")
+            result = run_generation_benchmark(
+                args.manifest,
+                args.output_dir,
+                config=cfg,
+                model_keys=args.models,
+                formal=not args.exploratory,
+            )
+        except Exception as exc:
+            result = {
+                "schema_version": "1.0",
+                "artifact_type": "generation_benchmark_summary",
+                "status": "failed",
+                "error_type": type(exc).__name__,
+                "error": _exception_warning(exc),
+            }
+            output_dir = Path(args.output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            write_json(output_dir / "benchmark_summary.json", result)
+            print(f"medHarness2 benchmark run failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         print(f"wrote benchmark results to {args.output_dir}; status={result['status']}")
         return 0 if result.get("status") == "succeeded" else 1
     if args.command == "benchmark" and args.benchmark_command == "evaluate":
-        cfg = load_config(args.config) if args.config else load_config("config/dmx_strong.yaml")
-        result = evaluate_generation_benchmark(
-            args.benchmark_dir,
-            args.manifest,
-            args.output_dir,
-            config=cfg,
-            resume=args.resume,
-            progress_callback=lambda event: print(
-                json.dumps(event, ensure_ascii=False),
-                flush=True,
-            ),
-        )
+        try:
+            cfg = load_config(args.config) if args.config else load_config("config/dmx_strong.yaml")
+            result = evaluate_generation_benchmark(
+                args.benchmark_dir,
+                args.manifest,
+                args.output_dir,
+                config=cfg,
+                resume=args.resume,
+                progress_callback=lambda event: print(
+                    json.dumps(event, ensure_ascii=False),
+                    flush=True,
+                ),
+            )
+        except Exception as exc:
+            result = {
+                "schema_version": "1.0",
+                "artifact_type": "generation_benchmark_evaluation_summary",
+                "status": "failed",
+                "error_type": type(exc).__name__,
+                "error": _exception_warning(exc),
+            }
+            output_dir = Path(args.output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            write_json(output_dir / "benchmark_evaluation_summary.json", result)
+            print(f"medHarness2 benchmark evaluate failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         print(
             f"wrote benchmark evaluation to {args.output_dir}; "
             f"status={result['status']} evaluations={result['evaluation_count']} "
