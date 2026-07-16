@@ -489,6 +489,16 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
         limit=request.limit,
         config=cfg,
     )
+    errors = list(result.get("errors") or [])
+    _record_registry(
+        Path(request.output_path).parent,
+        stage="workflow.batch-readers",
+        status="failed" if errors or int(result.get("failed_case_count", 0) or 0) else "passed",
+        inputs={"manifest": request.manifest_path},
+        outputs={"workflow2": request.output_path},
+        metrics={"case_count": int(result.get("case_count", 0) or 0), "failed_case_count": int(result.get("failed_case_count", 0) or 0), "reader_count": len(result.get("per_reader") or {})},
+        warnings=errors,
+    )
     return {
         "output_path": request.output_path,
         "summary": {"cases": result["case_count"], "readers": len(result["per_reader"]), "errors": list(result.get("errors") or [])},
@@ -499,6 +509,16 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
 @app.post("/workflow/department")
 def department(request: DepartmentRequest) -> dict[str, Any]:
     result = run_department_comparison(request.batch_result_path, request.output_path)
+    errors = list(result.get("errors") or [])
+    _record_registry(
+        Path(request.output_path).parent,
+        stage="workflow.department",
+        status="failed" if errors else "passed",
+        inputs={"batch_result": request.batch_result_path},
+        outputs={"workflow3": request.output_path},
+        metrics={"case_count": int(result.get("case_count", 0) or 0), "reader_count": int(result.get("reader_count", 0) or 0)},
+        warnings=errors,
+    )
     # ``summary.readers`` reports readers present in the completed batch.  The
     # workflow result separately exposes ``reader_count`` for readers eligible
     # for statistical aggregation, plus ``excluded_reader_count``.
@@ -544,6 +564,16 @@ def merge_batches(request: MergeBatchesRequest) -> dict[str, Any]:
 @app.post("/workflow/analyze-run")
 def analyze_run_endpoint(request: AnalyzeRunRequest) -> dict[str, Any]:
     result = analyze_run(request.output_dir, request.analysis_dir)
+    errors = list(result.get("errors") or [])
+    _record_registry(
+        request.output_dir,
+        stage="workflow.analyze-run",
+        status="failed" if errors else "passed",
+        inputs={"output_dir": request.output_dir},
+        outputs={"analysis_dir": result.get("analysis_dir", "")},
+        metrics={"case_count": int(result.get("case_count", 0) or 0), "error_count": len(errors)},
+        warnings=errors,
+    )
     return {
         "analysis_dir": result["analysis_dir"],
         "summary": {

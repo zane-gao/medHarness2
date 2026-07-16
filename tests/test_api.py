@@ -178,6 +178,7 @@ def test_api_batch_readers_and_department(tmp_path: Path):
     )
     assert response.status_code == 200
     assert response.json()["summary"]["cases"] == 1
+    assert json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))["entries"][-1]["stage"] == "workflow.batch-readers"
     dept_output = tmp_path / "workflow3.json"
     response = client.post(
         "/workflow/department",
@@ -185,6 +186,7 @@ def test_api_batch_readers_and_department(tmp_path: Path):
     )
     assert response.status_code == 200
     assert response.json()["summary"]["readers"] == 1
+    assert json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))["entries"][-1]["stage"] == "workflow.department"
 
 
 def test_api_sample_data_writes_registry_failure_for_empty_sample(tmp_path: Path):
