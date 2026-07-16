@@ -505,6 +505,25 @@ def test_ocr_candidate_benchmark_excludes_low_quality_sidecars(tmp_path: Path, q
     assert result["blocked_items"] == [f"provenance:case1:model-a:{reason}"]
 
 
+@pytest.mark.parametrize("quality_status", ["blocked", "review_required"])
+def test_ocr_candidate_benchmark_rejects_low_quality_gold_sidecars(tmp_path: Path, quality_status: str):
+    gold = tmp_path / "gold.json"
+    gold.write_text(
+        json.dumps({"case_id": "case1", "quality_status": quality_status, "text": "same"}),
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps([{"case_id": "case1", "gold_text": str(gold), "candidates": {"model-a": "same"}}]),
+        encoding="utf-8",
+    )
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "blocked"
+    assert result["blocked_items"] == [f"provenance:case1:gold:ocr_quality_{quality_status}"]
+
+
 def test_ocr_candidate_benchmark_rejects_candidate_sidecar_for_different_model(tmp_path: Path):
     candidate = tmp_path / "candidate.json"
     candidate.write_text(

@@ -47,6 +47,11 @@ def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) 
         gold_value = item.get("gold_text")
         gold = _resolve_text(gold_value, base_dir=manifest_file.parent)
         candidates = item.get("candidates") or {}
+        gold_quality_blocker = _gold_quality_blocker(gold_value, case_id=case_id, base_dir=manifest_file.parent)
+        if gold_quality_blocker:
+            blocked.append(gold_quality_blocker)
+            hard_blocked = True
+            continue
         if not case_id or not gold or not isinstance(candidates, dict):
             blocked.append(case_id or "unknown_case")
             if _is_declared_text_path(gold_value, base_dir=manifest_file.parent) and not gold:
@@ -363,6 +368,17 @@ def _candidate_payload(value: Any, *, base_dir: Path | None = None) -> dict[str,
             return {}
         return payload if isinstance(payload, dict) else {}
     return {}
+
+
+def _gold_quality_blocker(value: Any, *, case_id: str, base_dir: Path) -> str | None:
+    """Reject explicitly low-quality OCR sidecars used as benchmark gold."""
+    payload = _candidate_payload(value, base_dir=base_dir)
+    quality_status = str(payload.get("quality_status") or "").strip().lower()
+    if quality_status in {"blocked", "review_required"}:
+        return f"provenance:{case_id or 'unknown_case'}:gold:ocr_quality_{quality_status}"
+    if quality_status and quality_status != "passed":
+        return f"provenance:{case_id or 'unknown_case'}:gold:ocr_quality_status"
+    return None
 
 
 def _hash_file(path: Path) -> str:
