@@ -360,6 +360,7 @@ def sample_data(request: SampleDataRequest) -> dict[str, Any]:
     return {
         "manifest_path": str(Path(request.output_dir) / "manifest.jsonl"),
         "case_count": len(rows),
+        "errors": ["no_cases_discovered"] if not rows else [],
         "warnings": sorted({warning for row in rows for warning in row.warnings}),
     }
 
@@ -379,7 +380,7 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
         )
         return {
             "output_dir": request.output_dir,
-            "summary": {"dry_run": True, **result["summary"]},
+            "summary": {"dry_run": True, **result["summary"], "errors": list(result.get("errors") or [])},
             "result": result,
         }
     result = run_sample_full(
@@ -400,6 +401,7 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
             **result["summary"],
             "validation_passed": result["validation"]["passed"],
             "validation_errors": result["validation"]["errors"],
+            "errors": list(result["validation"].get("errors") or []),
         },
         "result": result,
     }
@@ -418,7 +420,7 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
     )
     return {
         "output_path": request.output_path,
-        "summary": {"cases": result["case_count"], "readers": len(result["per_reader"])},
+        "summary": {"cases": result["case_count"], "readers": len(result["per_reader"]), "errors": list(result.get("errors") or [])},
         "result": result,
     }
 
@@ -434,6 +436,7 @@ def department(request: DepartmentRequest) -> dict[str, Any]:
         "summary": {
             "cases": result["case_count"],
             "readers": result.get("reader_total_count", result["reader_count"]),
+            "errors": list(result.get("errors") or []),
         },
         "result": result,
     }
@@ -460,6 +463,7 @@ def merge_batches(request: MergeBatchesRequest) -> dict[str, Any]:
             "readers": len(result["per_reader"]),
             "validation_passed": validation["passed"],
             "validation_errors": validation["errors"],
+            "errors": list(validation.get("errors") or []),
         },
         "result": result,
         "validation": validation,
@@ -475,6 +479,7 @@ def analyze_run_endpoint(request: AnalyzeRunRequest) -> dict[str, Any]:
             "cases": result["case_count"],
             "generated_reports": result["generated_report_count"],
             "quality_failed": result["quality_gate_failed_count"],
+            "errors": list(result.get("errors") or []),
         },
         "result": result,
     }
@@ -511,6 +516,7 @@ def preflight(request: PreflightRequest) -> dict[str, Any]:
             "blockers": result["blockers"],
             "warnings": result["warnings"],
             "cases": result["sample"]["case_count"],
+            "errors": list(result.get("blockers") or []),
         },
         "result": result,
     }
@@ -538,7 +544,10 @@ def education(request: EducationRequest) -> dict[str, Any]:
         metrics={
             "suggestion_count": len(result.get("suggestions") or []),
             "general_suggestion_count": len(result.get("general_suggestions") or []),
+            "error_count": len(result.get("errors") or []),
         },
+        status="failed" if result.get("status") in {"blocked", "blocked_insufficient_data"} else "passed",
+        warnings=list(result.get("errors") or []),
     )
     return {
         "output_path": request.output_path,
@@ -546,6 +555,8 @@ def education(request: EducationRequest) -> dict[str, Any]:
             "mode": result["mode"],
             "suggestions": len(result.get("suggestions") or []),
             "general_suggestions": len(result.get("general_suggestions") or []),
+            "status": result.get("status"),
+            "errors": list(result.get("errors") or []),
         },
         "result": result,
     }
