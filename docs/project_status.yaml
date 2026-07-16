@@ -5,9 +5,9 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: 70b3fff
+  git_sha: 8247ffd
   dirty_worktree: true
-  pytest_passed: 369
+  pytest_passed: 370
   pytest_warnings: 17
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -81,7 +81,7 @@ workstreams:
     next_gate: Freeze repeated-run reliability targets, complete dual-reader gold labels, and benchmark every model role before a formal case run.
   ocr:
     status: in_progress
-    summary: OCR 现已升级为逐页 300 DPI 图像管线，记录页级 hash、provider/model、页序和疑似截断；保留文本层快速路径。豆包 Seed 视觉、PaddleOCR-VL-1.6、PP-OCRv6、本地 Qwen 仍是候选，尚未凭宣传或单例样本指定生产 winner；必须在冻结集上按 clinical CER、数字/否定词、截断率和重测一致性实测。独立多模态模型只允许产出差异审计，不静默改写主 OCR。
+    summary: OCR 现已升级为逐页 300 DPI 图像管线，记录页级 hash、provider/model、页序和疑似截断；保留文本层快速路径。缺失或空的冻结 manifest 会严格返回 blocked。豆包 Seed 视觉、PaddleOCR-VL-1.6、PP-OCRv6、本地 Qwen 仍是候选，尚未凭宣传或单例样本指定生产 winner；必须在冻结集上按 clinical CER、数字/否定词、截断率和重测一致性实测。独立多模态模型只允许产出差异审计，不静默改写主 OCR。
     evidence_paths:
       - docs/superpowers/specs/2026-07-11-dmx-doubao-ocr-benchmark-design.md
       - outputs/ocr_quality_audit_qwen3vl4b_20260711/summary.json

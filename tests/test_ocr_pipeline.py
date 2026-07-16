@@ -123,3 +123,9 @@ def test_ocr_candidate_benchmark_scores_and_blocks_missing_artifacts(tmp_path: P
     assert result["status"] == "completed_with_blockers"
     assert result["by_model"]["model-a"]["clinical_cer_mean"] == 0.0
     assert result["blocked_items"] == ["case2:model-a"]
+
+
+def test_ocr_candidate_benchmark_blocks_missing_manifest(tmp_path: Path):
+    result = evaluate_ocr_candidates(tmp_path / "does-not-exist.json", tmp_path / "summary.json")
+    assert result["status"] == "blocked"
+    assert result["selection"]["status"] == "blocked"

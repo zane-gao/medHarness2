@@ -36,10 +36,17 @@ def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) 
                 continue
             rows.append({"case_id": case_id, "model": str(model), **_metrics(gold, text)})
     summary = _aggregate(rows)
+    status = (
+        "blocked"
+        if not manifest or (not rows and blocked)
+        else "completed_with_blockers"
+        if blocked
+        else "succeeded"
+    )
     result = {
         "schema_version": "1.0",
         "artifact_type": "ocr_candidate_benchmark",
-        "status": "blocked" if blocked and not rows else "completed_with_blockers" if blocked else "succeeded",
+        "status": status,
         "manifest": str(manifest_path),
         "case_count": len(manifest),
         "evaluated_count": len(rows),

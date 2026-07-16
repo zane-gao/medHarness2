@@ -4,11 +4,11 @@
 
 > **2026-07-15 执行增量**：已完成 OCR 逐页管线、可注入的 audit-only 多模态 verifier、三模态软部位路由、Likert 归一化、统计白名单/小样本区间、并列百分位、鲁棒 JSON 解析、fallback/mock 统计过滤、参考图 recall、seed/cache、Retry-After 和非 CXR observation slug 规范化。北川数据集按当前工程约定直接作为金标准数据源；API/敏感产物硬化按用户指示暂不作为本轮阻塞。以下清单仍保留原始审计事实，已修复项以当前代码和测试为准。
 
-> **修复状态**：H5、H9、H10、H11、H12、H14、H15、H17、M1、M2、M3、M6 已有代码与回归测试证据；H7 已完成小样本 t 区间但正式显著性/多重比较尚未实现；H13 已把 seed/route 纳入 checkpoint 输入，但仍需真实重复运行验证；M7/M12 仍需要 gated live judge smoke；C1/H1-H4 按用户指示暂缓。
+> **修复状态**：H5、H9、H10、H11、H12、H14、H15、H17、M1、M2、M3、M6 已有代码与回归测试证据；H7 已完成小样本 t 区间；H8 已接入正式 benchmark summary 的 Welch+Holm 统计，但真实冻结结果仍需执行。H13 已把 seed/route 纳入 checkpoint 输入，并明确 checkpoint reuse 不等于重复实验；仍需真实重复运行验证。M7/M12 仍需要 gated live judge smoke；C1/H1-H4 按用户指示暂缓。
 
 > **2026-07-16 增量**：M4（Tool2 宽泛异常）、M5（报告文本 prompt 边界）、M9（失败病例分母）、M10/M11/M13（fallback provenance）和 M7 的 Tool1 重测记录已补代码与测试。H8 新增 Welch 近似比较与 Holm 校正 API，并已接入正式 benchmark summary；样本不足的比较标为 blocked。H6 的排名 cutoff 近似并列候选现在会一并保留并标记 `near_cutoff`；真实分析仍必须在冻结数据上运行并记录方法。
 
-> **当前未完成门禁**：真实北川 OCR 候选 benchmark、真实多模态 verifier smoke、临床 pilot10 标注、正式显著性分析和 gated live judge smoke。它们需要外部模型/临床数据/凭据，当前环境没有可安全替代的证据，因此不能标记为已完成。
+> **当前未完成门禁**：真实北川 OCR 候选 benchmark、真实多模态 verifier smoke、临床 pilot10 标注、在真实冻结结果上执行的统计分析和 gated live judge smoke。当前环境的 `live-smoke` 因 `DMX_API_KEY` 缺失返回 `blocked`；OCR benchmark 对缺失 manifest 也返回 `blocked`，因此不能标记为已完成。
 
 > **门禁实现增量（2026-07-16）**：新增 `medharness2 ocr-benchmark` 和 `medharness2 live-smoke`。前者在 gold/candidate 缺失时返回 `blocked`，后者在凭据缺失时返回 `blocked`；两者都不会把缺失、mock 或 fallback 计为成功。
 > 方法：8 维度并行代码审计（62 个 agent）+ **对抗性验证**（每条发现派独立"怀疑者"读真实代码反驳），关键项由主审人逐行复核。
@@ -127,11 +127,8 @@ payload 只有 model/messages/temperature/max_tokens，全项目 `seed` 在 LLM 
 **这是"11–56% 重测一致率"的机械根因**：确定性工具 100% 复现，LLM 工具因没锁采样器而漂移。
 > 注记：seed 支持依赖 provider，推理模型即便有 seed 也未必比特可复现——所以这不是唯一根因，但确凿证明复现性无保证。
 
-**H13. "复现性"其实只是首抽缓存，靠 `resume=True`，缓存键不含 seed/输出**（新增，第一版漏）
-`benchmark_evaluation.py:169-185`。`StageCheckpointStore` 只在 `if resume:` 内构造（`--no-resume` 关闭）。
-缓存键是 `{report_text, image指纹, model_role, route指纹}` 的 sha256（`checkpoints.py:47`），**不含 seed 也不含输出内容**。
-它把首次随机响应冻在磁盘上逐字回放，**不是让评委确定，而是冻结一个随机样本**。删缓存目录/`--no-resume`/换机器 → 全新随机数。
-"复现性"实际依赖把 checkpoint 目录随论文一起分发。
+**H13. checkpoint reuse 不是独立重复实验**（已缓解但仍需外部验证）
+当前 checkpoint 输入已包含 route、temperature、seed、schema/config 指纹，且支持 `--no-resume` 强制重跑。它能保证同一输入下的缓存完整性，但不能证明模型在独立调用中的随机稳定性；删缓存或关闭 resume 后仍需真实重复运行并报告差异。
 
 ### —— LLM 集成（2 条，confirmed）——
 
