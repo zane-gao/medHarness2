@@ -21,6 +21,7 @@ def run_single_case(
     report_path: str | Path | None = None,
     image_path: str | Path | None = None,
     output_path: str | Path | None = None,
+    case_id: str | None = None,
     report_text: str | None = None,
     prepared_assets: dict[str, Any] | None = None,
     modality: str | None = None,
@@ -57,6 +58,7 @@ def run_single_case(
             fallback_image_path=image,
             config=cfg,
             llm_client=client,
+            case_id=case_id,
         )
     )
     generated = [

@@ -18,6 +18,7 @@ def generate_reports(
     fallback_image_path: str | None = None,
     config: AppConfig | None = None,
     llm_client: LLMClient | None = None,
+    case_id: str | None = None,
 ) -> list[GeneratedReport]:
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
@@ -38,6 +39,7 @@ def generate_reports(
             modality,
             reference_report=generation_reference,
             body_part=body_part,
+            case_id=case_id,
         )
         if generated.report:
             reports.append(generated)

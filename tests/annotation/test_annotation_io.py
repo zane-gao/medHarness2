@@ -166,3 +166,17 @@ def test_validate_pilot_annotation_package_rejects_duplicate_ids_and_paths(tmp_p
     assert result["status"] == "blocked"
     assert any(error.startswith("manifest:pilot-001:duplicate_case_id:") for error in result["errors"])
     assert any(error.startswith("manifest:pilot-001:duplicate_annotation_path:") for error in result["errors"])
+
+
+def test_build_pilot_annotation_package_cleans_stale_case_files_on_rebuild(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    output_dir = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, output_dir, limit=3)
+    build_pilot_annotation_package(run_dir, output_dir, limit=1)
+
+    result = validate_pilot_annotation_package(output_dir)
+
+    assert result["status"] == "not_started"
+    assert result["case_count"] == 1
+    assert result["errors"] == []
+    assert sorted(path.name for path in (output_dir / "cases").glob("*.json")) == ["pilot-001.json"]

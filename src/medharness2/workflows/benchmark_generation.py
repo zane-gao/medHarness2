@@ -333,6 +333,7 @@ def run_generation_benchmark(
                 case.modality,
                 reference_report=None,
                 body_part=case.body_part,
+                case_id=case.case_id,
             )
             latency_sec = round(time.monotonic() - started, 4)
             result = _benchmark_result(

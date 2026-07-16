@@ -59,6 +59,7 @@ def run_batch_readers(
                 report_text=report_text,
                 image_path=image_path,
                 output_path=case_output,
+                case_id=row.case_id,
                 prepared_assets={**row.derived_assets, "volume_path": row.volume_path} if row.derived_assets or row.volume_path else {},
                 modality=row.modality,
                 body_part=row.body_part,

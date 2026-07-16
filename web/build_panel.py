@@ -531,11 +531,20 @@ def extract_pilot10(path: Path) -> dict | None:
     if not path.exists():
         return None
     rows = []
+    parse_errors: list[str] = []
     with path.open(encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if line:
-                rows.append(json.loads(line))
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    parse_errors.append(f"manifest:row_{len(rows) + 1}:invalid_json")
+                    continue
+                if not isinstance(row, dict):
+                    parse_errors.append(f"manifest:row_{len(rows) + 1}:not_an_object")
+                    continue
+                rows.append(row)
     if not rows:
         return None
     status_counts: dict[str, int] = {}
@@ -546,6 +555,10 @@ def extract_pilot10(path: Path) -> dict | None:
         mod = str(r.get("modality") or "unknown")
         modality_counts[mod] = modality_counts.get(mod, 0) + 1
     validation = validate_pilot_annotation_package(path.parent)
+    if parse_errors:
+        validation = dict(validation)
+        validation["status"] = "blocked"
+        validation["errors"] = list(dict.fromkeys([*parse_errors, *validation.get("errors", [])]))
     return {
         "total": len(rows),
         "status_counts": status_counts,

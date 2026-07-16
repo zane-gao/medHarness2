@@ -130,3 +130,17 @@ def test_extract_pilot10_uses_annotation_validator_for_completion(tmp_path):
 
     assert result["done"] == 0
     assert result["validation_status"] == "not_started"
+
+
+def test_extract_pilot10_reports_blocked_manifest_without_crashing(tmp_path):
+    package = tmp_path / "pilot10"
+    package.mkdir()
+    manifest = package / "manifest.jsonl"
+    manifest.write_text('{"pilot_case_id":"pilot-001"}\nnot-json\n', encoding="utf-8")
+
+    result = build_panel.extract_pilot10(manifest)
+
+    assert result is not None
+    assert result["validation_status"] == "blocked"
+    assert result["done"] == 0
+    assert result["validation_errors"]

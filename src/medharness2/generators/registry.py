@@ -176,9 +176,15 @@ class ReportGeneratorRegistry:
         modality: str,
         reference_report: str | None = None,
         body_part: str | None = None,
+        case_id: str | None = None,
     ) -> GeneratedReport:
         if entry.source == "artifact_reuse":
-            result = self._generate_artifact(entry, image_path=image_path, modality=modality)
+            result = self._generate_artifact(
+                entry,
+                image_path=image_path,
+                modality=modality,
+                case_id=case_id,
+            )
         elif entry.source == "medharness_cli":
             result = self._generate_medharness_cli(
                 entry,
@@ -220,7 +226,14 @@ class ReportGeneratorRegistry:
             metadata={"image_path": image_path},
         )
 
-    def _generate_artifact(self, entry: GeneratorEntry, *, image_path: str, modality: str) -> GeneratedReport:
+    def _generate_artifact(
+        self,
+        entry: GeneratorEntry,
+        *,
+        image_path: str,
+        modality: str,
+        case_id: str | None = None,
+    ) -> GeneratedReport:
         source = resolve_existing_path(entry.source_generation_jsonl) if entry.source_generation_jsonl else Path("")
         if not source.exists():
             return GeneratedReport(
@@ -230,11 +243,30 @@ class ReportGeneratorRegistry:
                 modality=modality,
                 warnings=["artifact_missing", str(source)],
             )
+        fallback_row: dict[str, Any] | None = None
         with source.open("r", encoding="utf-8") as f:
             for line in f:
                 if not line.strip():
                     continue
                 row = json.loads(line)
+                if fallback_row is None:
+                    fallback_row = row
+                row_case_id = str(row.get("case_id") or row.get("sample_id") or "")
+                if case_id and row_case_id and row_case_id != str(case_id):
+                    continue
+                if case_id and not row_case_id:
+                    # A legacy single-row artifact has no case identity; keep
+                    # it compatible only when the file is unambiguously one row.
+                    remainder = [item for item in f if item.strip()]
+                    if remainder:
+                        return GeneratedReport(
+                            model=entry.key,
+                            source=entry.source,
+                            report="",
+                            modality=modality,
+                            warnings=["artifact_case_id_missing_for_multi_case_artifact"],
+                            metadata={"source_generation_jsonl": str(source), "image_path": image_path},
+                        )
                 report = row.get("generated_text") or row.get("generated_report") or row.get("prediction_text") or row.get("Pred") or ""
                 return GeneratedReport(
                     model=entry.key,
@@ -248,6 +280,30 @@ class ReportGeneratorRegistry:
                         "image_path": image_path,
                     },
                 )
+        if case_id:
+            return GeneratedReport(
+                model=entry.key,
+                source=entry.source,
+                report="",
+                modality=modality,
+                warnings=["artifact_case_not_found", str(case_id)],
+                metadata={"source_generation_jsonl": str(source), "image_path": image_path},
+            )
+        if fallback_row is not None:
+            row = fallback_row
+            report = row.get("generated_text") or row.get("generated_report") or row.get("prediction_text") or row.get("Pred") or ""
+            return GeneratedReport(
+                model=entry.key,
+                source=entry.source,
+                report=str(report),
+                modality=str(row.get("modality") or modality),
+                warnings=["artifact_reuse_not_fresh_inference"],
+                metadata={
+                    "case_id": row.get("case_id") or row.get("sample_id"),
+                    "source_generation_jsonl": str(source),
+                    "image_path": image_path,
+                },
+            )
         return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["artifact_empty"])
 
     def _generate_medharness_cli(

@@ -188,6 +188,7 @@ def evaluate_generation_benchmark(
                     report_text=reference_text,
                     image_path=input_asset,
                     output_path=raw_path,
+                    case_id=case_id,
                     prepared_assets={
                         "primary_image": str(input_asset)
                         if generation_result.get("input_asset_kind") == "image"

@@ -66,6 +66,7 @@ def reevaluate_run(
                 report_text=report_text,
                 image_path=image_path,
                 output_path=case_output,
+                case_id=case_id,
                 prepared_assets=dict(input_payload.get("prepared_assets") or {}),
                 modality=str(case.get("modality") or input_payload.get("modality") or "unknown"),
                 body_part=str(case.get("body_part") or input_payload.get("body_part") or "unknown"),

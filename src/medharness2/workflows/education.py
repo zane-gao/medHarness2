@@ -7,6 +7,7 @@ from typing import Any
 from medharness2.config import AppConfig, load_config
 from medharness2.llm_client import LLMClient, LLMClientError
 from medharness2.tools.tool1_likert import LIKERT_METRICS
+from medharness2.tools.tool12_statistics import calculate_statistics
 from medharness2.utils.io import parse_json_object, read_json, write_json
 
 
@@ -73,11 +74,20 @@ def _radiologist_suggestions(payload: dict[str, Any], client: LLMClient) -> dict
     if not readers:
         raise ValueError("Workflow 2 result must contain per_reader.")
     reader_id, reader = sorted(readers.items(), key=lambda item: str(item[0]))[0]
-    peer_means = _peer_means(readers, exclude=str(reader_id))
-    stats = dict(reader.get("human_statistics") or {})
-    weakest = _weak_reader_metrics(stats, peer_means)
+    effective_stats = {
+        str(identifier): _effective_reader_statistics(payload, str(identifier), item)
+        for identifier, item in readers.items()
+    }
+    peer_means = _peer_means(effective_stats, exclude=str(reader_id))
+    stats = effective_stats[str(reader_id)]
+    if not stats:
+        return _blocked_radiologist_result(str(reader_id), int(reader.get("case_count") or 0), "missing_reader_statistics")
+    weakest = _weak_reader_metrics(stats, peer_means) if peer_means else []
+    peer_baseline_available = bool(peer_means)
     if not weakest:
-        weakest = [_min_stat_metric(stats)]
+        weakest = _weakest_available_metrics(stats)
+    if not weakest:
+        return _blocked_radiologist_result(str(reader_id), int(reader.get("case_count") or 0), "no_comparable_metrics")
     default = {
         "mode": "eval_radiologist",
         "status": "suggestions_generated",
@@ -86,7 +96,9 @@ def _radiologist_suggestions(payload: dict[str, Any], client: LLMClient) -> dict
             "n_reports": int(reader.get("case_count") or 0),
             "weakest_metrics": weakest,
             "peer_gaps": {
-                metric: round(float(stats.get(metric, {}).get("mean", 0.0)) - float(peer_means.get(metric, 0.0)), 4)
+                metric: round(float(stats[metric]["mean"]) - float(peer_means[metric]), 4)
+                if metric in peer_means
+                else None
                 for metric in weakest
             },
         },
@@ -94,15 +106,38 @@ def _radiologist_suggestions(payload: dict[str, Any], client: LLMClient) -> dict
             {
                 "metric": metric,
                 "pattern": f"{metric} is below the peer baseline.",
-                "peer_comparison": f"Reader mean={_stat_mean(stats, metric):.2f}; peer mean={peer_means.get(metric, 0.0):.2f}.",
+                "peer_comparison": (
+                    f"Reader mean={_stat_mean(stats, metric):.2f}; peer mean={peer_means[metric]:.2f}."
+                    if metric in peer_means
+                    else "Peer baseline unavailable; this suggestion is based on the reader's own statistics."
+                ),
                 "suggestion": _metric_guidance(metric),
                 "reasoning": "Suggestion is derived from reader-level metric aggregates and peer gap.",
             }
             for metric in weakest
         ],
-        "metadata": {"source": "deterministic_or_llm"},
+        "metadata": {
+            "source": "deterministic_or_llm",
+            "peer_baseline_available": peer_baseline_available,
+            "limitations": [] if peer_baseline_available else ["missing_peer_statistics"],
+        },
     }
     return _try_llm_json(client, _radiologist_prompt(payload, default), default)
+
+
+def _blocked_radiologist_result(reader_id: str, case_count: int, reason: str) -> dict[str, Any]:
+    return {
+        "mode": "eval_radiologist",
+        "status": "blocked_insufficient_data",
+        "radiologist_summary": {
+            "radiologist_id": reader_id,
+            "n_reports": case_count,
+            "weakest_metrics": [],
+            "peer_gaps": {},
+        },
+        "suggestions": [],
+        "metadata": {"source": "insufficient_data", "fallback_used": False, "blocked_reasons": [reason]},
+    }
 
 
 def _try_llm_json(client: LLMClient, prompt: str, default: dict[str, Any]) -> dict[str, Any]:
@@ -239,12 +274,24 @@ def _metric_guidance(metric: str) -> str:
     return guidance.get(metric, "Revise the report so the clinical finding, evidence, and impression are explicit.")
 
 
-def _peer_means(readers: dict[str, Any], *, exclude: str) -> dict[str, float]:
+def _effective_reader_statistics(payload: dict[str, Any], reader_id: str, reader: dict[str, Any]) -> dict[str, Any]:
+    existing = reader.get("human_statistics") or {}
+    if existing:
+        return dict(existing)
+    rows = [
+        dict(case.get("human_metrics") or {})
+        for case in payload.get("cases") or []
+        if str(case.get("reader") or "") == reader_id and case.get("human_metrics")
+    ]
+    return calculate_statistics(rows) if rows else {}
+
+
+def _peer_means(readers: dict[str, dict[str, Any]], *, exclude: str) -> dict[str, float]:
     values: dict[str, list[float]] = {}
     for reader_id, payload in readers.items():
         if str(reader_id) == exclude:
             continue
-        stats = payload.get("human_statistics") or {}
+        stats = payload or {}
         for metric, item in stats.items():
             if isinstance(item, dict) and isinstance(item.get("mean"), (int, float)):
                 values.setdefault(str(metric), []).append(float(item["mean"]))
@@ -254,23 +301,28 @@ def _peer_means(readers: dict[str, Any], *, exclude: str) -> dict[str, float]:
 def _weak_reader_metrics(stats: dict[str, Any], peer_means: dict[str, float]) -> list[str]:
     weak = []
     for metric, peer_mean in peer_means.items():
-        if _stat_mean(stats, metric) < peer_mean - 1.0:
+        reader_mean = _stat_mean(stats, metric)
+        if reader_mean is not None and reader_mean < peer_mean - 1.0:
             weak.append(metric)
     return weak
 
 
-def _min_stat_metric(stats: dict[str, Any]) -> str:
-    if not stats:
-        return "Completeness and Accuracy"
-    return min(stats, key=lambda metric: _stat_mean(stats, str(metric)))
+def _weakest_available_metrics(stats: dict[str, Any]) -> list[str]:
+    valid = [(metric, _stat_mean(stats, str(metric))) for metric in stats]
+    valid = [(metric, value) for metric, value in valid if value is not None]
+    if not valid:
+        return []
+    minimum = min(value for _, value in valid)
+    return [metric for metric, value in valid if value == minimum]
 
 
-def _stat_mean(stats: dict[str, Any], metric: str) -> float:
+def _stat_mean(stats: dict[str, Any], metric: str) -> float | None:
     item = stats.get(metric) or {}
     try:
-        return float(item.get("mean", 0.0))
+        value = item.get("mean")
+        return None if value is None else float(value)
     except (TypeError, ValueError):
-        return 0.0
+        return None
 
 
 def _report_prompt(payload: dict[str, Any], default: dict[str, Any]) -> str:

@@ -50,6 +50,56 @@ def test_run_education_suggestions_from_workflow2(tmp_path: Path):
     assert result["metadata"]["fallback_used"] is True
 
 
+def test_education_blocks_missing_reader_statistics_instead_of_inventing_weak_metric(tmp_path: Path):
+    workflow2 = tmp_path / "workflow2.json"
+    workflow2.write_text(json.dumps({"case_count": 1, "per_reader": {"reader_a": {"case_count": 1}}}), encoding="utf-8")
+    result = run_education_suggestions(
+        eval_radiologist=workflow2,
+        output_path=tmp_path / "education.json",
+        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+    )
+    assert result["status"] == "blocked_insufficient_data"
+    assert result["suggestions"] == []
+    assert result["metadata"]["blocked_reasons"] == ["missing_reader_statistics"]
+
+
+def test_education_derives_reader_statistics_from_case_metrics(tmp_path: Path):
+    workflow2 = tmp_path / "workflow2.json"
+    workflow2.write_text(
+        json.dumps({
+            "case_count": 2,
+            "cases": [
+                {"reader": "reader_a", "human_metrics": {"finding_coverage": 0.2}},
+                {"reader": "reader_b", "human_metrics": {"finding_coverage": 0.9}},
+            ],
+            "per_reader": {"reader_a": {"case_count": 1}, "reader_b": {"case_count": 1}},
+        }),
+        encoding="utf-8",
+    )
+    result = run_education_suggestions(
+        eval_radiologist=workflow2,
+        output_path=tmp_path / "education.json",
+        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+    )
+    assert result["status"] == "suggestions_generated"
+    assert result["radiologist_summary"]["weakest_metrics"] == ["finding_coverage"]
+
+
+def test_education_marks_missing_peer_statistics_without_zero_baseline(tmp_path: Path):
+    workflow2 = tmp_path / "workflow2.json"
+    workflow2.write_text(json.dumps({"case_count": 1, "per_reader": {"reader_a": {"case_count": 1, "human_statistics": {"Completeness": {"mean": 2.0}}}}}), encoding="utf-8")
+    result = run_education_suggestions(
+        eval_radiologist=workflow2,
+        output_path=tmp_path / "education.json",
+        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+    )
+    assert result["status"] == "suggestions_generated"
+    assert result["suggestions"]
+    assert result["radiologist_summary"]["peer_gaps"]["Completeness"] is None
+    assert result["metadata"]["peer_baseline_available"] is False
+    assert result["metadata"]["limitations"] == ["missing_peer_statistics"]
+
+
 def test_run_education_requires_exactly_one_input(tmp_path: Path):
     output = tmp_path / "education.json"
     try:

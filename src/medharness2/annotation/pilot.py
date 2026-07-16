@@ -23,6 +23,8 @@ def build_pilot_annotation_package(
     output = Path(output_dir)
     cases_dir = output / "cases"
     cases_dir.mkdir(parents=True, exist_ok=True)
+    for stale in cases_dir.glob("*.json"):
+        stale.unlink()
     policy = ExternalPayloadPolicy()
     selected = _stratified_cases(_load_case_payloads(root), limit=limit)
     manifest_rows = []

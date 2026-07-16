@@ -50,6 +50,53 @@ def test_artifact_generator_reads_existing_jsonl(tmp_path: Path):
     assert reports[0].source == "artifact_reuse"
 
 
+def test_artifact_generator_selects_requested_case_from_multi_case_jsonl(tmp_path: Path):
+    artifact = tmp_path / "generation.jsonl"
+    artifact.write_text(
+        "\n".join(
+            json.dumps(row)
+            for row in [
+                {
+                    "case_id": "case-a",
+                    "generated_report": "FINDINGS: Case A finding.",
+                    "modality": "xray",
+                },
+                {
+                    "case_id": "case-b",
+                    "generated_report": "FINDINGS: Case B finding.",
+                    "modality": "xray",
+                },
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["artifact"],
+            local_models=[
+                {
+                    "key": "artifact",
+                    "source": "artifact_reuse",
+                    "supported_modalities": ["xray", "cxr"],
+                    "source_generation_jsonl": str(artifact),
+                }
+            ],
+        )
+    )
+
+    reports = generate_reports(
+        "image.png",
+        "cxr",
+        model_keys=["artifact"],
+        case_id="case-b",
+        config=cfg,
+    )
+
+    assert reports[0].report == "FINDINGS: Case B finding."
+
+
 def test_fallback_records_failed_local_generation_attempt(tmp_path: Path):
     missing_artifact = tmp_path / "missing.jsonl"
     cfg = AppConfig(
