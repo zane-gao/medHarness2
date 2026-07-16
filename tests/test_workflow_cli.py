@@ -950,6 +950,15 @@ def test_cli_sample_data_writes_run_registry(tmp_path: Path):
     assert entry["metrics"]["case_count"] == 1
 
 
+def test_cli_sample_data_rejects_empty_sample_root(tmp_path: Path):
+    output_dir = tmp_path / "empty_dataset"
+    code = main(["workflow", "sample-data", "--sample-root", str(tmp_path / "empty"), "--output-dir", str(output_dir), "--skip-ocr"])
+    assert code == 1
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["metrics"]["case_count"] == 0
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_cli_sample_full(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"

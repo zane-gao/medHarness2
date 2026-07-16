@@ -758,3 +758,9 @@ def test_sample_full_dry_run_filters_local_models_by_source(tmp_path: Path):
     assert "llava_rad" in keys
     assert "maira_2" not in keys
     assert set(result["cases"][0]["compatible_model_sources"].values()) == {"artifact_reuse"}
+
+
+def test_sample_full_dry_run_rejects_empty_sample_root(tmp_path: Path):
+    result = plan_sample_full_routes(tmp_path / "empty", tmp_path / "run", config=AppConfig(), model_keys=["*"])
+    assert result["summary"]["case_count"] == 0
+    assert result["errors"] == ["no_cases_discovered"]

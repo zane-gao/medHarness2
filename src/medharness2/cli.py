@@ -422,6 +422,7 @@ def main(argv: list[str] | None = None) -> int:
             args.output_dir,
             command=command,
             stage="workflow.sample-data",
+            status="passed" if rows else "failed",
             inputs={
                 "sample_root": args.sample_root,
                 "limit": args.limit,
@@ -442,7 +443,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"wrote medHarness2 sample manifest to {Path(args.output_dir) / 'manifest.jsonl'}")
         print(f"cases={len(rows)}")
-        return 0
+        return 0 if rows else 1
     if args.command == "workflow" and args.workflow == "sample-full":
         config = load_config(args.config) if args.config else load_config()
         model_keys = _model_keys(args)
@@ -459,6 +460,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.output_dir,
                 command=command,
                 stage="workflow.sample-full.dry-run",
+                status="passed" if result["summary"]["case_count"] else "failed",
                 inputs={
                     "sample_root": args.sample_root,
                     "limit": args.limit,
@@ -476,7 +478,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"local_candidates={result['summary']['cases_with_local_candidates']} "
                 f"fallback={result['summary']['cases_requiring_fallback']}"
             )
-            return 0
+            return 0 if result["summary"]["case_count"] else 1
         result = run_sample_full(
             args.sample_root,
             args.output_dir,

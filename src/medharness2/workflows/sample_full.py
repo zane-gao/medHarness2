@@ -81,6 +81,8 @@ def plan_sample_full_routes(
         },
         "cases": cases,
     }
+    if not cases:
+        result["errors"] = ["no_cases_discovered"]
     write_json(out_dir / "route_plan.json", result)
     return result
 

@@ -15,6 +15,9 @@ from medharness2.schema import CaseManifest, PreparedCase
 def build_sample_manifest(sample_root: str | Path, output_path: str | Path) -> list[CaseManifest]:
     root = Path(sample_root)
     rows: list[CaseManifest] = []
+    if not root.is_dir():
+        _write_manifest(output_path, rows)
+        return rows
     reader_map = _read_reader_map(root / "readers.xlsx")
     for modality_dir in sorted(path for path in root.iterdir() if path.is_dir()):
         if modality_dir.name.startswith("."):
