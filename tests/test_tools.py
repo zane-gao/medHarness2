@@ -1849,6 +1849,42 @@ def test_tool9_keeps_near_cutoff_candidates_for_review():
     assert ranked[1]["near_cutoff_review"] is True
 
 
+def test_tool9_keeps_candidates_when_score_ci_overlaps_cutoff():
+    rows = [
+        {
+            "model": "winner_by_point_estimate",
+            "composite_inputs": {"likert_mean": 4.2, "structure_score": 0.8, "finding_coverage": 0.8},
+            "score_ci_lower": 0.60,
+            "score_ci_upper": 0.82,
+        },
+        {
+            "model": "uncertain_runner_up",
+            "composite_inputs": {"likert_mean": 4.0, "structure_score": 0.8, "finding_coverage": 0.8},
+            "score_ci_lower": 0.58,
+            "score_ci_upper": 0.79,
+        },
+    ]
+    ranked = select_top_k(rows, top_k=1, near_cutoff_tolerance=0.0)
+    assert [row["model"] for row in ranked] == ["winner_by_point_estimate", "uncertain_runner_up"]
+    assert all(row["uncertainty_overlap"] is True for row in ranked)
+    assert all(row["requires_review"] is True for row in ranked)
+
+
+def test_tool9_does_not_fabricate_uncertainty_without_ci():
+    ranked = select_top_k(
+        [
+            {"model": "a", "composite_inputs": {"likert_mean": 4.0, "structure_score": 0.8, "finding_coverage": 0.8}},
+            {"model": "b", "composite_inputs": {"likert_mean": 3.5, "structure_score": 0.8, "finding_coverage": 0.8}},
+        ],
+        top_k=1,
+        near_cutoff_tolerance=0.0,
+    )
+    assert ranked[0]["uncertainty_status"] == "unavailable"
+    assert ranked[0]["score_ci_lower"] is None
+    assert ranked[0]["score_ci_upper"] is None
+    assert [row["model"] for row in ranked] == ["a"]
+
+
 def test_tool1_can_record_retest_consistency_without_replacing_primary_score():
     class StableClient:
         def __init__(self):

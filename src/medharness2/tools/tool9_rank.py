@@ -23,12 +23,17 @@ def select_top_k(
             continue
         score = sum(metric_weights.get(key, 0.0) * metrics.get(key, 0.0) for key in metric_weights)
         total = sum(metric_weights.values()) or 1.0
+        score = score / total
+        score_interval = _score_interval(evaluation, metric_weights, total, metrics)
         rows.append(
             {
                 "index": index,
                 "model": evaluation.get("model"),
-                "score": round(score / total, 4),
+                "score": round(score, 4),
                 "metrics": metrics,
+                "score_ci_lower": None if score_interval is None else round(score_interval[0], 4),
+                "score_ci_upper": None if score_interval is None else round(score_interval[1], 4),
+                "uncertainty_status": "available" if score_interval is not None else "unavailable",
             }
         )
     ranked = sorted(rows, key=lambda row: row["score"], reverse=True)
@@ -43,7 +48,69 @@ def select_top_k(
             row["near_cutoff"] = True
             row["near_cutoff_review"] = not row["selected_top_n"]
             row["near_cutoff_tolerance"] = near_cutoff_tolerance
+        cutoff_row = ranked[top_k - 1]
+        if cutoff_row["score_ci_lower"] is not None:
+            cutoff_interval = (cutoff_row["score_ci_lower"], cutoff_row["score_ci_upper"])
+            for row in ranked:
+                if row["score_ci_lower"] is None:
+                    continue
+                if _intervals_overlap((row["score_ci_lower"], row["score_ci_upper"]), cutoff_interval):
+                    if row not in selected:
+                        selected.append(row)
+                    row["uncertainty_overlap"] = True
+                    row["requires_review"] = True
+            selected.sort(key=lambda row: row["score"], reverse=True)
+    for row in selected:
+        row.setdefault("uncertainty_overlap", False)
+        row.setdefault("requires_review", bool(row.get("near_cutoff_review", False)))
     return selected
+
+
+def _score_interval(
+    evaluation: dict[str, Any],
+    metric_weights: dict[str, float],
+    total_weight: float,
+    metrics: dict[str, float],
+) -> tuple[float, float] | None:
+    """Return a score interval without fabricating uncertainty.
+
+    A pre-computed score CI takes precedence. Otherwise metric-level CIs are
+    combined using the ranking weights. Missing or malformed bounds make the
+    interval unavailable rather than silently treating them as zero.
+    """
+    payload = dict(evaluation.get("composite_inputs") or {})
+    payload.update({key: value for key, value in evaluation.items() if key not in payload})
+    for lower_key, upper_key in (("score_ci_lower", "score_ci_upper"), ("ci_lower", "ci_upper")):
+        lower = _finite_or_none(payload.get(lower_key))
+        upper = _finite_or_none(payload.get(upper_key))
+        if lower is not None and upper is not None and lower <= upper:
+            return max(0.0, lower), min(1.0, upper)
+    bounds: list[tuple[float, float, float]] = []
+    for metric, weight in metric_weights.items():
+        if float(weight) <= 0 or metric not in metrics:
+            continue
+        lower = _finite_or_none(payload.get(f"{metric}_ci_lower"))
+        upper = _finite_or_none(payload.get(f"{metric}_ci_upper"))
+        if lower is None or upper is None or lower > upper:
+            return None
+        bounds.append((lower, upper, float(weight)))
+    if not bounds:
+        return None
+    lower = sum(item[0] * item[2] for item in bounds) / total_weight
+    upper = sum(item[1] * item[2] for item in bounds) / total_weight
+    return max(0.0, lower), min(1.0, upper)
+
+
+def _finite_or_none(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _intervals_overlap(left: tuple[float, float], right: tuple[float, float]) -> bool:
+    return left[0] <= right[1] and right[0] <= left[1]
 
 
 def _numeric_metrics(evaluation: dict[str, Any]) -> dict[str, float]:
