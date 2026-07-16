@@ -1159,6 +1159,37 @@ def test_tool4_retries_incomplete_judge_output_and_preserves_candidate_evidence(
     assert result["errors"][1]["location"] == "left pleural"
 
 
+def test_tool4_prefers_canonical_codes_when_building_judge_evidence():
+    candidates = [
+        {
+            "error_type": "omission_finding",
+            "reference": {
+                "observation_code": "pulmonary_nodule",
+                "observation_text": "tiny lung nodule",
+                "anatomy_code": "right_upper_lobe",
+                "location_text": "apical segment of the right upper lobe",
+            },
+        }
+    ]
+    client = _RecordingClient(
+        {
+            "errors": [
+                {
+                    "error_type": "omission_finding",
+                    "hazard_level": 3,
+                    "explanation": "Potential missed finding.",
+                    "recommended_action": "review_if_relevant",
+                }
+            ]
+        }
+    )
+
+    result = evaluate_hazards(candidates, llm_client=client)
+
+    assert result["errors"][0]["observation"] == "pulmonary_nodule"
+    assert result["errors"][0]["location"] == "right_upper_lobe"
+
+
 def test_tool4_uses_role_route_and_sends_only_minimal_structured_evidence():
     client = _RecordingClient(
         {
@@ -1250,8 +1281,8 @@ def test_tool4_minimal_payload_reads_canonical_v2_finding_fields():
     evaluate_hazards(candidates, llm_client=client)
 
     prompt = client.calls[0]["prompt"]
-    assert "pulmonary nodule" in prompt
-    assert "right upper lobe" in prompt
+    assert '"observation": "nodule"' in prompt
+    assert '"location": "right upper lobe"' in prompt
     assert "8 mm" in prompt
     assert "private source text" not in prompt
 
