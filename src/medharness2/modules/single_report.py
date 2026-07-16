@@ -122,7 +122,10 @@ def evaluate_single_report(
     composite_inputs = {
         "likert_mean": likert_mean(likert),
         "structure_score": float(structure.get("score", 0.0)),
-        "finding_coverage": float(finding_graph.get("coverage", 0.0)),
+        # A reference report is evaluated against itself: ranking coverage is
+        # reference recall, while extractor/template coverage remains a
+        # diagnostic field on the finding graph.
+        "finding_coverage": 1.0 if finding_graph.get("findings") else 0.0,
     }
     return SingleReportResult(
         likert=likert,

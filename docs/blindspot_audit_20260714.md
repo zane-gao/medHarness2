@@ -122,41 +122,34 @@ CLI `reevaluate-run`/`single-case` 不带 `--config` 默认吃 `default.yaml`（
 
 ### —— 复现性（2 条，confirmed）——
 
-**H12. LLM 请求从不传 `seed`——temperature=0 单独不保证可复现** `llm_client.py:116-126`
-payload 只有 model/messages/temperature/max_tokens，全项目 `seed` 在 LLM 传输层零命中。
-**这是"11–56% 重测一致率"的机械根因**：确定性工具 100% 复现，LLM 工具因没锁采样器而漂移。
-> 注记：seed 支持依赖 provider，推理模型即便有 seed 也未必比特可复现——所以这不是唯一根因，但确凿证明复现性无保证。
+**H12.（历史发现，当前已修复传输层）LLM 请求从不传 `seed`——temperature=0 单独不保证可复现** `llm_client.py:116-126`
+当前 Responses API 与 Chat Completions 路径都会在配置提供时传递 `seed`，并纳入 checkpoint route fingerprint；但 provider 仍可能不承诺比特级确定性，因此仍需真实重复运行验证。
 
 **H13. checkpoint reuse 不是独立重复实验**（已缓解但仍需外部验证）
 当前 checkpoint 输入已包含 route、temperature、seed、schema/config 指纹，且支持 `--no-resume` 强制重跑。它能保证同一输入下的缓存完整性，但不能证明模型在独立调用中的随机稳定性；删缓存或关闭 resume 后仍需真实重复运行并报告差异。
 
 ### —— LLM 集成（2 条，confirmed）——
 
-**H14. `hazard_reviewer` 省略 temperature → 非确定性 reviewer 污染它本要测的一致率**
+**H14.（历史发现，当前默认配置已修复）`hazard_reviewer` 省略 temperature → 非确定性 reviewer 污染它本要测的一致率**
 `dmx_strong.yaml:43`（`omit_temperature:true`）+ `llm_client.py:120-121`。
 primary=gpt-5.6-terra@temp0，reviewer=claude-opus 走默认 ~1.0。`review_hazards` 算的 agreement 混了模型家族差异 + 温度差异 + 真噪声。
 重跑同一 benchmark 得到不同 `agreement_summary`。
-> 注记：`omit_temperature` 可能是合法的传输兼容 workaround（opus/推理模型常拒 temperature≠1），故非纯疏忽；但"三评委一致率"里一个评委跑不受控温度，仍是真实的复现性缺陷。
+> 当前 `config/dmx_strong.yaml` 已明确配置 reviewer 的 `temperature: 0.0` 与 `seed: 0`；仍需真实 provider smoke 验证该模型对这些参数的兼容性，并记录必要的参数省略。
 
-**H15. `parse_json_object` 只能剥"整段就是围栏"的 JSON，无花括号切片兜底** `utils/io.py:33-44`
-`re.fullmatch` 要求整串恰为围栏块，任何前言/结尾散文都使匹配失败且 `json.loads` 报 Extra data → ValueError。
-claude-opus/部分 gpt-5.6 常加前言。严格路径直接 `status='failed'` 踢出分母 → 偏向"碰巧能解析"的 case。
-> 注记：`response_format=json_object` 不是缓解——防御性解析的意义正是扛住不遵守它的模型。实际频率取决于模型行为，无运行日志佐证，故 HIGH 非 CRITICAL。
+**H15.（历史发现，当前已修复）`parse_json_object` 只能剥"整段就是围栏"的 JSON** `utils/io.py:33-44`
+当前解析器在标准 JSON/Markdown fence 失败时会切片首个 `{` 到末个 `}` 再重试，并有对应回归测试；真实模型仍需通过 gated smoke 验证。
 
 ### —— 测试覆盖（1 条，confirmed）——
 
-**H16. Tool7 模态识别零真实行为测试** `tools/tool7_modality.py:10-27`
-12 个工具里唯一无行为测试的，却在 `single_case.py:45` 驱动每个 case 的生成器路由 + 模态冲突质检。
-空 LLM 回复 → 'unknown'；CT 误标 'cxr' → 路由错生成器 + 用错质检规则 → 翻转 pass/fail、污染模态分层质量数。
+**H16.（当前已补行为回归测试）Tool7 模态识别曾缺少真实行为测试** `tools/tool7_modality.py:10-27`
+现已覆盖 DICOM header 优先、常见图像后缀、VLM MRI/空回复归一化，并继续保留未知模态为 `unknown` 的显式行为。
 
 ### —— 数据/schema 一致性（1 条，confirmed，第一版整个维度漏了）——
 
-**H17. `observation_code` 对非 CXR 是原始 LLM 自由文本，却被当精确匹配 join 键**
+**H17.（当前已修复规范化）`observation_code` 对非 CXR 是原始 LLM 自由文本，却被当精确匹配 join 键**
 producer `tool2_extract.py:508` → consumer `alignment/scoring.py:11`。
 v2 里 `finding_pair_score` 要求 `observation` 字符串完全相等才允许配对，且优先取 `observation_code`。
-但 tool2 只对 CXR 规范化 `observation_code`，**其他模态直接塞 LLM 原文**。
-CT/MRI 双方都说"small hepatic cyst"，参考 emit `hepatic_cyst`、候选 emit `liver cyst` → `_normalized_text` 不等 →
-匹配器永不配对 → 候选被判 `false_finding`、参考被判 `omission`。**非 CXR 的对齐/hazard 计数系统性错误。**
+当前 Tool2 对所有非 CXR 模态也生成稳定 lowercase slug（空格/连字符归一化），解决同一文本因大小写/标点导致 join 失败的路径。不同语义词（如 `hepatic_cyst` 与 `liver_cyst`）仍需 ontology 或临床标注确认，不能仅靠 slug 解决同义词映射。
 
 ---
 
@@ -165,32 +158,31 @@ CT/MRI 双方都说"small hepatic cyst"，参考 emit `hepatic_cyst`、候选 em
 - **M1. `model_count` 注入指标字典污染 `calculate_statistics`**（confirmed）`tool10_modelwise.py:17`→`tool12:38`。
   modelwise dict 无 metrics/composite_inputs 键 → 兜底吃整行 → "这个 case 有几个模型"被算出 mean/CI 摆在真指标旁。
   （注：tool10 自己的 `_numeric_metrics` 有 skip-set，tool12 没有。）
-- **M2. `percentile_rank` 用 `<=` 含自身，小样本上偏**（confirmed）`tool12:33`。1 reader→100 分位；4 reader→最好 100/最差 25。已显示在 dashboard。
-- **M3. `calculate_statistics` 缺 metric 白名单**（confirmed）`tool12:38`。无键时吞整行任意数值字段（M1 的泄漏机制，也纳入未来任何数值字段）。
+- **M2.（历史发现，当前已修复）`percentile_rank` 用 `<=` 含自身，小样本上偏** `tool12:33`。当前使用 midrank 口径。
+- **M3.（历史发现，当前已修复）`calculate_statistics` 缺 metric 白名单** `tool12:38`。当前仅消费明确的统计指标键。
 - **M4. tool2 的 `except Exception` 太宽把代码 bug 当"评委瞬时错误"**（partly）`tool2_extract.py:111`。
   KeyError/AttributeError 被当瞬时错误重试再回退。
   > 注：`tool4_hazard.py:90`（DEFAULT_HAZARD 所在处）经验证**只包住 `client.call`，不含 `_build_graph`**，那半条被驳倒——只有 tool2 成立。
 - **M5. 被评报告文本嵌进评委 prompt，仅靠一句"treat as data"防注入**（partly）`tool1_likert.py:143-154`。
   json 编码防住语法注入，但报文仍作为 prompt 内容送评委。被评模型可输出"给所有维度 5 分"抬自己分，无 grounding 校验。评测完整性漏洞。
-- **M6. 传输重试忽略 `Retry-After` / 限流信号，只有固定指数退避**（confirmed，新增）`llm_client.py:131-153,94-104`。
-  429/502/503 与硬 4xx 不区分，`max_retries=2` 实际只 1 次 5s 退避。限流突发时优先丢掉高负载时段的 case，偏置聚合。
+- **M6.（当前已部分修复）传输重试曾忽略 `Retry-After` / 限流信号** `llm_client.py:131-153,94-104`。
+  当前 429 会读取 `Retry-After`，传输异常会安全使用指数退避；正式运行仍需记录重试与最终失败分母。
   > 注："accounts exhausted"作 HTTP≥400 或 200-body-error **能被正确 surface** 并抛 LLMClientError，**无静默 mock 替换**——弱点仅在退避策略。
 - **M7.（历史发现，当前已支持配置化重测）单样本评委，全项目无自一致/多数投票**（partly）`tool1_likert.py:41-71`、`tool4:80-102`。
   每个指标是 n=1 抽样，方差从不采样。（`max_retries=1` 时一次调用一抽样。）
-- **M8. 顶层 `provider: mock` 是 strong 配置的隐患**（confirmed）`dmx_strong.yaml:5`。
+- **M8.（当前仍是配置风险）顶层 `provider: mock` 是 strong 配置的隐患** `dmx_strong.yaml:5`。
   任何不传 role override 的调用继承 provider=mock 静默返回伪造 JSON。真评委 role 覆盖了它、且 temp=0 确实生效，但新脚本/notebook 易踩。
-- **M9. 失败 case 被踢出统计造成幸存者偏差**（partly）`reevaluate_run.py:73`、`batch_readers.py:65`。
-  长 CT 超时失败、简单 CXR 成功 → 均值只算简单幸存者。failed_count 有进结果（好），但统计块不标 N 缩小。
+- **M9.（当前已改进，仍需正式分析消费）失败 case 被踢出统计造成幸存者偏差** `reevaluate_run.py:73`、`batch_readers.py:65`。
+  结果现在保留 manifest/source 分母、成功率和失败列表；正式汇总仍需将失败率作为独立 endpoint 报告，不能只看成功病例均值。
 - **M10. Hazard 回退到硬编码 DEFAULT_HAZARD 常量却标非 fallback**（partly）`tool4_hazard.py:20-27,435-457`。
   无 hazard_primary 角色 + mock 时每个遗漏=高危 4、每个假发现=中危 3，与临床内容无关，喂 hazardwise。
-- **M11. Workflow4 education 的 LLM 路径未测且无法区分 LLM/模板**（confirmed）`education.py:64,103,108-120`。
-  `source` 硬编码字面量 `'deterministic_or_llm'`，`_try_llm_json` 静默吞异常退模板；4 个测试无论 LLM 是否跑都同样通过。
+- **M11.（当前已修复 provenance，仍需真实 smoke）Workflow4 education 的 LLM 路径曾无法区分 LLM/模板** `education.py:64,103,108-120`。
+  当前结果已用 `llm_judge`、`mock_judge`、`deterministic_fallback` 区分来源；真实 provider smoke 仍未执行。
 - **M12. 无真实评委调用的测试，坏评委能过 CI 绿灯**（confirmed）`tests/test_tools.py:1487-1527`。
   所有 judge 测试用 stub 绕过 `LLMClient`（含隐私校验），无任何 live 网络请求。破坏 live 评委的回归会让全部测试全绿却产生 fallback/垃圾分。
   （注：套件实为 237 个测试函数，非我第一版说的 ~330。）
-- **M13. mock fallback 产出可打分的伪报告而非拒绝**（confirmed）`tool8_generate.py:53-64`。
-  provider=mock + cloud_fallback 时返回 "mock response for prompt length N"，`source='mock_fallback'`，下游 Tool1 照样 Likert 打分。
-  产物有标 `evidence_tier=mock` + 警告（非全静默），formal benchmark 会拦；但探索/batch 跑会静默产出并持久化伪报告分数。
+- **M13.（当前已修复评估门禁）mock fallback 产出可打分的伪报告而非拒绝** `tool8_generate.py:53-64`。
+  产物仍保留用于诊断并明确标记 `evidence_tier=mock`；质量门禁现在把 fallback generation 标为失败，Tool9/Tool10 也排除 `mock`/`mock_fallback` 行，不再进入排名或模型汇总。
 
 ---
 
@@ -218,7 +210,7 @@ CT/MRI 双方都说"small hepatic cyst"，参考 emit `hepatic_cyst`、候选 em
 | 权威 benchmark 路径 | **未被 mock/fallback 污染**，硬门禁完备 | `_validate_role_routes`(:585-633) + `verify_real_llm_case_evaluation`(:349-531) 双重 gate；两信号（implementation_type + fallback_used）独立校验 |
 | LLMClient chat_completions | **完整实现且有单测**，无静默 mock | `llm_client.py:49,106-183`；`test_llm_client.py:45-159`（端点覆盖/超时/温度省略/403 结构化错误/key 不泄漏） |
 | tool12 除零/空组 | **安全**，无崩溃 | `stdev` 有 `len>1` 守卫、`ci` 有 `if values`、`percentile_rank` 有 `if not population`、`tool10:16` 有 `totals>0`、`tool9:12` 有 `sum(weights) or 1.0` |
-| GPT 角色 temperature=0 | **确实生效** | `config.py:64-82` 放行 0.0，`llm_client.py:120-121` 发送。真正缺的是 seed（H12）与 reviewer 的 omit_temperature（H14） |
+| GPT 角色 temperature=0 | **确实生效** | `config.py:64-82` 放行 0.0，`llm_client.py:120-121` 发送；seed、reviewer 温度配置已落地，仍需真实 provider 验证兼容性 |
 
 ---
 
@@ -238,28 +230,26 @@ CT/MRI 双方都说"small hepatic cyst"，参考 emit `hepatic_cyst`、候选 em
 - **H9/H10（统计侧）**：`tool12.calculate_statistics` 现在过滤 `fallback_used`、`debug_fallback`、`mock` 和 fallback source；聚合层不会再把这些行混入均值。`tool9/tool10` 原有过滤继续保留。
 - **H7（单样本边界）**：`n=1` 的 CI 上下界现在输出 `null`，明确表示无法估计不确定性；不再输出与均值重合的伪 CI。
 - **M11**：教育结果 provenance 现在明确标记 `llm_judge`、`mock_judge` 或 `deterministic_fallback`，并同步 `fallback_used`。
-- 回归测试新增，当前全量测试为 `366 passed, 17 warnings`。
+- 回归测试持续新增；2026-07-16 本轮全量验证为 `382 passed, 17 warnings`，并已通过 `compileall` 与 `git diff --check`。
 
 ### 仍需处理
 
-**第一梯队 —— 数字可信度地基（改动小、验证简单）**
-1. **H8** 将 `compare_metric_groups` 与 Holm 校正真正接入正式 benchmark 汇总，并在无足够样本时显式 blocked。
-2. **H6** 排名增加不确定性/并列处理，避免仅按点估计宣布赢家。
-3. **H12** 传 `seed`
-4. **H7** 继续补齐不同样本量的统计解释和下游消费方的 `null CI` 兼容检查。
+**第一梯队 —— 真实证据门禁（当前代码已具备，尚缺外部证据）**
+1. **H8** 正式 benchmark summary 已接入 Welch+Holm；仍需在冻结结果上执行并保存统计产物。
+2. **H6** 排名已保留 cutoff 近似并列候选；仍需在冻结结果上报告不确定性。
+3. **H12/H13** seed、route fingerprint 和 `--no-resume` 已落地；仍需真实重复运行验证。
+4. **M12** `live-smoke` 已提供；当前缺少 `DMX_API_KEY`，必须保持 blocked。
 
 **第二梯队 —— 合规红线（动真实病人数据前必须）**
 5. **H1 / H2 / H3** 评测链路强制去标识 + 给出"真评测 + 扫描"的配置态
 6. **H4** 收紧 `outputs/` 权限 + `docs/pat.txt` 移出组内可读位置
 7. **C1** API 鉴权 + 路径白名单
 
-**第三梯队 —— 评委可靠性与工程健壮性**
-8. **H14 / M7** reviewer 也锁温度 + 自一致投票
-9. **H13** 明确 checkpoint 缓存 ≠ 方法复现性（文档 + 可选去缓存复跑）
-10. **H15** JSON 解析加花括号切片兜底
-11. **H17** 非 CXR observation_code 规范化 / 改用非精确匹配
-12. **H16 / M12** 给 tool7 补测试 + 一条 gated 真实评委 smoke 测试
-13. 其余 MEDIUM/LOW 按模块顺手处理
+**第三梯队 —— 仍需外部或产品决策的事项**
+8. **H14 / M7** reviewer 参数兼容性与真实自一致率仍需云端重复调用验证。
+9. **H15/H16/H17** 本地解析、Tool7 行为测试和非 CXR slug 规范化已落地；真实模型/同义词质量仍需冻结集确认。
+10. **OCR/临床**：北川 10 例 OCR 冻结集、双次候选比较、多模态 verifier、pilot10 双读者标注尚未就位。
+11. 安全/隐私与 API 鉴权按用户明确要求暂缓，不作为本轮阻塞。
 
 ---
 

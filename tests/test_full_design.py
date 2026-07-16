@@ -14,6 +14,7 @@ from medharness2.tools.tool6_structure_diff import compare_structure
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
 from medharness2.workflows.batch_readers import _mean_score as batch_mean_score
+from medharness2.workflows.batch_readers import _evaluation_metadata
 from medharness2.workflows.reevaluate_run import _mean_score as reevaluate_mean_score
 from medharness2.workflows.merge_batches import _mean_score as merge_mean_score
 from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full
@@ -72,6 +73,34 @@ def test_tool12_statistics_and_percentile_rank():
 def test_statistics_ignore_bookkeeping_fields():
     stats = calculate_statistics([{"score": 0.5, "model_count": 2}, {"score": 0.7, "model_count": 3}])
     assert set(stats) == {"score"}
+
+
+def test_statistics_ignore_nested_fallback_provenance():
+    stats = calculate_statistics(
+        [
+            {"score": 1.0, "metadata": {"fallback_used": True}},
+            {"score": 0.5, "metadata": {"fallback_used": False}},
+        ]
+    )
+    assert stats["score"]["n"] == 1
+    assert stats["score"]["mean"] == pytest.approx(0.5)
+
+
+def test_human_provenance_merge_keeps_any_fallback_signal():
+    metadata = _evaluation_metadata(
+        {
+            "likert": {"_metadata": {"source": "mock_judge", "fallback_used": True}},
+            "finding_graph": {
+                "metadata": {
+                    "llm_correction": {
+                        "source": "llm_extractor",
+                        "fallback_used": False,
+                    }
+                }
+            },
+        }
+    )
+    assert metadata["fallback_used"] is True
 
 
 def test_statistics_excludes_fallback_rows_and_reports_single_sample_uncertainty():

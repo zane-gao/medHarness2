@@ -95,6 +95,7 @@ class LLMClient:
         max_retries = max(1, int(kwargs.get("max_retries") or llm.max_retries))
         timeout_sec = int(kwargs.get("timeout_sec") or llm.timeout_sec)
         for attempt in range(max_retries):
+            response = None
             try:
                 with urllib.request.urlopen(request, timeout=timeout_sec) as response:
                     body = json.loads(response.read().decode("utf-8"))
@@ -136,6 +137,7 @@ class LLMClient:
         max_retries = max(1, int(kwargs.get("max_retries") or llm.max_retries))
         timeout_sec = int(kwargs.get("timeout_sec") or llm.timeout_sec)
         for attempt in range(max_retries):
+            response = None
             try:
                 response = requests.post(
                     endpoint,

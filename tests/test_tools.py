@@ -1613,6 +1613,24 @@ def test_tool9_excludes_fallback_rows_from_ranking():
     assert [row["model"] for row in ranked] == ["real"]
 
 
+def test_tool9_and_tool10_exclude_mock_fallback_source_and_tier():
+    rows = [
+        {
+            "model": "mock",
+            "source": "mock_fallback",
+            "evidence_tier": "mock",
+            "composite_inputs": {"likert_mean": 5, "structure_score": 1, "finding_coverage": 1},
+        },
+        {
+            "model": "real",
+            "source": "artifact_reuse",
+            "evidence_tier": "artifact",
+            "composite_inputs": {"likert_mean": 3, "structure_score": 0.5, "finding_coverage": 0.5},
+        },
+    ]
+    assert [row["model"] for row in select_top_k(rows, top_k=2)] == ["real"]
+
+
 def test_tool9_keeps_near_cutoff_candidates_for_review():
     ranked = select_top_k(
         [

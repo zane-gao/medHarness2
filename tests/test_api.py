@@ -43,10 +43,13 @@ def test_api_single_case_accepts_report_text(tmp_path: Path):
     body = response.json()
     assert body["output_path"] == str(output_path)
     assert body["summary"]["generated_reports"] == 1
-    assert body["summary"]["pairwise_comparisons"] == 1
+    assert body["summary"]["pairwise_comparisons"] == 0
+    assert body["summary"]["rankings"] == 0
     assert body["summary"]["modality"] == "cxr"
     assert output_path.exists()
-    assert json.loads(output_path.read_text(encoding="utf-8"))["generated_reports"]
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["generated_reports"]
+    assert payload["generated_reports"][0]["metadata"]["quality_gate"]["passed"] is False
 
 
 def test_api_single_case_requires_report_text_or_path(tmp_path: Path):

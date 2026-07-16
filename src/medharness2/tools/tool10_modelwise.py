@@ -44,6 +44,6 @@ def _eligible(row: dict[str, Any]) -> bool:
     metadata = row.get("metadata") or row.get("provenance") or {}
     if bool(metadata.get("fallback_used")):
         return False
-    if str(row.get("evidence_tier") or "").lower() == "debug_fallback":
+    if str(row.get("evidence_tier") or "").lower() in {"debug_fallback", "mock"}:
         return False
-    return str(row.get("source") or "").lower() not in {"local_vlm_fallback", "mock", "fallback"}
+    return str(row.get("source") or "").lower() not in {"local_vlm_fallback", "mock", "fallback", "mock_fallback", "mock_judge"}

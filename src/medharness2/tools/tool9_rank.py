@@ -74,8 +74,8 @@ def _eligible_for_statistics(evaluation: dict[str, Any]) -> bool:
     metadata = evaluation.get("metadata") or evaluation.get("provenance") or {}
     if bool(metadata.get("fallback_used")):
         return False
-    if str(evaluation.get("evidence_tier") or "").lower() == "debug_fallback":
+    if str(evaluation.get("evidence_tier") or "").lower() in {"debug_fallback", "mock"}:
         return False
-    if str(evaluation.get("source") or "").lower() in {"local_vlm_fallback", "mock", "fallback"}:
+    if str(evaluation.get("source") or "").lower() in {"local_vlm_fallback", "mock", "fallback", "mock_fallback", "mock_judge"}:
         return False
     return True

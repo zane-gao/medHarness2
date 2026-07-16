@@ -153,6 +153,27 @@ def test_chat_completions_honors_retry_after_for_rate_limits(monkeypatch):
     assert sleeps == [7.0]
 
 
+def test_chat_completions_transport_error_retries_without_unbound_response(monkeypatch):
+    monkeypatch.setenv("DMX_API_KEY", "test-only-secret")
+    calls = 0
+    sleeps = []
+
+    def fake_post(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        raise requests.ConnectionError("temporary network failure")
+
+    import requests
+
+    monkeypatch.setattr("requests.post", fake_post)
+    monkeypatch.setattr("time.sleep", lambda value: sleeps.append(value))
+    client = LLMClient(AppConfig(llm=LLMConfig(provider="mock", max_retries=2, retry_initial_sec=0.25)))
+    with pytest.raises(LLMClientError, match="temporary network failure"):
+        client.call("hello", provider="chat_completions", api_key_env="DMX_API_KEY", max_retries=2, payload_classification="synthetic_test")
+    assert calls == 2
+    assert sleeps == [0.25]
+
+
 def test_chat_completions_preserves_structured_provider_error_details(monkeypatch):
     monkeypatch.setenv("DMX_API_KEY", "test-only-secret")
 

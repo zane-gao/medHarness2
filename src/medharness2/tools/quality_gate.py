@@ -22,12 +22,27 @@ _MODALITY_CONFLICTS = {
 
 def apply_generation_quality_gate(report: GeneratedReport, *, modality: str | None, body_part: str | None) -> GeneratedReport:
     result = check_generation_quality(report.report, modality=modality, body_part=body_part)
+    if _is_fallback_report(report):
+        result["passed"] = False
+        result["warnings"] = ["fallback_generation", *result["warnings"]]
     report.metadata = {**report.metadata, "quality_gate": result}
     if not result["passed"]:
         for warning in ["quality_gate_failed", *result["warnings"]]:
             if warning not in report.warnings:
                 report.warnings.append(warning)
     return report
+
+
+def _is_fallback_report(report: GeneratedReport) -> bool:
+    metadata = report.metadata or {}
+    source = str(report.source or "").lower()
+    tier = str(report.evidence_tier or "").lower()
+    return bool(metadata.get("fallback_used")) or tier in {"mock", "debug_fallback"} or source in {
+        "mock",
+        "mock_fallback",
+        "fallback",
+        "local_vlm_fallback",
+    }
 
 
 def check_generation_quality(text: str, *, modality: str | None, body_part: str | None) -> dict[str, Any]:

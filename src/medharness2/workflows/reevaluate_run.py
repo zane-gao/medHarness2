@@ -82,7 +82,11 @@ def reevaluate_run(
             )
             continue
 
-        human_metrics = dict((reevaluated.get("human_evaluation") or {}).get("composite_inputs") or {})
+        human_evaluation = reevaluated.get("human_evaluation") or {}
+        human_metrics = dict(human_evaluation.get("composite_inputs") or {})
+        human_provenance = _evaluation_metadata(human_evaluation)
+        if human_provenance:
+            human_metrics["metadata"] = human_provenance
         generated_metrics = [
             {
                 "model": item.get("model"),
@@ -281,12 +285,22 @@ def _mean_score(rows: list[dict[str, Any]]) -> float:
 
 def _evaluation_metadata(evaluation: dict[str, Any]) -> dict[str, Any]:
     metadata: dict[str, Any] = {}
+    fallback_seen = False
     for key in ("likert", "finding_graph"):
         value = evaluation.get(key)
         if isinstance(value, dict):
             nested = value.get("_metadata") or value.get("metadata") or value.get("provenance")
             if isinstance(nested, dict):
                 metadata.update(nested)
+                fallback_seen = fallback_seen or bool(nested.get("fallback_used"))
+            if key == "finding_graph":
+                correction = (value.get("metadata") or {}).get("llm_correction")
+                if isinstance(correction, dict):
+                    metadata.update(correction)
+                    fallback_seen = fallback_seen or bool(correction.get("fallback_used"))
     if isinstance(evaluation.get("metadata"), dict):
         metadata.update(evaluation["metadata"])
+        fallback_seen = fallback_seen or bool(evaluation["metadata"].get("fallback_used"))
+    if fallback_seen:
+        metadata["fallback_used"] = True
     return metadata

@@ -73,6 +73,7 @@ def merge_batch_results(
                 target = case_dir / f"{case_id}.json"
                 _write_merged_case_artifact(workflow1_path, target, case_id=case_id)
                 item["workflow1_output"] = str(target)
+                _attach_human_provenance(item, target)
                 metadata["copied_workflow1_outputs"] += 1
                 _count_workflow1(target, model_counts, source_counts, warning_counts, quality_counts)
             else:
@@ -154,6 +155,45 @@ def _count_workflow1(
         quality_gate = (report.get("metadata") or {}).get("quality_gate") or {}
         if quality_gate:
             quality_counts["passed" if quality_gate.get("passed") else "failed"] += 1
+
+
+def _attach_human_provenance(item: dict[str, Any], workflow1_path: Path) -> None:
+    """Backfill human-evaluation provenance when merging legacy batch rows."""
+    metrics = dict(item.get("human_metrics") or {})
+    if isinstance(metrics.get("metadata"), dict):
+        return
+    try:
+        payload = read_json(workflow1_path)
+    except (OSError, ValueError, TypeError):
+        return
+    human = payload.get("human_evaluation") or {}
+    metadata = _evaluation_metadata(human)
+    if metadata:
+        metrics["metadata"] = metadata
+        item["human_metrics"] = metrics
+
+
+def _evaluation_metadata(evaluation: dict[str, Any]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    fallback_seen = False
+    for key in ("likert", "finding_graph"):
+        value = evaluation.get(key)
+        if isinstance(value, dict):
+            nested = value.get("_metadata") or value.get("metadata") or value.get("provenance")
+            if isinstance(nested, dict):
+                metadata.update(nested)
+                fallback_seen = fallback_seen or bool(nested.get("fallback_used"))
+            if key == "finding_graph":
+                correction = (value.get("metadata") or {}).get("llm_correction")
+                if isinstance(correction, dict):
+                    metadata.update(correction)
+                    fallback_seen = fallback_seen or bool(correction.get("fallback_used"))
+    if isinstance(evaluation.get("metadata"), dict):
+        metadata.update(evaluation["metadata"])
+        fallback_seen = fallback_seen or bool(evaluation["metadata"].get("fallback_used"))
+    if fallback_seen:
+        metadata["fallback_used"] = True
+    return metadata
 
 
 def _build_per_reader(cases: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

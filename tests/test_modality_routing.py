@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from medharness2.config import AppConfig
 from medharness2.generators.registry import GeneratorEntry, ReportGeneratorRegistry
-from medharness2.tools.tool7_modality import _normalize_modality_token
+from medharness2.tools.tool7_modality import _normalize_modality_token, recognize_modality
+from medharness2.tools.tool2_extract import _canonical_observation_code
 
 
 def test_registry_keeps_modality_route_when_body_part_is_unknown():
@@ -26,3 +27,42 @@ def test_modality_token_normalization_handles_common_vlm_phrasing():
     assert _normalize_modality_token("CT abdomen") == "CT"
     assert _normalize_modality_token("chest x-ray") == "DX"
 
+
+def test_recognize_modality_uses_dicom_header_before_filename_or_llm(tmp_path):
+    import pydicom
+    from pydicom.dataset import FileDataset, FileMetaDataset
+
+    path = tmp_path / "scan.png"
+    meta = FileMetaDataset()
+    dataset = FileDataset(str(path), {}, file_meta=meta, preamble=b"\0" * 128)
+    dataset.Modality = "MR"
+    dataset.save_as(path)
+
+    assert recognize_modality(str(path), config=AppConfig()) == "mri"
+
+
+def test_recognize_modality_uses_image_suffix_without_llm(tmp_path):
+    path = tmp_path / "portable.jpg"
+    path.write_bytes(b"not a dicom")
+
+    assert recognize_modality(str(path), config=AppConfig()) == "xray"
+
+
+def test_recognize_modality_normalizes_vlm_result_and_empty_reply(monkeypatch, tmp_path):
+    path = tmp_path / "unknown.bin"
+    path.write_bytes(b"not a dicom")
+
+    class Client:
+        def __init__(self, text):
+            self.text = text
+
+        def call(self, *args, **kwargs):
+            return self.text
+
+    assert recognize_modality(str(path), config=AppConfig(), llm_client=Client("MRI examination")) == "mri"
+    assert recognize_modality(str(path), config=AppConfig(), llm_client=Client("")) == "unknown"
+
+
+def test_non_cxr_observation_codes_are_stable_slugs_for_alignment():
+    assert _canonical_observation_code("Small hepatic cyst", "small hepatic cyst") == "small_hepatic_cyst"
+    assert _canonical_observation_code("liver-cyst", "liver cyst") == "liver_cyst"

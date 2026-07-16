@@ -19,6 +19,16 @@ def test_single_report_module_returns_composite_inputs():
     assert result["finding_graph"]["findings"]
 
 
+def test_reference_report_coverage_is_self_recall_not_template_size():
+    result = evaluate_single_report(
+        "FINDINGS: Mild right lung opacity. IMPRESSION: Mild opacity.",
+        modality="cxr",
+        llm_client=build_mock_client(),
+    )
+    assert result["composite_inputs"]["finding_coverage"] == 1.0
+    assert result["finding_graph"]["template_coverage"]["coverage_rate"] < 1.0
+
+
 def test_single_report_routes_likert_through_general_judge_role():
     response = {
         metric: {"score": 4, "explanation": "Evidence-based score."}
@@ -783,6 +793,22 @@ def test_single_case_quality_gate_keeps_matching_cxr_report(tmp_path: Path):
     assert "quality_gate_failed" not in kept["warnings"]
     assert result["rankings"][0]["model"] == "chexagent_srrg_findings_full"
     assert len(result["pairwise_comparisons"]) == 1
+
+
+def test_single_case_quality_gate_blocks_mock_fallback_report(tmp_path: Path):
+    from medharness2.schema import GeneratedReport
+    from medharness2.tools.quality_gate import apply_generation_quality_gate
+
+    report = GeneratedReport(
+        model="mock",
+        source="mock_fallback",
+        report="mock response",
+        modality="cxr",
+        metadata={"fallback_used": True},
+    )
+    gated = apply_generation_quality_gate(report, modality="cxr", body_part="chest")
+    assert gated.metadata["quality_gate"]["passed"] is False
+    assert "fallback_generation" in gated.metadata["quality_gate"]["warnings"]
 
 
 def test_single_case_fallback_uses_primary_image_instead_of_volume(tmp_path: Path):
