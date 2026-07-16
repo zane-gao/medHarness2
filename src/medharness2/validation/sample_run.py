@@ -321,6 +321,8 @@ def _read_manifest(path: Path, errors: list[str]) -> list[dict[str, Any]]:
                 row = json.loads(line)
                 if isinstance(row, dict):
                     rows.append(row)
+                else:
+                    errors.append(f"invalid_manifest_jsonl:row_{len(rows) + 1}:not_object")
     except Exception as exc:
         errors.append(f"invalid_manifest_jsonl:{type(exc).__name__}")
     return rows
