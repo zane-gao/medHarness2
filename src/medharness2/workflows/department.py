@@ -21,10 +21,30 @@ def run_department_comparison(batch_result_path: str | Path, output_path: str | 
         for reader, score in reader_scores.items()
     }
     model_group_rows = [case.get("modelwise_metrics") or {} for case in batch.get("cases") or [] if case.get("modelwise_metrics")]
+    denominator = dict(batch.get("denominator") or {})
+    source_case_count = int(
+        denominator.get("manifest_case_count")
+        or denominator.get("source_case_count")
+        or batch.get("case_count", 0)
+        or 0
+    )
+    successful_case_count = int(denominator.get("successful_case_count") or batch.get("case_count", 0) or 0)
+    failed_case_count = int(denominator.get("failed_case_count") or batch.get("failed_case_count", 0) or 0)
+    denominator.update(
+        {
+            "source_case_count": source_case_count,
+            "successful_case_count": successful_case_count,
+            "failed_case_count": failed_case_count,
+            "success_rate": round(successful_case_count / max(source_case_count, 1), 4),
+            "failure_rate": round(failed_case_count / max(source_case_count, 1), 4),
+        }
+    )
     result = {
         "batch_result_path": str(batch_result_path),
         "reader_count": len(per_reader),
         "case_count": int(batch.get("case_count", 0)),
+        "failed_case_count": failed_case_count,
+        "denominator": denominator,
         "statistics": {
             "readers": calculate_statistics([{"overall_score": score} for score in population]),
             "model_group": calculate_statistics(model_group_rows),

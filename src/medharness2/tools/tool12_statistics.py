@@ -14,6 +14,9 @@ STATISTIC_METRICS = {
     "score",
     "error_rate",
     "agreement",
+    # Reader-level aggregate emitted by Workflow 2/3.  Keep it explicit so
+    # bookkeeping fields do not leak into statistical summaries.
+    "overall_score",
 }
 
 

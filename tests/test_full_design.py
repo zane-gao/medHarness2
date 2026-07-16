@@ -95,6 +95,13 @@ def test_statistics_ignore_bookkeeping_fields():
     assert set(stats) == {"score"}
 
 
+def test_statistics_include_reader_overall_score_with_ci():
+    stats = calculate_statistics([{"overall_score": 0.2}, {"overall_score": 0.8}])
+    assert stats["overall_score"]["n"] == 2
+    assert stats["overall_score"]["mean"] == pytest.approx(0.5)
+    assert stats["overall_score"]["ci_lower"] is not None
+
+
 def test_statistics_ignore_nested_fallback_provenance():
     stats = calculate_statistics(
         [
@@ -198,6 +205,33 @@ def test_batch_readers_and_department_workflows(tmp_path: Path):
     assert dept_output.exists()
     assert dept["statistics"]
     assert dept["reader_percentiles"]
+    assert dept["statistics"]["readers"]["overall_score"]["n"] == 2
+    assert dept["denominator"]["success_rate"] == 1.0
+    assert dept["denominator"]["failure_rate"] == 0.0
+
+
+def test_department_propagates_failed_case_denominator(tmp_path: Path):
+    batch_path = tmp_path / "workflow2.json"
+    batch_path.write_text(
+        json.dumps(
+            {
+                "case_count": 1,
+                "failed_case_count": 2,
+                "cases": [{"case_id": "ok", "modelwise_metrics": {"precision": 1.0}}],
+                "failed_cases": [{"case_id": "bad1"}, {"case_id": "bad2"}],
+                "per_reader": {"reader": {"case_count": 1, "overall_score": 0.75}},
+                "denominator": {"manifest_case_count": 3, "successful_case_count": 1, "failed_case_count": 2},
+            }
+        ),
+        encoding="utf-8",
+    )
+    result = run_department_comparison(batch_path, tmp_path / "workflow3.json")
+    assert result["denominator"]["manifest_case_count"] == 3
+    assert result["denominator"]["successful_case_count"] == 1
+    assert result["denominator"]["failed_case_count"] == 2
+    assert result["denominator"]["source_case_count"] == 3
+    assert result["denominator"]["success_rate"] == pytest.approx(1 / 3, abs=1e-4)
+    assert result["denominator"]["failure_rate"] == pytest.approx(2 / 3, abs=1e-4)
 
 
 def test_batch_readers_batches_medharness_cli_generation(monkeypatch, tmp_path: Path):
