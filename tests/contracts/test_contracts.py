@@ -93,3 +93,14 @@ def test_cli_exports_versioned_json_schemas(tmp_path: Path):
     assert "finding_graph" in index["schemas"]
     schema = json.loads((tmp_path / index["schemas"]["finding_graph"]).read_text(encoding="utf-8"))
     assert schema["title"] == "FindingGraph"
+
+@pytest.mark.parametrize("bad", [True, 1.5, "2", -1])
+def test_aggregate_contract_rejects_implicit_integer_counts(bad):
+    from medharness2.contracts.aggregate import DenominatorAggregate, Workflow2Aggregate, Workflow3Aggregate
+
+    with pytest.raises(ValidationError):
+        Workflow2Aggregate.model_validate({"case_count": bad})
+    with pytest.raises(ValidationError):
+        DenominatorAggregate.model_validate({"source_case_count": bad})
+    with pytest.raises(ValidationError):
+        Workflow3Aggregate.model_validate({"reader_count": bad})

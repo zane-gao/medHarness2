@@ -47,3 +47,10 @@ def test_cancelled_run_can_be_requeued(tmp_path):
 
     assert retried["status"] == "queued"
     assert retried["retry_count"] == 1
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, "10", 0, -1, 1001])
+def test_run_store_list_runs_rejects_implicit_or_out_of_range_limits(tmp_path, bad):
+    store = RunStore(tmp_path / "control.sqlite3")
+    with pytest.raises(ValueError, match="limit"):
+        store.list_runs(limit=bad)

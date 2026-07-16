@@ -17,6 +17,12 @@ _RUN_TRANSITIONS = {
 }
 
 
+def _strict_limit(value: Any) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 1000:
+        raise ValueError("limit must be an integer between 1 and 1000")
+    return value
+
+
 class RunStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -37,10 +43,11 @@ class RunStore:
         return self.get_run(run_id, include_children=False)
 
     def list_runs(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        limit = _strict_limit(limit)
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT * FROM runs ORDER BY created_at_utc DESC LIMIT ?",
-                (max(1, min(int(limit), 1000)),),
+                (limit,),
             ).fetchall()
         return [_run_row(row) for row in rows]
 
