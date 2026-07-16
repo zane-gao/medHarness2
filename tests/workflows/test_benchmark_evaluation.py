@@ -1182,3 +1182,13 @@ def _stable_sha256(payload: dict) -> str:
 
 def _file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+@pytest.mark.parametrize("field", ["generated_evaluations", "pairwise_comparisons"])
+@pytest.mark.parametrize("bad", ["bad", {"x": 1}, ["bad-item"]])
+def test_real_llm_case_verification_rejects_malformed_object_lists(field, bad):
+    from medharness2.workflows.benchmark_evaluation import verify_real_llm_case_evaluation
+
+    payload = {"human_evaluation": {}, "generated_evaluations": [], "pairwise_comparisons": []}
+    payload[field] = bad
+    with pytest.raises(ValueError, match=field):
+        verify_real_llm_case_evaluation(payload)

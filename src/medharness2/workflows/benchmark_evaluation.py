@@ -360,8 +360,8 @@ def verify_real_llm_case_evaluation(
 ) -> dict[str, Any]:
     evidence: list[dict[str, Any]] = []
     human = dict(payload.get("human_evaluation") or {})
-    generated = list(payload.get("generated_evaluations") or [])
-    pairwise = list(payload.get("pairwise_comparisons") or [])
+    generated = _object_list(payload.get("generated_evaluations"), "generated_evaluations")
+    pairwise = _object_list(payload.get("pairwise_comparisons"), "pairwise_comparisons")
     if not human or len(generated) != 1 or len(pairwise) != 1:
         raise ValueError(
             "Real LLM verification requires one reference evaluation, one candidate evaluation, and one pairwise comparison"
@@ -426,8 +426,9 @@ def verify_real_llm_case_evaluation(
         alignment_audit.get("adjudication_summary") or {}
     )
     deterministic_error_count = len(alignment.get("error_candidates") or [])
-    adjudicated_candidates = list(
-        alignment_audit.get("adjudicated_error_candidates") or []
+    adjudicated_candidates = _object_list(
+        alignment_audit.get("adjudicated_error_candidates"),
+        "adjudicated_error_candidates",
     )
     if adjudication_summary.get("complete") is not True:
         raise ValueError("T5 adjudication is incomplete")
@@ -474,7 +475,7 @@ def verify_real_llm_case_evaluation(
         raise ValueError("T4 reviewer is not independent from the primary judge")
     evidence.extend([primary, reviewer])
 
-    disagreements = list(hazard_review.get("disagreements") or [])
+    disagreements = _object_list(hazard_review.get("disagreements"), "disagreements")
     if disagreements:
         hazard_adjudication = comparison.get("hazard_adjudication")
         if not isinstance(hazard_adjudication, dict):
@@ -487,7 +488,7 @@ def verify_real_llm_case_evaluation(
             hazard_review
         ):
             raise ValueError("T4 hazard adjudication review hash mismatch")
-        decisions = list(hazard_adjudication.get("decisions") or [])
+        decisions = _object_list(hazard_adjudication.get("decisions"), "decisions")
         expected_indices = {
             int(item["error_index"])
             for item in disagreements
@@ -1153,25 +1154,33 @@ def _count_or_zero(value: Any, label: str) -> int:
     return 0 if value is None else _strict_nonnegative_int(value, label)
 
 
+def _object_list(value: Any, label: str) -> list[dict[str, Any]]:
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"{label} must be a list of objects")
+    return value
+
+
 def _valid_hazard_level(value: Any) -> bool:
     return _valid_int(value) and 1 <= int(value) <= 5
 
 
 def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
-    generated = list(payload.get("generated_evaluations") or [])
-    pairwise = list(payload.get("pairwise_comparisons") or [])
+    generated = _object_list(payload.get("generated_evaluations"), "generated_evaluations")
+    pairwise = _object_list(payload.get("pairwise_comparisons"), "pairwise_comparisons")
     candidate = dict(generated[0]) if generated else {}
     comparison = dict((pairwise[0] or {}).get("comparison") or {}) if pairwise else {}
     hazards = dict(comparison.get("hazards") or {})
     hazard_review = dict(comparison.get("hazard_review") or {})
     agreement_summary = dict(hazard_review.get("agreement_summary") or {})
     hazard_adjudication = dict(comparison.get("hazard_adjudication") or {})
-    adjudication_decisions = list(hazard_adjudication.get("decisions") or [])
+    adjudication_decisions = _object_list(hazard_adjudication.get("decisions"), "decisions")
     alignment_audit = dict(comparison.get("alignment_audit") or {})
     adjudication_summary = dict(
         alignment_audit.get("adjudication_summary") or {}
     )
-    hazard_errors = list(hazards.get("errors") or [])
+    hazard_errors = _object_list(hazards.get("errors"), "errors")
     hazard_levels = [
         int(error["hazard_level"])
         for error in hazard_errors
