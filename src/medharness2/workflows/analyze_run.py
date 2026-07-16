@@ -39,9 +39,9 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
         body_part = str(case.get("body_part") or "unknown")
         workflow1 = _read_workflow1(root, str(case.get("workflow1_output") or ""))
         legacy_reference_assisted = str(workflow1.get("schema_version") or "") != "2.0"
-        reports = list(workflow1.get("generated_reports") or [])
-        rankings = list(workflow1.get("rankings") or [])
-        pairwise = list(workflow1.get("pairwise_comparisons") or [])
+        reports = _object_list(workflow1.get("generated_reports"), "generated_reports")
+        rankings = _object_list(workflow1.get("rankings"), "rankings")
+        pairwise = _object_list(workflow1.get("pairwise_comparisons"), "pairwise_comparisons")
         ranking_count += len(rankings)
         pairwise_count += len(pairwise)
         generated_report_count += len(reports)
@@ -306,6 +306,14 @@ def _first_present(*values: Any) -> Any:
 def _strict_nonnegative_int(value: Any, label: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
+def _object_list(value: Any, label: str) -> list[dict[str, Any]]:
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"{label} must be a list of objects")
     return value
 
 

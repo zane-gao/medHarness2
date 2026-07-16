@@ -250,3 +250,15 @@ def _write_json(path: Path, payload: dict) -> None:
 def _read_csv(path: Path) -> list[dict[str, str]]:
     with path.open("r", encoding="utf-8", newline="") as f:
         return list(csv.DictReader(f))
+
+@pytest.mark.parametrize("field", ["generated_reports", "rankings", "pairwise_comparisons"])
+@pytest.mark.parametrize("bad", ["bad", {"x": 1}, ["bad-item"]])
+def test_analyze_run_rejects_malformed_workflow1_object_lists(tmp_path: Path, field, bad):
+    run_dir = _write_run(tmp_path / "run")
+    workflow1_path = run_dir / "workflow2_cases" / "case1.json"
+    workflow1 = json.loads(workflow1_path.read_text(encoding="utf-8"))
+    workflow1[field] = bad
+    workflow1_path.write_text(json.dumps(workflow1), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=field):
+        analyze_run(run_dir, tmp_path / "analysis")
