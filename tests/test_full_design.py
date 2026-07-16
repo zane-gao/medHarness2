@@ -245,6 +245,12 @@ def test_holm_treats_non_finite_p_values_as_non_significant():
     assert corrected["valid"] == pytest.approx(0.02)
 
 
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+def test_percentile_rank_ignores_non_finite_values(bad_value):
+    assert percentile_rank(0.5, [0.0, bad_value, 1.0]) == pytest.approx(50.0)
+    assert percentile_rank(bad_value, [0.0, 1.0]) == 0.0
+
+
 def test_workflow_mean_scores_use_same_likert_normalization():
     rows = [{"likert_mean": 1.0}, {"likert_mean": 5.0}]
     expected = pytest.approx(0.5)

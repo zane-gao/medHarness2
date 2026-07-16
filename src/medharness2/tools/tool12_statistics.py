@@ -45,11 +45,14 @@ def calculate_statistics(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]
 
 
 def percentile_rank(value: float, population: list[float]) -> float:
-    if not population:
+    if not _is_finite_number(value):
         return 0.0
-    below = sum(1 for item in population if item < value)
-    equal = sum(1 for item in population if item == value)
-    return round(100.0 * (below + 0.5 * equal) / len(population), 6)
+    finite_population = [float(item) for item in population if _is_finite_number(item)]
+    if not finite_population:
+        return 0.0
+    below = sum(1 for item in finite_population if item < value)
+    equal = sum(1 for item in finite_population if item == value)
+    return round(100.0 * (below + 0.5 * equal) / len(finite_population), 6)
 
 
 def _numeric_metrics(row: dict[str, Any]) -> dict[str, float]:
