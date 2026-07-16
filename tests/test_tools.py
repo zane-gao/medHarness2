@@ -1100,6 +1100,12 @@ def test_tool4_rejects_invalid_max_retries_without_coercion(bad):
 
 
 @pytest.mark.parametrize("bad", [True, 1.5, "2", 0, -1])
+def test_tool4_validates_max_retries_before_empty_candidate_fast_path(bad):
+    with pytest.raises(ValueError, match="max_retries"):
+        evaluate_hazards([], llm_client=build_mock_client(), max_retries=bad)
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, "2", 0, -1])
 def test_tool4_rejects_invalid_consistency_runs_without_coercion(bad):
     primary = evaluate_hazards([{"error_type": "false_finding"}], llm_client=build_mock_client())
     with pytest.raises(ValueError, match="consistency_runs"):
@@ -1652,6 +1658,29 @@ def test_tool4_third_adjudicator_resolves_disagreement_and_hash_binds_inputs():
     assert validated.primary_preserved is True
     assert validated.reviewer_preserved is True
     assert validated.clinical_validation_required is True
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, "2", 0, -1])
+def test_tool4_third_adjudicator_rejects_invalid_max_retries(bad):
+    candidates = [{"error_type": "omission_finding", "observation": "nodule"}]
+    primary = evaluate_hazards(candidates, llm_client=build_mock_client())
+    review = review_hazards(
+        primary,
+        candidates,
+        llm_client=build_mock_client(),
+        require_llm=False,
+        allow_fallback=True,
+    )
+    with pytest.raises(ValueError, match="max_retries"):
+        adjudicate_hazard_disagreements(
+            primary,
+            review,
+            candidates,
+            llm_client=build_mock_client(),
+            max_retries=bad,
+            require_llm=False,
+            allow_fallback=True,
+        )
 
 
 def test_tool4_strict_mode_raises_instead_of_using_template_fallback():

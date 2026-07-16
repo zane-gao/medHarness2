@@ -63,6 +63,7 @@ def evaluate_hazards(
     allow_fallback: bool = True,
 ) -> dict[str, Any]:
     options = dict(judge_options or {})
+    max_retries = _strict_positive_int(max_retries, "max_retries")
     deterministic = {"errors": [_default_error(error) for error in error_candidates]}
     if not error_candidates and not require_llm:
         return _result(
@@ -75,7 +76,7 @@ def evaluate_hazards(
         raise LLMClientError("Tool 4 strict mode requires a non-mock provider")
     judge_backend = "mock_judge" if provider == "mock" else "llm_judge"
     judge_errors: list[str] = []
-    attempts = _strict_positive_int(max_retries, "max_retries")
+    attempts = max_retries
     judge_candidates = ExternalPayloadPolicy().sanitize_hazard_candidates(
         [_minimal_judge_candidate(candidate) for candidate in error_candidates]
     )
@@ -292,6 +293,7 @@ def adjudicate_hazard_disagreements(
     require_llm: bool = True,
     allow_fallback: bool = False,
 ) -> dict[str, Any]:
+    max_retries = _strict_positive_int(max_retries, "max_retries")
     primary = HazardResult.model_validate(primary_result)
     review = HazardReviewArtifact.model_validate(hazard_review)
     primary_json = primary.model_dump(mode="json")
@@ -336,7 +338,7 @@ def adjudicate_hazard_disagreements(
         )
 
     errors: list[str] = []
-    attempts = max(1, int(max_retries))
+    attempts = max_retries
     response: _HazardAdjudicationResponse | None = None
     used_fallback = False
     for attempt in range(attempts):
