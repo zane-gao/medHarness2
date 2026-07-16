@@ -205,11 +205,23 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
         for row in sorted(modality_rows.values(), key=lambda item: (str(item["modality"]), str(item["body_part"])))
     ]
     reader_summary_rows = _reader_rows(workflow2, workflow3)
+    source_case_count = int(
+        workflow2.get("denominator", {}).get("manifest_case_count")
+        or workflow2.get("denominator", {}).get("source_case_count")
+        or workflow2.get("case_count", 0)
+        or 0
+    )
+    successful_case_count = int(workflow2.get("case_count", 0) or len(case_rows))
+    failed_case_count = int(workflow2.get("failed_case_count", 0) or 0)
     result = {
         "output_dir": str(root),
         "analysis_dir": str(out),
         "case_count": int(workflow2.get("case_count", 0) or len(case_rows)),
-        "failed_case_count": int(workflow2.get("failed_case_count", 0) or 0),
+        "failed_case_count": failed_case_count,
+        "source_case_count": source_case_count,
+        "successful_case_count": successful_case_count,
+        "success_rate": round(successful_case_count / max(source_case_count, 1), 4),
+        "failure_rate": round(failed_case_count / max(source_case_count, 1), 4),
         "reader_count": int(workflow3.get("reader_count", 0) or len(reader_summary_rows)),
         "generated_report_count": generated_report_count,
         "ranking_count": ranking_count,
@@ -287,6 +299,9 @@ def _render_markdown(result: dict[str, Any], model_rows: list[dict[str, Any]], m
         "",
         f"- Cases: {result['case_count']}",
         f"- Failed cases: {result['failed_case_count']}",
+        f"- Source cases: {result['source_case_count']}",
+        f"- Success rate: {result['success_rate']:.4f}",
+        f"- Failure rate: {result['failure_rate']:.4f}",
         f"- Readers: {result['reader_count']}",
         f"- Generated reports: {result['generated_report_count']}",
         f"- Rankings: {result['ranking_count']}",

@@ -15,6 +15,10 @@ def test_analyze_run_writes_csv_and_markdown_outputs(tmp_path: Path):
     result = analyze_run(run_dir, analysis_dir)
 
     assert result["case_count"] == 2
+    assert result["source_case_count"] == 2
+    assert result["successful_case_count"] == 2
+    assert result["success_rate"] == 1.0
+    assert result["failure_rate"] == 0.0
     assert result["generated_report_count"] == 3
     assert result["quality_gate_failed_count"] == 1
     assert result["generated_report_evidence_tier_counts"] == {
