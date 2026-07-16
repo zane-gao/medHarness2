@@ -474,14 +474,27 @@ def _ocr_pages_have_quality_blockers(meta: dict[str, Any]) -> bool:
     for page in pages:
         if not isinstance(page, dict):
             return True
-        if not page.get("skipped") and int(page.get("char_count") or 0) <= 0:
-            return True
+        if not page.get("skipped"):
+            char_count = page.get("char_count")
+            if (
+                not isinstance(char_count, int)
+                or isinstance(char_count, bool)
+                or char_count <= 0
+            ):
+                return True
     source_count = meta.get("source_page_count")
     retained_count = meta.get("retained_page_count", meta.get("page_count"))
     if source_count is not None and retained_count is not None:
         try:
-            if int(retained_count) > int(source_count) or int(retained_count) != sum(
-                1 for page in pages if not page.get("skipped")
+            if (
+                not isinstance(source_count, int)
+                or isinstance(source_count, bool)
+                or not isinstance(retained_count, int)
+                or isinstance(retained_count, bool)
+                or source_count < 0
+                or retained_count < 0
+                or retained_count > source_count
+                or retained_count != sum(1 for page in pages if not page.get("skipped"))
             ):
                 return True
         except (TypeError, ValueError):

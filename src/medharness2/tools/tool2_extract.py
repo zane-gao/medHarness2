@@ -22,6 +22,14 @@ from medharness2.utils.io import parse_json_object
 MAX_EXTRACTION_REPORT_CHARS = 12_000
 
 
+def _template_count_or_zero(value: Any) -> int:
+    if value is None:
+        return 0
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError("total_template_items must be a non-negative integer")
+    return value
+
+
 class _LLMFinding(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -313,7 +321,7 @@ def _build_graph(
         )
 
     template_coverage = dict(candidate.get("template_coverage") or {})
-    total_template_items = int(template_coverage.get("total_template_items") or 0)
+    total_template_items = _template_count_or_zero(template_coverage.get("total_template_items"))
     coverage = min(1.0, len(findings) / max(total_template_items, 1)) if findings else 0.0
     template_coverage.update(
         {

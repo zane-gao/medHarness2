@@ -7,7 +7,14 @@ from pathlib import Path
 import pytest
 
 from medharness2.contracts import HazardResult
-from medharness2.validation.sample_run import validate_sample_run
+from medharness2.validation.sample_run import _ocr_pages_have_quality_blockers, validate_sample_run
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
+def test_ocr_quality_gate_rejects_invalid_page_char_count(bad):
+    assert _ocr_pages_have_quality_blockers(
+        {"pages": [{"skipped": False, "char_count": bad}]}
+    ) is True
 
 
 def test_validate_sample_run_passes_complete_mock_run(tmp_path: Path):

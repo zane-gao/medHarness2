@@ -16,7 +16,7 @@ from medharness2.contracts import (
 )
 from medharness2.llm_client import LLMClientError, build_mock_client
 from medharness2.tools.tool1_likert import _judge_prompt, evaluate_likert, likert_mean
-from medharness2.tools.tool2_extract import _extraction_prompt, extract_findings
+from medharness2.tools.tool2_extract import _extraction_prompt, _template_count_or_zero, extract_findings
 from medharness2.tools.tool3_structure import check_structure, section_order
 from medharness2.tools.tool4_hazard import (
     adjudicate_hazard_disagreements,
@@ -207,6 +207,12 @@ def test_tool2_placeholder_extracts_schema_valid_graph():
     assert graph["backend"] == "placeholder"
     assert graph["findings"][0]["observation_code"] == "opacity"
     assert graph["findings"][0]["measurements"][0]["normalized_mm"] == 12.0
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
+def test_tool2_template_count_rejects_invalid_values(bad):
+    with pytest.raises(ValueError, match="total_template_items"):
+        _template_count_or_zero(bad)
 
 
 def test_tool2_cxr_rule_extracts_chinese_cxr_findings():
