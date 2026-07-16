@@ -1,0 +1,65 @@
+{
+  "additionalProperties": true,
+  "properties": {
+    "cases": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Cases",
+      "type": "array"
+    },
+    "case_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Case Count"
+    },
+    "overall_score": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Overall Score"
+    },
+    "human_metrics": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Human Metrics",
+      "type": "array"
+    },
+    "modelwise_metrics": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Modelwise Metrics",
+      "type": "array"
+    },
+    "human_statistics": {
+      "additionalProperties": true,
+      "title": "Human Statistics",
+      "type": "object"
+    },
+    "modelwise_statistics": {
+      "additionalProperties": true,
+      "title": "Modelwise Statistics",
+      "type": "object"
+    }
+  },
+  "title": "ReaderAggregate",
+  "type": "object"
+}

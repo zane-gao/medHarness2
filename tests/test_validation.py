@@ -148,6 +148,26 @@ def test_validate_sample_run_accepts_subset_workflow_without_summary(tmp_path: P
     assert result["summary"]["case_count"] == 2
 
 
+def test_validate_sample_run_rejects_malformed_aggregate_reader_payload(tmp_path: Path):
+    _write_manifest(tmp_path / "manifest.jsonl", 1, with_report_text=True)
+    _write_json(tmp_path / "workflow2.json", {
+        "case_count": 1,
+        "failed_case_count": 0,
+        "per_reader": {"r": {"case_count": "not-an-int"}},
+    })
+    _write_json(tmp_path / "workflow3.json", {
+        "case_count": 1,
+        "reader_count": 1,
+        "reader_percentiles": {"r": {"percentile": 101}},
+    })
+
+    result = validate_sample_run(tmp_path, expected_cases=1)
+
+    assert result["passed"] is False
+    assert "workflow2_aggregate:ValidationError" in result["errors"]
+    assert "workflow3_aggregate:ValidationError" in result["errors"]
+
+
 def test_validate_sample_run_rejects_invalid_nested_case_artifact_contract(tmp_path: Path):
     _write_run(tmp_path, warning_counts={}, failed_case_count=1)
     _write_json(

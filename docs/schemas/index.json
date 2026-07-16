@@ -1,6 +1,7 @@
 {
   "schema_version": "2.0",
   "schemas": {
+    "denominator_aggregate": "denominator_aggregate.schema.json",
     "artifact_reference": "artifact_reference.schema.json",
     "alignment_audit": "alignment_audit.schema.json",
     "case_evaluation": "case_evaluation.schema.json",
@@ -10,6 +11,10 @@
     "hazard_result": "hazard_result.schema.json",
     "hazard_review": "hazard_review.schema.json",
     "structure_audit": "structure_audit.schema.json",
-    "run_manifest": "run_manifest.schema.json"
+    "run_manifest": "run_manifest.schema.json",
+    "reader_aggregate": "reader_aggregate.schema.json",
+    "reader_percentile": "reader_percentile.schema.json",
+    "workflow2_aggregate": "workflow2_aggregate.schema.json",
+    "workflow3_aggregate": "workflow3_aggregate.schema.json"
   }
 }

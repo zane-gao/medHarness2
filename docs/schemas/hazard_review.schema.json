@@ -436,6 +436,11 @@
     "reviewer_result": {
       "$ref": "#/$defs/HazardResult"
     },
+    "reviewer_consistency": {
+      "additionalProperties": true,
+      "title": "Reviewer Consistency",
+      "type": "object"
+    },
     "disagreements": {
       "items": {
         "$ref": "#/$defs/HazardDisagreement"

@@ -5,6 +5,13 @@ from pathlib import Path
 from typing import Any
 
 from medharness2.contracts.case import CaseEvaluationArtifact
+from medharness2.contracts.aggregate import (
+    DenominatorAggregate,
+    ReaderAggregate,
+    ReaderPercentile,
+    Workflow2Aggregate,
+    Workflow3Aggregate,
+)
 from medharness2.contracts.common import SCHEMA_VERSION, ArtifactReference
 from medharness2.contracts.evaluation import (
     AlignmentAuditArtifact,
@@ -19,6 +26,7 @@ from medharness2.contracts.run import RunManifest
 
 
 SCHEMA_MODELS = {
+    "denominator_aggregate": DenominatorAggregate,
     "artifact_reference": ArtifactReference,
     "alignment_audit": AlignmentAuditArtifact,
     "case_evaluation": CaseEvaluationArtifact,
@@ -29,6 +37,10 @@ SCHEMA_MODELS = {
     "hazard_review": HazardReviewArtifact,
     "structure_audit": StructureAuditArtifact,
     "run_manifest": RunManifest,
+    "reader_aggregate": ReaderAggregate,
+    "reader_percentile": ReaderPercentile,
+    "workflow2_aggregate": Workflow2Aggregate,
+    "workflow3_aggregate": Workflow3Aggregate,
 }
 
 

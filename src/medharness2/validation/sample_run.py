@@ -14,6 +14,8 @@ from medharness2.contracts import (
     HazardResult,
     HazardReviewArtifact,
     StructureAuditArtifact,
+    Workflow2Aggregate,
+    Workflow3Aggregate,
 )
 from medharness2.ocr import REAL_OCR_PROVIDERS
 
@@ -37,6 +39,10 @@ def validate_sample_run(
         summary = _summary_from_manifest(manifest_rows)
     workflow2 = _read_json(root / "workflow2.json", errors, "workflow2") if require_workflows else {}
     workflow3 = _read_json(root / "workflow3.json", errors, "workflow3") if require_workflows else {}
+    if workflow2:
+        _validate_contract(Workflow2Aggregate, workflow2, "workflow2_aggregate", errors)
+    if workflow3:
+        _validate_contract(Workflow3Aggregate, workflow3, "workflow3_aggregate", errors)
 
     case_count = int(summary.get("case_count") or len(manifest_rows) or 0)
     if expected_cases is not None and case_count != expected_cases:

@@ -1,4 +1,11 @@
 from medharness2.contracts.case import CaseEvaluationArtifact
+from medharness2.contracts.aggregate import (
+    DenominatorAggregate,
+    ReaderAggregate,
+    ReaderPercentile,
+    Workflow2Aggregate,
+    Workflow3Aggregate,
+)
 from medharness2.contracts.common import (
     SCHEMA_VERSION,
     ArtifactReference,
@@ -34,6 +41,7 @@ from medharness2.contracts.run import RunManifest
 
 __all__ = [
     "SCHEMA_VERSION",
+    "DenominatorAggregate",
     "ArtifactReference",
     "AlignmentAuditArtifact",
     "AlignmentErrorJudgement",
@@ -54,7 +62,11 @@ __all__ = [
     "Measurement",
     "ModelProvenance",
     "RunManifest",
+    "ReaderAggregate",
+    "ReaderPercentile",
     "TextSpan",
+    "Workflow2Aggregate",
+    "Workflow3Aggregate",
     "export_json_schemas",
     "infer_evidence_tier",
     "migrate_case_evaluation_v1",

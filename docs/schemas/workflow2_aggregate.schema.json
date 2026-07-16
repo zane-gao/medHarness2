@@ -1,0 +1,204 @@
+{
+  "$defs": {
+    "DenominatorAggregate": {
+      "additionalProperties": true,
+      "properties": {
+        "source_case_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Case Count"
+        },
+        "manifest_case_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manifest Case Count"
+        },
+        "successful_case_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Successful Case Count"
+        },
+        "failed_case_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failed Case Count"
+        },
+        "success_rate": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Success Rate"
+        },
+        "failure_rate": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Rate"
+        }
+      },
+      "title": "DenominatorAggregate",
+      "type": "object"
+    },
+    "ReaderAggregate": {
+      "additionalProperties": true,
+      "properties": {
+        "cases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Cases",
+          "type": "array"
+        },
+        "case_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Case Count"
+        },
+        "overall_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Overall Score"
+        },
+        "human_metrics": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Human Metrics",
+          "type": "array"
+        },
+        "modelwise_metrics": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Modelwise Metrics",
+          "type": "array"
+        },
+        "human_statistics": {
+          "additionalProperties": true,
+          "title": "Human Statistics",
+          "type": "object"
+        },
+        "modelwise_statistics": {
+          "additionalProperties": true,
+          "title": "Modelwise Statistics",
+          "type": "object"
+        }
+      },
+      "title": "ReaderAggregate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "case_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Case Count",
+      "type": "integer"
+    },
+    "failed_case_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Failed Case Count",
+      "type": "integer"
+    },
+    "cases": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Cases",
+      "type": "array"
+    },
+    "failed_cases": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Failed Cases",
+      "type": "array"
+    },
+    "per_reader": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ReaderAggregate"
+      },
+      "title": "Per Reader",
+      "type": "object"
+    },
+    "denominator": {
+      "$ref": "#/$defs/DenominatorAggregate"
+    },
+    "statistics": {
+      "additionalProperties": true,
+      "title": "Statistics",
+      "type": "object"
+    }
+  },
+  "title": "Workflow2Aggregate",
+  "type": "object"
+}

@@ -1,0 +1,187 @@
+{
+  "$defs": {
+    "DenominatorAggregate": {
+      "additionalProperties": true,
+      "properties": {
+        "source_case_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Case Count"
+        },
+        "manifest_case_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Manifest Case Count"
+        },
+        "successful_case_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Successful Case Count"
+        },
+        "failed_case_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failed Case Count"
+        },
+        "success_rate": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Success Rate"
+        },
+        "failure_rate": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Rate"
+        }
+      },
+      "title": "DenominatorAggregate",
+      "type": "object"
+    },
+    "ReaderPercentile": {
+      "additionalProperties": true,
+      "properties": {
+        "overall_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Overall Score"
+        },
+        "percentile": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Percentile"
+        },
+        "case_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Case Count"
+        }
+      },
+      "title": "ReaderPercentile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "case_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Case Count",
+      "type": "integer"
+    },
+    "failed_case_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Failed Case Count",
+      "type": "integer"
+    },
+    "reader_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reader Count"
+    },
+    "reader_percentiles": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ReaderPercentile"
+      },
+      "title": "Reader Percentiles",
+      "type": "object"
+    },
+    "denominator": {
+      "$ref": "#/$defs/DenominatorAggregate"
+    },
+    "statistics": {
+      "additionalProperties": true,
+      "title": "Statistics",
+      "type": "object"
+    },
+    "comparisons": {
+      "additionalProperties": true,
+      "title": "Comparisons",
+      "type": "object"
+    }
+  },
+  "title": "Workflow3Aggregate",
+  "type": "object"
+}

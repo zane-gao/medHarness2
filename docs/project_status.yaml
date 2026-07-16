@@ -7,7 +7,7 @@ baseline:
   branch: main
   git_sha: 5dc2cd1
   dirty_worktree: true
-  pytest_passed: 422
+  pytest_passed: 423
   pytest_warnings: 18
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -56,14 +56,14 @@ baseline:
 workstreams:
   contracts:
     status: validated
-    summary: Versioned v2 case, finding, generated-report, hazard, run, and optional audit contracts are enforced recursively; audit hashes are bound to deterministic primary artifacts, and the 52-case v1 migration path is directly validatable.
+    summary: Versioned v2 case, finding, generated-report, hazard, run, optional audit, and workflow2/workflow3 aggregate contracts are enforced; aggregate boundaries retain additive compatibility while rejecting malformed reader, denominator, percentile, and count fields. Audit hashes remain bound to deterministic primary artifacts, and the 52-case v1 migration path is directly validatable.
     evidence_paths:
       - docs/schemas/index.json
       - outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710/run_summary.json
       - src/medharness2/contracts/migrations.py
       - tests/contracts/test_migrations.py
       - tests/test_validation.py
-    next_gate: Add typed contracts for remaining workflow2/workflow3 aggregate payloads and validate a frozen run with nonzero T4/T5/T6 audit artifacts.
+    next_gate: Validate a frozen run with nonzero T4/T5/T6 audit artifacts and add contract coverage for any newly introduced aggregate fields.
   tools:
     status: in_progress
     summary: T1 uses a strict real LLM judge; T2/T4 use deterministic templates plus LLM judgement; T5/T6 preserve deterministic primary results and emit hash-linked LLM audit artifacts. Hazard reviewer now supports configuration-driven consistency re-runs with contract-bound provenance while preserving the first reviewer result. A pure-DMX 11-case run passed 11/11 with 99 verified role artifacts and zero fallback after fixing the T5 suggested-error-type prompt/schema mismatch. Test-retest instability remains material, so clinical gold-set calibration and repeated-run reliability validation are outstanding.
