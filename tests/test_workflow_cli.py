@@ -673,6 +673,31 @@ def test_single_case_preserves_legacy_fourth_positional_report_text(tmp_path: Pa
     assert "Positional report text" in payload["human_evaluation"]["finding_graph"]["findings"][0]["source_text"]
 
 
+def test_single_case_keyword_case_id_is_preserved_without_changing_legacy_positionals(tmp_path: Path):
+    report = tmp_path / "human.txt"
+    image = tmp_path / "dummy.dcm"
+    output = tmp_path / "result.json"
+    report.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal.", encoding="utf-8")
+    image.write_text("dummy", encoding="utf-8")
+
+    result = run_single_case(
+        report,
+        image,
+        output,
+        case_id="explicit-case-id",
+        modality="cxr",
+        top_n=1,
+        llm_client=build_mock_client(),
+        config=load_config(),
+    )
+
+    assert result["case_id"] == "explicit-case-id"
+    assert result["input"]["case_id"] == "explicit-case-id"
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["case_id"] == "explicit-case-id"
+    assert payload["input"]["case_id"] == "explicit-case-id"
+
+
 def test_cli_single_case(tmp_path: Path):
     report = tmp_path / "human.txt"
     image = tmp_path / "dummy.dcm"

@@ -63,6 +63,7 @@ class ExternalPayloadPolicy:
         self.config = config or PrivacyConfig()
 
     def scan(self, payload: str) -> PrivacyScanResult:
+        payload = _mask_opaque_provenance_fields(payload)
         findings: list[PrivacyFinding] = []
         for category, pattern_name, pattern in _PATTERNS:
             if pattern.search(payload):
@@ -120,3 +121,22 @@ def _clinical_sections_only(text: str) -> str:
         re.I,
     )
     return clinical[: end.start()] if end else clinical
+
+
+def _mask_opaque_provenance_fields(payload: str) -> str:
+    """Keep opaque cryptographic metadata out of clinical PII regex matching.
+
+    Hashes are not clinical text, but a 64-character hex digest can contain
+    digit runs that resemble phone or national-ID patterns.  Only structured
+    JSON metadata is masked; arbitrary text remains fully scanned.
+    """
+    try:
+        data = json.loads(payload)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return payload
+    if not isinstance(data, dict):
+        return payload
+    for key in ("source_case_sha256",):
+        if key in data:
+            data[key] = "<opaque_provenance_hash>"
+    return json.dumps(data, ensure_ascii=False, sort_keys=True)

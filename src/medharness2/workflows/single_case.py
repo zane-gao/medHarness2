@@ -143,11 +143,13 @@ def run_single_case(
                 "selected_evaluation": evaluation,
             }
         )
+    resolved_case_id = str(case_id or Path(output_path).stem)
     result = {
         "schema_version": "2.0",
         "artifact_type": "case_evaluation",
-        "case_id": Path(output_path).stem,
+        "case_id": resolved_case_id,
         "input": {
+            "case_id": resolved_case_id,
             "report_path": str(report_path) if report_path is not None else None,
             "image_path": image,
             "modality": modality_key,

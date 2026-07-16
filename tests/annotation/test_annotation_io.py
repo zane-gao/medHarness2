@@ -89,6 +89,18 @@ def test_build_pilot_annotation_package_is_blinded_valid_and_deidentified(tmp_pa
         assert set(case.annotations) == {"reader_a", "reader_b", "adjudication"}
 
 
+def test_pilot_privacy_scan_ignores_cryptographic_provenance_hash(tmp_path: Path, monkeypatch):
+    run_dir = _write_run(tmp_path / "run")
+    monkeypatch.setattr(
+        "medharness2.annotation.pilot._source_case_sha256",
+        lambda payload: "123456789012345678" + "a" * 46,
+    )
+
+    result = build_pilot_annotation_package(run_dir, tmp_path / "pilot10", limit=1)
+
+    assert result["case_count"] == 1
+
+
 def test_annotation_schema_is_exported_with_package(tmp_path: Path):
     run_dir = _write_run(tmp_path / "run")
     output_dir = tmp_path / "pilot10"

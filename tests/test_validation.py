@@ -168,6 +168,37 @@ def test_validate_sample_run_rejects_malformed_aggregate_reader_payload(tmp_path
     assert "workflow3_aggregate:ValidationError" in result["errors"]
 
 
+def test_validate_sample_run_accepts_reader_total_count_above_statistical_count(tmp_path: Path):
+    _write_manifest(tmp_path / "manifest.jsonl", 1, with_report_text=True)
+    _write_json(tmp_path / "workflow2.json", {"case_count": 1, "failed_case_count": 0})
+    _write_json(tmp_path / "workflow3.json", {
+        "case_count": 1,
+        "reader_total_count": 2,
+        "reader_count": 1,
+        "reader_percentiles": {"eligible": {"overall_score": 0.8, "percentile": 100}},
+    })
+
+    result = validate_sample_run(tmp_path, expected_cases=1)
+
+    assert result["passed"] is True
+
+
+def test_validate_sample_run_rejects_reader_total_count_below_percentile_count(tmp_path: Path):
+    _write_manifest(tmp_path / "manifest.jsonl", 1, with_report_text=True)
+    _write_json(tmp_path / "workflow2.json", {"case_count": 1, "failed_case_count": 0})
+    _write_json(tmp_path / "workflow3.json", {
+        "case_count": 1,
+        "reader_total_count": 0,
+        "reader_count": 1,
+        "reader_percentiles": {"eligible": {"overall_score": 0.8, "percentile": 100}},
+    })
+
+    result = validate_sample_run(tmp_path, expected_cases=1)
+
+    assert result["passed"] is False
+    assert "workflow3_aggregate:ValidationError" in result["errors"]
+
+
 def test_validate_sample_run_rejects_inconsistent_aggregate_denominators(tmp_path: Path):
     _write_manifest(tmp_path / "manifest.jsonl", 2, with_report_text=True)
     _write_json(tmp_path / "workflow2.json", {

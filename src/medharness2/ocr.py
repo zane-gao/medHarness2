@@ -293,7 +293,7 @@ def _cache_is_compatible(
     # The cache filename is caller-controlled; bind the sidecar to the case as
     # well so a copied/renamed OCR artifact cannot cross case boundaries.
     cached_case_id = str(meta.get("case_id") or "")
-    if cached_case_id and cached_case_id != str(case_id):
+    if not cached_case_id or cached_case_id != str(case_id):
         return False
     method = str(meta.get("method") or "").lower()
     if method == "pdf_text_layer":

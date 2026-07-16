@@ -42,6 +42,8 @@
 > **2026-07-16 pilot 标识完整性增量**：validator 现在拒绝重复的 `candidate_id` 或 `blinded_model_id`，避免读者 hazard 归属和后续统计出现歧义。全量回归测试为 466 passed、18 warnings。
 > **2026-07-16 pilot provenance 增量**：`source_case_sha256` 现在对 canonical source case payload（稳定 JSON）计算，而不是只对病例 ID 计算；同一 ID 的源内容变化会产生新 hash，新增 source-drift 回归测试。全量回归测试为 467 passed、18 warnings。
 > **2026-07-16 reader 统计收尾增量**：batch/reevaluate/merge 的 reader 聚合继续过滤 fallback/mock 证据；Workflow3/API 额外保留完成 reader 总数与统计有效 reader 数，避免 mock 测试或失败证据被纳入均值时误报“没有 reader”。全量回归测试为 468 passed、18 warnings。
+> **2026-07-16 合约收尾增量**：`workflow3_aggregate` schema 现在显式包含 `reader_total_count`，并校验其不小于统计有效 reader 数；单病例入口同时保留显式 `case_id` 到产物与 input 的绑定，避免输出文件名意外覆盖病例身份。相关验证已补回归测试。
+> **2026-07-16 隐私/OCR 收尾增量**：annotation 候选文本继续统一走临床脱敏；结构化 `source_case_sha256` 由公共隐私扫描器作为不透明 provenance 元数据处理，避免哈希数字片段被误判为手机号/身份证；OCR sidecar 缺少 `case_id` 时不再复用缓存。全量回归测试为 473 passed、18 warnings。
 > **2026-07-16 reader provenance 增量**：reader `overall_score` 现在复用 Tool 12 的 fallback/mock provenance gate；全 fallback reader 返回 `null`，Workflow 3 记录 `excluded_readers`，不再把兜底结果或 0 分伪装成可比较的 reader 百分位。reader 等权 pooled mean 与 Tool 9 的 `0.4/0.3/0.3` 候选排名权重仍明确区分。
 > **2026-07-16 reader 计数增量**：department 输出的 `reader_count` 现在只统计有有效 `overall_score` 的 reader，并单独记录 `excluded_reader_count`，避免 reader 总数与 percentile/统计群体不一致。
 > **2026-07-16 兼容/标注安全增量**：恢复 `run_single_case` 历史第四个位置参数作为 `report_text` 的兼容语义；pilot 包重建在已有标注或无效包时拒绝删除旧病例文件；损坏 manifest 继续以 blocked 状态展示。全量回归测试为 443 passed、18 warnings。

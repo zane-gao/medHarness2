@@ -148,6 +148,19 @@
       "title": "Failed Case Count",
       "type": "integer"
     },
+    "reader_total_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reader Total Count"
+    },
     "reader_count": {
       "anyOf": [
         {

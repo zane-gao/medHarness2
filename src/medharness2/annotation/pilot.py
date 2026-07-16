@@ -65,7 +65,7 @@ def build_pilot_annotation_package(
         )
         filename = f"{pilot_case_id}.json"
         raw = annotation_case.model_dump_json(indent=2)
-        scan = policy.scan(raw)
+        scan = _scan_annotation_payload(raw, policy)
         if not scan.allowed:
             categories = ",".join(sorted({finding.category for finding in scan.findings}))
             raise ValueError(f"Annotation case failed privacy scan: {pilot_case_id}: {categories}")
@@ -373,6 +373,11 @@ def _source_case_sha256(payload: dict[str, Any]) -> str:
     """Bind annotation provenance to source case content without exposing its ID."""
     canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _scan_annotation_payload(raw: str, policy: ExternalPayloadPolicy):
+    """Backward-compatible wrapper for the shared structured payload scanner."""
+    return policy.scan(raw)
 
 
 def _package_readme(case_count: int) -> str:

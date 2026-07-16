@@ -95,6 +95,7 @@ class ReaderPercentile(AggregateCompatModel):
 class Workflow3Aggregate(AggregateCompatModel):
     case_count: int = Field(default=0, ge=0)
     failed_case_count: int = Field(default=0, ge=0)
+    reader_total_count: int | None = Field(default=None, ge=0)
     reader_count: int | None = Field(default=None, ge=0)
     reader_percentiles: dict[str, ReaderPercentile] = Field(default_factory=dict)
     denominator: DenominatorAggregate = Field(default_factory=DenominatorAggregate)
@@ -105,4 +106,8 @@ class Workflow3Aggregate(AggregateCompatModel):
     def validate_reader_count(self) -> "Workflow3Aggregate":
         if self.reader_count is not None and self.reader_percentiles and self.reader_count != len(self.reader_percentiles):
             raise ValueError("workflow3 reader_count must match reader_percentiles")
+        if self.reader_total_count is not None:
+            eligible_count = self.reader_count if self.reader_count is not None else len(self.reader_percentiles)
+            if self.reader_total_count < eligible_count:
+                raise ValueError("workflow3 reader_total_count cannot be below eligible reader count")
         return self

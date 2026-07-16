@@ -34,6 +34,7 @@ app = FastAPI(title="medHarness2 API", version="0.1.0")
 
 
 class SingleCaseRequest(BaseModel):
+    case_id: str | None = None
     report_text: str | None = None
     report_path: str | None = None
     image_path: str
@@ -233,6 +234,7 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
             report_path=report_path,
             image_path=Path(request.image_path),
             output_path=Path(request.output_path),
+            case_id=request.case_id,
             modality=request.modality,
             top_n=request.top_n,
             model_keys=request.model_keys,

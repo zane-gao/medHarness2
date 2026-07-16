@@ -137,6 +137,7 @@ Workflow (端到端 + 文件 I/O)
 - 当前 reader 汇总对每个有效的 normalized metric observation（Likert 使用 `(x-1)/4`，structure/coverage 保持 `[0,1]`）做等权 pooled mean；缺失指标只贡献实际观测，不补 0。
 - 汇总前复用 Tool 12 的 provenance gate：`fallback_used`、`mock`、`mock_judge`、`debug_fallback` 和明确的 fallback source 不进入 `overall_score`。若 reader 没有任何有效观测，`overall_score=null`，Workflow 3 将其列入 `excluded_readers`，不计算百分位。
 - 因此该分数用于当前工程的 reader 画像和审计，不应被解读为临床金标准或与模型 Top-N 排名同一口径；正式口径仍需冻结 metric contract 后再升级。
+- Workflow3 另外输出 `reader_total_count`，表示批次中出现且完成处理的 reader 总数；`reader_count` 仍表示有资格进入统计的 reader 数，二者允许不同但必须满足 `reader_total_count >= reader_count`。这样 mock/fallback 或缺失分数 reader 被排除统计时，API 与前端仍能准确反映批次处理范围。
 
 ### 质量门控 · `tools/quality_gate.py`（设计稿外的工程增强）
 

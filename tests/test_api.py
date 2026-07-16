@@ -52,6 +52,45 @@ def test_api_single_case_accepts_report_text(tmp_path: Path):
     assert payload["generated_reports"][0]["metadata"]["quality_gate"]["passed"] is False
 
 
+def test_api_single_case_preserves_explicit_case_id(tmp_path: Path):
+    config_path = tmp_path / "api_config.yaml"
+    config_path.write_text(
+        "\n".join(
+            [
+                "llm:",
+                "  provider: mock",
+                "extractor:",
+                "  backend: placeholder",
+                "generator:",
+                "  cloud_fallback_enabled: true",
+                "  default_models: []",
+                "  local_models: []",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    output_path = tmp_path / "api_result.json"
+    response = TestClient(app).post(
+        "/workflow/single-case",
+        json={
+            "case_id": "api-case-id",
+            "report_text": "FINDINGS: No pneumothorax. IMPRESSION: Normal.",
+            "image_path": "tests/fixtures/dummy.dcm",
+            "output_path": str(output_path),
+            "modality": "cxr",
+            "top_n": 1,
+            "config_path": str(config_path),
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["result"]["case_id"] == "api-case-id"
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["case_id"] == "api-case-id"
+    assert payload["input"]["case_id"] == "api-case-id"
+
+
 def test_api_single_case_requires_report_text_or_path(tmp_path: Path):
     client = TestClient(app)
     response = client.post(
