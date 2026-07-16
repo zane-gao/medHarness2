@@ -59,6 +59,7 @@ def extract_report_text(
     cache_path = out_dir / f"{case_id}.txt"
     meta_path = out_dir / f"{case_id}.ocr.json"
     source_pdf_sha256 = _sha256(pdf)
+    source_page_count = _pdf_page_count(pdf)
     if cache_path.exists() and cache_path.read_text(encoding="utf-8").strip() and not force:
         cached_meta = _read_meta(meta_path)
         if _cache_is_compatible(
@@ -120,15 +121,16 @@ def extract_report_text(
                     continue
                 retained_rendered_pages.append(image_path)
                 retained_page_indices.append(page_index)
-                page_text = str(
-                    client.call(
-                        prompt,
-                        image_path=image_path,
-                        response_format="text",
-                        payload_classification="raw_medical_document",
-                        **primary_options,
-                    )
-                ).strip()
+                raw_page_text = client.call(
+                    prompt,
+                    image_path=image_path,
+                    response_format="text",
+                    payload_classification="raw_medical_document",
+                    **primary_options,
+                )
+                page_text = raw_page_text.strip() if isinstance(raw_page_text, str) else ""
+                if not page_text:
+                    warnings.append(f"ocr_empty_page_response:page_{page_index}")
                 page_results.append(page_text)
                 page_meta.append(
                     {
@@ -165,6 +167,8 @@ def extract_report_text(
                         )
                         try:
                             audit = json.loads(str(raw_audit))
+                            if not isinstance(audit, dict):
+                                raise TypeError("verifier response must be a JSON object")
                         except json.JSONDecodeError:
                             audit = {"status": "invalid_verifier_response", "raw": str(raw_audit)[:500]}
                             warnings.append(f"ocr_verifier_invalid_response:page_{page_index}")
@@ -186,10 +190,10 @@ def extract_report_text(
         provider = primary_provider
         if not text:
             warnings.append("empty_vlm_ocr_result")
-        page_count = len(page_results)
+        retained_page_count = len(page_results)
     if method == "pdf_text_layer":
         page_meta = []
-        page_count = 0
+        retained_page_count = 0
     cache_path.write_text(text + ("\n" if text and not text.endswith("\n") else ""), encoding="utf-8")
     meta_path.write_text(
         json.dumps(
@@ -207,7 +211,12 @@ def extract_report_text(
                 },
                 "source_pdf": str(pdf),
                 "warnings": warnings,
-                "page_count": page_count,
+                # ``page_count`` is retained for compatibility and means the
+                # number of pages sent through page-level OCR.  The explicit
+                # fields remove the old ambiguity for downstream audits.
+                "page_count": retained_page_count,
+                "source_page_count": source_page_count,
+                "retained_page_count": retained_page_count,
                 "pages": page_meta,
                 "source_pdf_sha256": source_pdf_sha256,
                 "prompt_version": "ocr-page-v2",
@@ -265,7 +274,7 @@ def _cache_is_compatible(
     # Legacy/default OCR caches predate configurable role model routing.  Keep
     # them reusable when the provider and source hash are still trustworthy;
     # role-specific caches remain strict about the selected model.
-    if role != "default" and cached_model != model:
+    if cached_model != model and not (role == "default" and str(meta.get("role") or "") == "default"):
         return False
     if str(meta.get("role") or "") != role:
         return False
@@ -310,6 +319,18 @@ def _sha256(path: Path) -> str:
 
 def _text_sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _pdf_page_count(pdf: Path) -> int:
+    try:
+        import fitz
+    except Exception:
+        return 0
+    try:
+        with fitz.open(pdf) as document:
+            return len(document)
+    except Exception:
+        return 0
 
 
 def _image_ink_ratio(path: Path) -> float:

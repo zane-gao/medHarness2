@@ -37,11 +37,14 @@ def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) 
                 continue
             rows.append({"case_id": case_id, "model": str(model), **_metrics(gold, text)})
     summary = _aggregate(rows)
+    coverage_blockers = _coverage_blockers(rows)
+    duplicate_blockers = _duplicate_blockers(rows)
+    all_blockers = [*blocked, *coverage_blockers, *duplicate_blockers]
     status = (
         "blocked"
-        if not manifest or (not rows and blocked)
+        if not manifest or (not rows and all_blockers)
         else "completed_with_blockers"
-        if blocked
+        if all_blockers
         else "succeeded"
     )
     result = {
@@ -51,10 +54,10 @@ def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) 
         "manifest": str(manifest_path),
         "case_count": len(manifest),
         "evaluated_count": len(rows),
-        "blocked_items": blocked,
+        "blocked_items": all_blockers,
         "metrics": rows,
         "by_model": summary,
-        "selection": _selection(summary) if not blocked else {"status": "blocked", "reason": "missing_gold_or_candidate_artifacts"},
+        "selection": _selection(summary, blockers=all_blockers),
     }
     write_json(output_path, result)
     return result
@@ -90,11 +93,47 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return result
 
 
-def _selection(summary: dict[str, dict[str, Any]]) -> dict[str, Any]:
+def _selection(summary: dict[str, dict[str, Any]], *, blockers: list[str] | None = None) -> dict[str, Any]:
+    if blockers:
+        if any(not item.startswith(("coverage:", "duplicate:")) for item in blockers):
+            reason = "missing_gold_or_candidate_artifacts"
+        elif any(item.startswith("coverage:") for item in blockers):
+            reason = "unequal_candidate_coverage"
+        elif any(item.startswith("duplicate:") for item in blockers):
+            reason = "duplicate_case_model_rows"
+        else:
+            reason = "missing_gold_or_candidate_artifacts"
+        return {"status": "blocked", "reason": reason, "blocked_items": list(blockers)}
     if not summary:
         return {"status": "blocked", "reason": "no_evaluated_candidates"}
     winner = min(summary, key=lambda model: (summary[model]["clinical_cer_mean"], summary[model]["truncation_count"], -summary[model]["negation_token_accuracy_mean"]))
     return {"status": "provisional", "primary_model": winner, "rule": "lowest clinical CER, then truncation count, then negation accuracy; clinical review required"}
+
+
+def _coverage_blockers(rows: list[dict[str, Any]]) -> list[str]:
+    """Reject model comparisons when candidates do not share the same cases."""
+    cases_by_model: dict[str, set[str]] = {}
+    for row in rows:
+        cases_by_model.setdefault(str(row["model"]), set()).add(str(row["case_id"]))
+    if len(cases_by_model) < 2:
+        return []
+    baseline = next(iter(cases_by_model.values()))
+    return [
+        f"coverage:{model}"
+        for model, cases in sorted(cases_by_model.items())
+        if cases != baseline
+    ]
+
+
+def _duplicate_blockers(rows: list[dict[str, Any]]) -> list[str]:
+    seen: set[tuple[str, str]] = set()
+    duplicates: set[tuple[str, str]] = set()
+    for row in rows:
+        key = (str(row["case_id"]), str(row["model"]))
+        if key in seen:
+            duplicates.add(key)
+        seen.add(key)
+    return [f"duplicate:{case_id}:{model}" for case_id, model in sorted(duplicates)]
 
 
 def _read_manifest(path: Path) -> list[dict[str, Any]]:

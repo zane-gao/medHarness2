@@ -43,6 +43,8 @@ def test_scanned_pdf_ocr_is_page_ordered_and_records_provenance(tmp_path: Path):
     assert result.text.index("page 1") < result.text.index("page 2")
     meta = json.loads((tmp_path / "ocr" / "case-pages.ocr.json").read_text(encoding="utf-8"))
     assert meta["page_count"] == 2
+    assert meta["source_page_count"] == 2
+    assert meta["retained_page_count"] == 2
     assert meta["pages"][0]["page_index"] == 1
     assert meta["pages"][1]["page_index"] == 2
     assert meta["provider"] == "openai"
@@ -70,6 +72,8 @@ def test_scanned_pdf_ocr_skips_deterministic_blank_pages(tmp_path: Path):
     assert result.text.startswith("FINDINGS: page 1")
     meta = json.loads((tmp_path / "ocr" / "case-blank-page.ocr.json").read_text(encoding="utf-8"))
     assert meta["page_count"] == 1
+    assert meta["source_page_count"] == 2
+    assert meta["retained_page_count"] == 1
     assert meta["pages"][1]["skipped"] is True
     assert meta["pages"][1]["skip_reason"] == "blank_page"
 
@@ -289,3 +293,57 @@ def test_ocr_candidate_benchmark_blocks_missing_manifest(tmp_path: Path):
     result = evaluate_ocr_candidates(tmp_path / "does-not-exist.json", tmp_path / "summary.json")
     assert result["status"] == "blocked"
     assert result["selection"]["status"] == "blocked"
+
+
+def test_ocr_candidate_benchmark_blocks_unequal_model_coverage(tmp_path: Path):
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {"case_id": "case1", "gold_text": "same", "candidates": {"a": "same", "b": "same"}},
+                {"case_id": "case2", "gold_text": "same", "candidates": {"a": "same", "b": ""}},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+    assert result["status"] == "completed_with_blockers"
+    assert result["selection"] == {
+        "status": "blocked",
+        "reason": "missing_gold_or_candidate_artifacts",
+        "blocked_items": ["case2:b", "coverage:b"],
+    }
+
+
+def test_ocr_candidate_benchmark_reports_coverage_blocker_without_missing_artifact(tmp_path: Path):
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {"case_id": "case1", "gold_text": "same", "candidates": {"a": "same", "b": "same"}},
+                {"case_id": "case2", "gold_text": "same", "candidates": {"a": "same"}},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+    assert result["selection"]["status"] == "blocked"
+    assert result["selection"]["reason"] == "unequal_candidate_coverage"
+
+
+def test_ocr_candidate_benchmark_blocks_duplicate_case_model_rows(tmp_path: Path):
+    manifest = tmp_path / "ocr_manifest.jsonl"
+    manifest.write_text(
+        "\n".join(
+            json.dumps(row)
+            for row in [
+                {"case_id": "case1", "gold_text": "same", "candidates": {"a": "same"}},
+                {"case_id": "case1", "gold_text": "same", "candidates": {"a": "same"}},
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+    assert result["selection"]["reason"] == "duplicate_case_model_rows"
+    assert result["selection"]["blocked_items"] == ["duplicate:case1:a"]

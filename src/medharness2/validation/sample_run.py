@@ -376,11 +376,25 @@ def _count_real_ocr_provenance(root: Path, rows: list[dict[str, Any]]) -> tuple[
             mock_count += 1
             continue
         meta = _read_ocr_meta(root, report_text)
+        text_path = _resolve_path(root, report_text)
+        # Legacy manifests may retain only the OCR provenance sidecar.  Keep
+        # that artifact compatible; enforce text presence when the manifest
+        # explicitly carries a source PDF, where an empty text would otherwise
+        # falsely satisfy the real-OCR gate.
+        if str(row.get("report_pdf") or "").strip() and (
+            not text_path.is_file() or not text_path.read_text(encoding="utf-8").strip()
+        ):
+            unknown_count += 1
+            continue
         if not meta:
             unknown_count += 1
             continue
         method = str(meta.get("method") or "").lower()
         provider = str(meta.get("provider") or "").lower()
+        warnings = {str(warning) for warning in meta.get("warnings") or []}
+        if "empty_vlm_ocr_result" in warnings or "ocr_empty_page_response" in " ".join(warnings):
+            unknown_count += 1
+            continue
         if method == "pdf_text_layer" or provider == "local_pdf_text":
             real_count += 1
         elif method == "vlm_ocr" and provider in REAL_OCR_PROVIDERS:

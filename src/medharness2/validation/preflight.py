@@ -29,7 +29,7 @@ def run_sample_preflight(
 
     root = Path(sample_root)
     if not root.exists():
-        blockers.append("sample_root_missing")
+        raise FileNotFoundError(f"sample root does not exist: {root}")
 
     from medharness2.workflows.sample_full import plan_sample_full_routes
 
@@ -79,11 +79,14 @@ def run_sample_preflight(
 
 
 def _check_ocr_provider(config: AppConfig) -> dict[str, Any]:
-    provider = config.llm.provider.lower()
+    route = config.model_roles.get("ocr_primary")
+    provider = str(route.provider if route and route.provider else config.llm.provider).lower()
+    model = str(route.model if route and route.model else config.llm.model)
+    api_key_env = str(route.api_key_env if route and route.api_key_env else config.llm.api_key_env)
     if provider == "mock":
         return {
             "provider": provider,
-            "model": config.llm.model,
+            "model": model,
             "status": "mock",
             "blocker": "real_ocr_required_but_provider_is_mock",
             "real_ocr_capable": False,
@@ -96,34 +99,34 @@ def _check_ocr_provider(config: AppConfig) -> dict[str, Any]:
         "codex_proxy",
         "codex",
     }:
-        key_set = bool(os.environ.get(config.llm.api_key_env))
+        key_set = bool(os.environ.get(api_key_env))
         return {
             "provider": provider,
-            "model": config.llm.model,
+            "model": model,
             "status": "ready" if key_set else "missing_api_key",
             "blocker": None if key_set else "missing_llm_api_key",
-            "api_key_env": config.llm.api_key_env,
+            "api_key_env": api_key_env,
             "api_key_set": key_set,
             "real_ocr_capable": key_set,
         }
     if provider in {"local_vlm_cli", "medharness_cli_vlm"}:
-        dry_run = _run_local_vlm_dry_run(config)
+        dry_run = _run_local_vlm_dry_run(config, model=model)
         status = str(dry_run.get("status") or "")
         ready = status in {"ready", "debug_ready"}
         return {
             "provider": provider,
-            "model": config.llm.model,
+            "model": model,
             "status": "ready" if ready else "unavailable",
             "blocker": None if ready else "local_vlm_cli_model_unavailable",
             "dry_run": dry_run,
             "real_ocr_capable": ready,
         }
     if provider in {"local_hf_vlm", "hf_vlm_local"}:
-        dry_run = _check_local_hf_vlm_files(config)
+        dry_run = _check_local_hf_vlm_files(config, model=model)
         ready = dry_run["status"] == "ready"
         return {
             "provider": provider,
-            "model": config.llm.model,
+            "model": model,
             "status": "ready" if ready else "unavailable",
             "blocker": None if ready else "local_hf_vlm_model_unavailable",
             "dry_run": dry_run,
@@ -131,14 +134,14 @@ def _check_ocr_provider(config: AppConfig) -> dict[str, Any]:
         }
     return {
         "provider": provider,
-        "model": config.llm.model,
+        "model": model,
         "status": "unsupported",
         "blocker": "unsupported_llm_provider_for_ocr",
         "real_ocr_capable": False,
     }
 
 
-def _run_local_vlm_dry_run(config: AppConfig) -> dict[str, Any]:
+def _run_local_vlm_dry_run(config: AppConfig, *, model: str | None = None) -> dict[str, Any]:
     script = resolve_existing_path(config.llm.local_cli_script)
     if not script.exists():
         return {
@@ -151,7 +154,7 @@ def _run_local_vlm_dry_run(config: AppConfig) -> dict[str, Any]:
         "--config",
         str(resolve_existing_path(config.llm.local_cli_config_path)),
         "--model-key",
-        config.llm.model,
+        model or config.llm.model,
         "--dry-run",
     ]
     try:
@@ -186,7 +189,7 @@ def _parse_json_object(text: str) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-def _check_local_hf_vlm_files(config: AppConfig) -> dict[str, Any]:
+def _check_local_hf_vlm_files(config: AppConfig, *, model: str | None = None) -> dict[str, Any]:
     model_path = Path(config.llm.local_hf_model_path)
     required = [
         model_path / "config.json",
@@ -201,5 +204,6 @@ def _check_local_hf_vlm_files(config: AppConfig) -> dict[str, Any]:
     return {
         "status": "ready" if not missing else "asset_missing",
         "model_path": str(model_path),
+        "model": model or config.llm.model,
         "missing_paths": missing,
     }
