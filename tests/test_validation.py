@@ -140,6 +140,15 @@ def test_validate_sample_run_reports_missing_workflow_outputs(tmp_path: Path):
     assert "missing_workflow3_json" in result["errors"]
 
 
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
+def test_validate_sample_run_rejects_invalid_summary_counts(tmp_path: Path, bad):
+    _write_json(tmp_path / "summary.json", {"case_count": bad, "warning_counts": {}})
+    _write_manifest(tmp_path / "manifest.jsonl", 1)
+    result = validate_sample_run(tmp_path, expected_cases=1, require_workflows=False)
+    assert result["passed"] is False
+    assert any("invalid" in error or "case_count" in error for error in result["errors"])
+
+
 def test_validate_sample_run_accepts_subset_workflow_without_summary(tmp_path: Path):
     _write_manifest(tmp_path / "manifest.jsonl", 2, with_report_text=True)
     for i in range(2):

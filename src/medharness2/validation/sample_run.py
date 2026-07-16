@@ -46,7 +46,11 @@ def validate_sample_run(
     if require_workflows and workflow3_path.exists():
         _validate_aggregate_contract(Workflow3Aggregate, workflow3, "workflow3_aggregate", errors)
 
-    case_count = int(_first_present(summary.get("case_count"), len(manifest_rows), 0))
+    case_count = _count_or_error(
+        _first_present(summary.get("case_count"), len(manifest_rows), 0),
+        "case_count",
+        errors,
+    )
     if expected_cases is not None and case_count != expected_cases:
         errors.append(f"case_count_mismatch:{case_count}!={expected_cases}")
     if manifest_rows and case_count != len(manifest_rows):
@@ -54,13 +58,23 @@ def validate_sample_run(
 
     summary_warning_counts = dict(summary.get("warning_counts") or {})
     manifest_warning_counts = _manifest_warning_counts(manifest_rows)
-    warning_counts = _merge_counts(summary_warning_counts, manifest_warning_counts)
-    mock_ocr_count = int(warning_counts.get("mock_ocr_used", 0))
+    warning_count_errors: list[str] = []
+    warning_counts = _merge_counts(
+        summary_warning_counts,
+        manifest_warning_counts,
+        errors=warning_count_errors,
+    )
+    errors.extend(warning_count_errors)
+    mock_ocr_count = _count_or_error(warning_counts.get("mock_ocr_used", 0), "mock_ocr_used", errors)
     real_ocr_count = 0
     unknown_ocr_count = 0
     if require_real_ocr and mock_ocr_count:
         errors.append("mock_ocr_used")
-    if require_real_ocr and int(warning_counts.get("real_ocr_required_but_provider_is_mock", 0)):
+    if require_real_ocr and _count_or_error(
+        warning_counts.get("real_ocr_required_but_provider_is_mock", 0),
+        "real_ocr_required_but_provider_is_mock",
+        errors,
+    ):
         errors.append("real_ocr_required_but_provider_is_mock")
     if require_real_ocr:
         real_ocr_count, unknown_ocr_count, provider_mock_count, missing_ocr_text_count = _count_real_ocr_provenance(root, manifest_rows)
@@ -72,20 +86,26 @@ def validate_sample_run(
         if missing_ocr_text_count:
             errors.append("ocr_text_missing")
 
-    failed_case_count = int(
-        _first_present(workflow2.get("failed_case_count") if workflow2 else None, 0)
+    failed_case_count = _count_or_error(
+        _first_present(workflow2.get("failed_case_count") if workflow2 else None, 0),
+        "failed_case_count",
+        errors,
     )
     if failed_case_count:
         errors.append(f"workflow2_failed_cases:{failed_case_count}")
-    workflow2_case_count = int(
-        _first_present(workflow2.get("case_count") if workflow2 else None, 0)
+    workflow2_case_count = _count_or_error(
+        _first_present(workflow2.get("case_count") if workflow2 else None, 0),
+        "workflow2.case_count",
+        errors,
     )
     if require_workflows and workflow2 and workflow2_case_count == 0 and failed_case_count == 0:
         errors.append("no_cases_discovered")
     if workflow2 and workflow2_case_count + failed_case_count != case_count:
         errors.append("workflow2_case_count_mismatch")
-    workflow3_case_count = int(
-        _first_present(workflow3.get("case_count") if workflow3 else None, 0)
+    workflow3_case_count = _count_or_error(
+        _first_present(workflow3.get("case_count") if workflow3 else None, 0),
+        "workflow3.case_count",
+        errors,
     )
     if workflow3 and workflow3_case_count != workflow2_case_count:
         errors.append("workflow3_case_count_mismatch")
@@ -269,6 +289,13 @@ def _first_present(*values: Any) -> Any:
     return 0
 
 
+def _count_or_error(value: Any, label: str, errors: list[str]) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        errors.append(f"invalid_{label}:nonnegative_integer_required")
+        return 0
+    return value
+
+
 def _validate_aggregate_contract(model: Any, payload: dict[str, Any], label: str, errors: list[str]) -> None:
     """Reject an empty existing aggregate instead of treating it as defaults."""
     if not payload:
@@ -384,14 +411,15 @@ def _summary_from_manifest(rows: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _merge_counts(*counts: dict[str, Any]) -> dict[str, int]:
+def _merge_counts(*counts: dict[str, Any], errors: list[str] | None = None) -> dict[str, int]:
     merged: dict[str, int] = {}
     for count_map in counts:
         for key, value in count_map.items():
-            try:
-                count = int(value)
-            except (TypeError, ValueError):
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                if errors is not None:
+                    errors.append(f"invalid_warning_count:{key}:nonnegative_integer_required")
                 continue
+            count = value
             merged[str(key)] = max(merged.get(str(key), 0), count)
     return merged
 
