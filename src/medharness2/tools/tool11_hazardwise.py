@@ -27,7 +27,7 @@ def hazardwise_weighted(
         if not error_type or level_value is None or isinstance(level_value, bool):
             continue
         try:
-            level_number = int(float(level_value))
+            level_number = _strict_hazard_level(level_value)
         except (TypeError, ValueError):
             continue
         if level_number < 1 or level_number > 5:
@@ -70,3 +70,17 @@ def _is_number(value: Any) -> bool:
 
 def _weighted_metric_value(value: Any, weight: float) -> Any:
     return value * weight if _is_number(value) else value
+
+
+def _strict_hazard_level(value: Any) -> int:
+    """Parse an integer hazard level without truncating fractional values."""
+    if isinstance(value, bool):
+        raise ValueError("boolean hazard level")
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text or (text[0] in "+-" and not text[1:].isdigit()) or not text.lstrip("+-").isdigit():
+            raise ValueError("hazard level must be an integer")
+        return int(text)
+    raise ValueError("hazard level must be an integer")

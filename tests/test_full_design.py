@@ -77,6 +77,14 @@ def test_tool11_excludes_incomplete_hazard_rows_instead_of_defaulting_to_lowest_
     assert result[0]["hazard_level"] == 4
 
 
+@pytest.mark.parametrize("bad_level", [3.5, "3.5", True, float("nan")])
+def test_tool11_rejects_fractional_or_nonfinite_hazard_levels(bad_level):
+    result = hazardwise_weighted(
+        [{"error_type": "false_finding", "hazard_level": bad_level, "metrics": {"error_rate": 0.2}}]
+    )
+    assert result == []
+
+
 def test_tool11_excludes_fallback_hazard_rows():
     rows = [
         {

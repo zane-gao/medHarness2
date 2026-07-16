@@ -130,7 +130,7 @@ Workflow (端到端 + 文件 I/O)
 ### Tool 11 · 按危害加权 — `tools/tool11_hazardwise.py`
 
 - **入口**：`hazardwise_weighted(rows, hazard_weights=None) -> list`
-- **实现**：按 `error_type + hazard_level` 查权重表 `DEFAULT_HAZARD_WEIGHTS`（omission 最重，level 越高权重越大），把权重乘到该行的数值指标上，附 `hazard_weight`。**不做维度缩减**，结构与输入同形。
+- **实现**：按 `error_type + hazard_level` 查权重表 `DEFAULT_HAZARD_WEIGHTS`（omission 最重，level 越高权重越大），把权重乘到该行的数值指标上，附 `hazard_weight`。**不做维度缩减**，结构与输入同形；`hazard_level` 只接受 1–5 的严格整数，不截断小数或接受非有限值。
 
 ### Tool 12 · 统计计算 — `tools/tool12_statistics.py`
 
