@@ -15,6 +15,14 @@ from medharness2.utils.io import parse_json_object, read_json, write_json
 ACTIONABLE_ERRORS = {"omission_finding", "incorrect_location", "incorrect_severity", "false_finding"}
 
 
+def _count_or_zero(value: Any, label: str) -> int:
+    if value is None:
+        return 0
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
 def run_education_suggestions(
     *,
     eval_report: str | Path | None = None,
@@ -85,19 +93,19 @@ def _radiologist_suggestions(payload: dict[str, Any], client: LLMClient) -> dict
     peer_means = _peer_means(effective_stats, exclude=str(reader_id))
     stats = effective_stats[str(reader_id)]
     if not stats:
-        return _blocked_radiologist_result(str(reader_id), int(reader.get("case_count") or 0), "missing_reader_statistics")
+        return _blocked_radiologist_result(str(reader_id), _count_or_zero(reader.get("case_count"), "case_count"), "missing_reader_statistics")
     weakest = _weak_reader_metrics(stats, peer_means) if peer_means else []
     peer_baseline_available = bool(peer_means)
     if not weakest:
         weakest = _weakest_available_metrics(stats)
     if not weakest:
-        return _blocked_radiologist_result(str(reader_id), int(reader.get("case_count") or 0), "no_comparable_metrics")
+        return _blocked_radiologist_result(str(reader_id), _count_or_zero(reader.get("case_count"), "case_count"), "no_comparable_metrics")
     default = {
         "mode": "eval_radiologist",
         "status": "suggestions_generated",
         "radiologist_summary": {
             "radiologist_id": str(reader_id),
-            "n_reports": int(reader.get("case_count") or 0),
+            "n_reports": _count_or_zero(reader.get("case_count"), "case_count"),
             "weakest_metrics": weakest,
             "peer_gaps": {
                 metric: round(float(stats[metric]["mean"]) - float(peer_means[metric]), 4)

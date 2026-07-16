@@ -701,7 +701,7 @@ def analyze_run_endpoint(request: AnalyzeRunRequest) -> dict[str, Any]:
         status="failed" if errors else "passed",
         inputs={"output_dir": request.output_dir},
         outputs={"analysis_dir": result.get("analysis_dir", "")},
-        metrics={"case_count": int(result.get("case_count", 0) or 0), "error_count": len(errors)},
+        metrics={"case_count": _count_or_zero(result.get("case_count"), "case_count"), "error_count": len(errors)},
         warnings=errors,
     )
     return {

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from medharness2.cli import main
 from medharness2.config import AppConfig, GeneratorConfig
 from medharness2.workflows.education import run_education_suggestions
@@ -18,6 +20,28 @@ def test_education_peer_means_reject_boolean_and_nonfinite_values():
     assert _peer_means(readers, exclude="reader_c") == {"Completeness": 4.0}
     assert _stat_mean(readers["reader_a"], "Completeness") is None
     assert _stat_mean(readers["reader_c"], "Clarity") == 3.0
+
+
+def test_education_rejects_invalid_reader_case_count(tmp_path: Path):
+    workflow2 = tmp_path / "workflow2.json"
+    workflow2.write_text(
+        json.dumps({
+            "case_count": 1,
+            "per_reader": {
+                "reader_a": {
+                    "case_count": True,
+                    "human_statistics": {"Completeness": {"mean": 2.0}},
+                }
+            },
+        }),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="case_count"):
+        run_education_suggestions(
+            eval_radiologist=workflow2,
+            output_path=tmp_path / "education.json",
+            config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        )
 
 
 def test_run_education_suggestions_from_workflow1(tmp_path: Path):
