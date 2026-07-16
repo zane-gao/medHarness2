@@ -55,6 +55,10 @@ def run_sample_preflight(
             blockers.append("real_ocr_required_but_provider_is_mock")
         elif ocr.get("status") != "ready":
             blockers.append(str(ocr.get("blocker") or "real_ocr_provider_unavailable"))
+    elif ocr.get("status") != "ready":
+        warnings.append(
+            f"ocr_not_ready:{ocr.get('blocker') or ocr.get('status') or 'unknown'}"
+        )
 
     result = {
         "passed": not blockers,

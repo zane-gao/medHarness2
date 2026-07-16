@@ -177,6 +177,29 @@ def test_truncated_page_response_is_marked_in_metadata(tmp_path: Path):
     assert "ocr_possible_truncation" in meta["warnings"]
 
 
+def test_complete_chinese_page_response_is_not_marked_truncated(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+
+    class ChineseOCRClient:
+        def call(self, *args, **kwargs):
+            return "检查所见：双肺未见异常。\n诊断印象：未见急性病变。"
+
+    result = extract_report_text(
+        pdf,
+        case_id="case-chinese-complete",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=ChineseOCRClient(),
+        force=True,
+    )
+
+    assert "ocr_possible_truncation" not in result.warnings
+
+
 def test_ocr_verifier_is_audit_only_and_cannot_change_primary_text(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()

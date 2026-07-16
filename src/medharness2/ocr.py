@@ -401,13 +401,16 @@ def _is_deterministic_blank_page(path: Path, ink_ratio: float) -> bool:
 
 
 def _looks_truncated(text: str) -> bool:
-    if not text:
+    stripped = text.strip()
+    if not stripped:
         return True
-    upper = text.upper()
-    if "FINDINGS" not in upper and "IMPRESSION" not in upper:
+    if stripped[-1] in "。！？.!?)]】}」』”\"'":
+        return False
+    if len(stripped) < 8:
         return True
-    terminal = text.rstrip()[-1]
-    return terminal.isalnum() and not text.rstrip().endswith(("stable", "normal", "negative"))
+    return stripped[-1].isascii() and stripped[-1].isalnum() and not stripped.lower().endswith(
+        ("stable", "normal", "negative", "正常")
+    )
 
 
 def _read_meta(path: Path) -> dict[str, Any]:
