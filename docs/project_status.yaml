@@ -7,7 +7,7 @@ baseline:
   branch: main
   git_sha: 5dc2cd1
   dirty_worktree: true
-  pytest_passed: 385
+  pytest_passed: 386
   pytest_warnings: 17
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52

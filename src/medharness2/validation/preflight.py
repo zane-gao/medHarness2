@@ -88,7 +88,14 @@ def _check_ocr_provider(config: AppConfig) -> dict[str, Any]:
             "blocker": "real_ocr_required_but_provider_is_mock",
             "real_ocr_capable": False,
         }
-    if provider in {"openai", "openai_responses"}:
+    if provider in {
+        "openai",
+        "openai_responses",
+        "chat_completions",
+        "openai_chat",
+        "codex_proxy",
+        "codex",
+    }:
         key_set = bool(os.environ.get(config.llm.api_key_env))
         return {
             "provider": provider,
