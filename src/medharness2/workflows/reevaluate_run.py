@@ -280,10 +280,9 @@ def _source_validation_options(source: Path) -> dict[str, Any]:
 def _optional_int(value: Any) -> int | None:
     if value is None:
         return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         return None
+    return value
 
 
 def _mean_score(rows: list[dict[str, Any]]) -> float | None:

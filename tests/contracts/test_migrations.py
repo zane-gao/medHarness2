@@ -288,3 +288,19 @@ def _legacy_finding_graph(
         "template_coverage": {"coverage_rate": 1.0},
         "warnings": [],
     }
+
+
+def test_migration_bounded_hazard_level_rejects_implicit_integer_coercion():
+    from medharness2.contracts.migrations import _bounded_int
+
+    for bad in (True, 3.8, "3"):
+        assert _bounded_int(bad, default=3, lower=1, upper=5) == 3
+
+
+def test_reevaluate_expected_cases_rejects_implicit_integer_coercion():
+    from medharness2.workflows.reevaluate_run import _optional_int
+
+    assert _optional_int(True) is None
+    assert _optional_int(1.5) is None
+    assert _optional_int("2") is None
+    assert _optional_int(2) == 2

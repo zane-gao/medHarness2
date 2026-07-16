@@ -551,10 +551,7 @@ def _bounded_float(value: Any, *, default: float) -> float:
 
 
 def _bounded_int(value: Any, *, default: int, lower: int, upper: int) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        parsed = default
+    parsed = value if isinstance(value, int) and not isinstance(value, bool) else default
     return max(lower, min(upper, parsed))
 
 
