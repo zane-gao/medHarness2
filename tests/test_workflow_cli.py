@@ -1141,6 +1141,29 @@ def test_cli_batch_readers_rejects_empty_manifest(tmp_path: Path):
     assert payload["errors"] == ["no_cases_discovered"]
 
 
+def test_cli_exploratory_benchmark_returns_nonzero_when_no_results(tmp_path: Path):
+    manifest = tmp_path / "empty.jsonl"
+    manifest.write_text("", encoding="utf-8")
+    output_dir = tmp_path / "benchmark"
+
+    code = main(
+        [
+            "benchmark",
+            "run",
+            "--manifest",
+            str(manifest),
+            "--output-dir",
+            str(output_dir),
+            "--exploratory",
+        ]
+    )
+
+    assert code == 1
+    summary = json.loads((output_dir / "benchmark_summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "failed"
+    assert summary["result_count"] == 0
+
+
 def test_cli_validate_run_writes_failed_run_registry(tmp_path: Path):
     output_dir = tmp_path / "run"
     output_dir.mkdir()

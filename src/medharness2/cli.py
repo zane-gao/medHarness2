@@ -239,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
             formal=not args.exploratory,
         )
         print(f"wrote benchmark results to {args.output_dir}; status={result['status']}")
-        return 0
+        return 0 if result.get("status") == "succeeded" else 1
     if args.command == "benchmark" and args.benchmark_command == "evaluate":
         cfg = load_config(args.config) if args.config else load_config("config/dmx_strong.yaml")
         result = evaluate_generation_benchmark(
