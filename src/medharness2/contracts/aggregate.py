@@ -79,9 +79,11 @@ class Workflow2Aggregate(AggregateCompatModel):
 
     @model_validator(mode="after")
     def validate_case_rows(self) -> "Workflow2Aggregate":
-        if self.cases and len(self.cases) != self.case_count:
+        # Preserve legacy files that omitted row arrays, but validate an
+        # explicitly supplied empty array just like a non-empty one.
+        if (self.cases or "cases" in self.model_fields_set) and len(self.cases) != self.case_count:
             raise ValueError("workflow2 cases length must match case_count")
-        if self.failed_cases and len(self.failed_cases) != self.failed_case_count:
+        if (self.failed_cases or "failed_cases" in self.model_fields_set) and len(self.failed_cases) != self.failed_case_count:
             raise ValueError("workflow2 failed_cases length must match failed_case_count")
         return self
 
@@ -104,7 +106,11 @@ class Workflow3Aggregate(AggregateCompatModel):
 
     @model_validator(mode="after")
     def validate_reader_count(self) -> "Workflow3Aggregate":
-        if self.reader_count is not None and self.reader_percentiles and self.reader_count != len(self.reader_percentiles):
+        if (
+            self.reader_count is not None
+            and (self.reader_percentiles or "reader_percentiles" in self.model_fields_set)
+            and self.reader_count != len(self.reader_percentiles)
+        ):
             raise ValueError("workflow3 reader_count must match reader_percentiles")
         if self.reader_total_count is not None:
             eligible_count = self.reader_count if self.reader_count is not None else len(self.reader_percentiles)
