@@ -875,6 +875,10 @@ def _build_evaluation_summary(
         if isinstance(metrics.get("consensus_max_hazard_level"), int)
         and int(metrics["consensus_max_hazard_level"]) > 0
     )
+    hazard_compared_count = sum(int(metrics.get("hazard_compared_count") or 0) for metrics in case_metrics)
+    hazard_exact_agreement_count = sum(int(metrics.get("hazard_exact_agreement_count") or 0) for metrics in case_metrics)
+    hazard_within_one_count = sum(int(metrics.get("hazard_within_one_count") or 0) for metrics in case_metrics)
+    hazard_action_agreement_count = sum(int(metrics.get("hazard_action_agreement_count") or 0) for metrics in case_metrics)
     return {
         "schema_version": "2.0",
         "artifact_type": "generation_benchmark_evaluation_summary",
@@ -928,6 +932,16 @@ def _build_evaluation_summary(
                 int(metrics.get("hazard_disagreement_count") or 0)
                 for metrics in case_metrics
             ),
+            "hazard_agreement": {
+                "compared_count": hazard_compared_count,
+                "exact_agreement_count": hazard_exact_agreement_count,
+                "within_one_count": hazard_within_one_count,
+                "action_agreement_count": hazard_action_agreement_count,
+                "exact_agreement_rate": round(hazard_exact_agreement_count / hazard_compared_count, 4) if hazard_compared_count else None,
+                "within_one_rate": round(hazard_within_one_count / hazard_compared_count, 4) if hazard_compared_count else None,
+                "action_agreement_rate": round(hazard_action_agreement_count / hazard_compared_count, 4) if hazard_compared_count else None,
+                "source": "hazard_review.agreement_summary",
+            },
             "hazard_adjudication_decision_count": sum(
                 int(metrics.get("hazard_adjudication_decision_count") or 0)
                 for metrics in case_metrics
@@ -1004,6 +1018,7 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
     comparison = dict((pairwise[0] or {}).get("comparison") or {}) if pairwise else {}
     hazards = dict(comparison.get("hazards") or {})
     hazard_review = dict(comparison.get("hazard_review") or {})
+    agreement_summary = dict(hazard_review.get("agreement_summary") or {})
     hazard_adjudication = dict(comparison.get("hazard_adjudication") or {})
     adjudication_decisions = list(hazard_adjudication.get("decisions") or [])
     alignment_audit = dict(comparison.get("alignment_audit") or {})
@@ -1047,6 +1062,10 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
         "hazard_error_count": len(hazard_errors),
         "max_hazard_level": max(hazard_levels) if hazard_levels else 0,
         "hazard_disagreement_count": len(hazard_review.get("disagreements") or []),
+        "hazard_compared_count": int(agreement_summary.get("compared_count") or len(hazard_errors)),
+        "hazard_exact_agreement_count": int(agreement_summary.get("exact_agreement_count") or 0),
+        "hazard_within_one_count": int(agreement_summary.get("within_one_count") or 0),
+        "hazard_action_agreement_count": int(agreement_summary.get("action_agreement_count") or 0),
         "hazard_adjudication_decision_count": len(adjudication_decisions),
         "hazard_adjudication_abstained_count": sum(
             bool(decision.get("abstain"))

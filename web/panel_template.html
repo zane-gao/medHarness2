@@ -989,7 +989,7 @@ document.getElementById("gate-table").innerHTML = `
         <div style="margin-top:6px;font-size:12.5px">11 例共识判级分布：${Object.entries(chl).map(([l,c])=>`${l}级×${c}`).join("、")}；其中<b>重大错误（material）${S.consensus_material_error_count} 个</b>，${S.clinical_validation_required_count} 例被标记「需临床医生最终确认」。</div>
       </div>
       <details class="more"><summary>但分歧率本身仍是个大问题</summary><div class="inner">
-        <p>两位 AI 法官的<b>完全一致率是 0%</b>（首例病例的 11 处判级无一完全相同，全场分歧率 70%）。仲裁制度保证了「有答案」，但答案是否正确，只有拿医生金标准来校——这就是为什么每例都标了 clinical_validation_required。制度先行、校准在后，顺序是对的。</p>
+        <p>两位 AI 法官的完全一致率、±1 级一致率和行动建议一致率都从真实汇总产物读取：完全一致率 <b>${pct((S.hazard_agreement||{}).exact_agreement_rate)}</b>，±1 级 <b>${pct((S.hazard_agreement||{}).within_one_rate)}</b>，行动建议 <b>${pct((S.hazard_agreement||{}).action_agreement_rate)}</b>。仲裁制度保证了「有答案」，但答案是否正确，只有拿医生金标准来校——这就是为什么每例都标了 clinical_validation_required。制度先行、校准在后，顺序是对的。</p>
       </div></details>
     </div>`);
   }

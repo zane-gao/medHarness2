@@ -305,6 +305,7 @@ def extract_smoke(eval_dir: Path) -> dict | None:
         "candidate_likert": metrics.get("candidate_likert_mean") or {},
         "hazard_error_count": metrics.get("hazard_error_count"),
         "hazard_disagreement_count": metrics.get("hazard_disagreement_count"),
+        "hazard_agreement": metrics.get("hazard_agreement") or {},
         # 三法官仲裁与共识指标
         "adjudication_decision_count": metrics.get("hazard_adjudication_decision_count"),
         "adjudication_abstained_count": metrics.get("hazard_adjudication_abstained_count"),
