@@ -226,6 +226,71 @@ def test_reevaluate_run_preserves_source_real_ocr_validation_policy(tmp_path: Pa
     assert validation["unknown_ocr_count"] == 0
 
 
+def test_reevaluate_run_marks_reconstructed_report_as_fallback(tmp_path: Path):
+    source = tmp_path / "source_run"
+    source_cases = source / "workflow2_cases"
+    source_cases.mkdir(parents=True)
+    image = tmp_path / "image.png"
+    image.write_bytes(b"\x89PNG\r\n\x1a\n")
+    _write_json(
+        source / "workflow2.json",
+        {
+            "manifest_path": "manifest.jsonl",
+            "case_count": 1,
+            "failed_case_count": 0,
+            "cases": [
+                {
+                    "case_id": "case1",
+                    "reader": "reader_a",
+                    "modality": "cxr",
+                    "body_part": "chest",
+                    "workflow1_output": str(source_cases / "case1.json"),
+                }
+            ],
+            "failed_cases": [],
+            "per_reader": {},
+            "statistics": {},
+        },
+    )
+    _write_json(
+        source_cases / "case1.json",
+        {
+            "input": {
+                "report_path": str(tmp_path / "missing-report.txt"),
+                "image_path": str(image),
+                "modality": "cxr",
+                "body_part": "chest",
+                "prepared_assets": {"primary_image": str(image)},
+            },
+            "human_evaluation": {
+                "finding_graph": {
+                    "backend": "cxr_rule",
+                    "findings": [
+                        {"id": "f1", "source_text": "右上肺见8mm结节影。"},
+                        {"id": "f2", "source_text": "未见气胸。"},
+                    ],
+                }
+            },
+            "generated_reports": [],
+            "generated_evaluations": [],
+            "rankings": [],
+            "pairwise_comparisons": [],
+        },
+    )
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        extractor=ExtractorConfig(backend="cxr_rule"),
+        generator=GeneratorConfig(default_models=[], local_models=[], include_legacy_ready_models=False),
+    )
+
+    result = reevaluate_run(source, tmp_path / "reeval_run", config=cfg)
+
+    case = result["workflow2"]["cases"][0]
+    assert case["reevaluation"]["report_text_source"] == "reconstructed_from_finding_graph"
+    assert case["human_metrics"]["metadata"]["report_text_source"] == "reconstructed_from_finding_graph"
+    assert case["human_metrics"]["metadata"]["fallback_used"] is True
+
+
 def test_cli_reevaluate_run_writes_run_registry(tmp_path: Path):
     source = _write_cli_source_run(tmp_path)
     output = tmp_path / "reeval_run"

@@ -53,7 +53,8 @@ def reevaluate_run(
             reused_generated_report_count += len(generated)
             input_payload = dict(workflow1.get("input") or {})
             report_path = _resolve_existing(source, input_payload.get("report_path"))
-            report_text = read_text(report_path) if report_path and report_path.exists() else _fallback_report_text(workflow1)
+            reconstructed_report = not (report_path and report_path.exists())
+            report_text = read_text(report_path) if not reconstructed_report else _fallback_report_text(workflow1)
             if not report_text:
                 raise ValueError("missing_report_text")
             image_path = _resolve_existing(source, input_payload.get("image_path"))
@@ -87,6 +88,11 @@ def reevaluate_run(
         human_evaluation = reevaluated.get("human_evaluation") or {}
         human_metrics = dict(human_evaluation.get("composite_inputs") or {})
         human_provenance = _evaluation_metadata(human_evaluation)
+        human_provenance["report_text_source"] = (
+            "reconstructed_from_finding_graph" if reconstructed_report else "original_report"
+        )
+        if reconstructed_report:
+            human_provenance["fallback_used"] = True
         if human_provenance:
             human_metrics["metadata"] = human_provenance
         generated_metrics = [
@@ -109,6 +115,9 @@ def reevaluate_run(
                 "source_run_dir": str(source),
                 "reused_generated_report_count": len(generated),
                 "new_generation_count": 0,
+                "report_text_source": (
+                    "reconstructed_from_finding_graph" if reconstructed_report else "original_report"
+                ),
             },
         }
         case_results.append(case_result)

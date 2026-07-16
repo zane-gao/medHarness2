@@ -220,8 +220,35 @@ def _reviewer_consistency(
     repeats: list[HazardResult],
 ) -> dict[str, Any]:
     runs = 1 + len(repeats)
+    retest_provenance = [
+        {
+            **repeat.provenance.model_dump(mode="json"),
+            "implementation_type": (
+                "deterministic_fallback" if repeat.provenance.fallback_used else "llm_json"
+            ),
+        }
+        for repeat in repeats
+    ]
+    fallback_used = bool(primary.provenance.fallback_used) or any(
+        bool(item.get("fallback_used")) for item in retest_provenance
+    )
+    base = {
+        "runs": runs,
+        "retest_provenance": retest_provenance,
+        "fallback_used": fallback_used,
+        "evidence_tier": "debug_fallback" if fallback_used else "real_llm",
+        "status": "blocked" if fallback_used else "complete",
+    }
     if not repeats:
-        return {"runs": runs, "exact_rate": None, "within_one_rate": None, "action_rate": None}
+        return {**base, "exact_rate": None, "within_one_rate": None, "action_rate": None}
+    if fallback_used:
+        return {
+            **base,
+            "compared_count": 0,
+            "exact_rate": None,
+            "within_one_rate": None,
+            "action_rate": None,
+        }
     compared = 0
     exact = within_one = action = 0
     for repeat in repeats:
@@ -234,7 +261,7 @@ def _reviewer_consistency(
             within_one += delta <= 1
             action += first.recommended_action == other.recommended_action
     return {
-        "runs": runs,
+        **base,
         "compared_count": compared,
         "exact_rate": round(exact / compared, 4) if compared else None,
         "within_one_rate": round(within_one / compared, 4) if compared else None,

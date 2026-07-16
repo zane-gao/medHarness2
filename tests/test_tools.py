@@ -1068,6 +1068,92 @@ def test_tool4_reviewer_can_record_consistency_runs_without_replacing_primary():
     assert result["reviewer_consistency"]["runs"] == 2
 
 
+def test_tool4_reviewer_consistency_preserves_each_retest_provenance():
+    response = {
+        "errors": [
+            {
+                "error_type": "false_finding",
+                "hazard_level": 2,
+                "explanation": "Minor overcall.",
+                "recommended_action": "review_if_relevant",
+                "confidence": 0.8,
+                "evidence_ids": ["e1"],
+                "abstain": False,
+            }
+        ]
+    }
+    client = _SequenceClient([response, response])
+    options = {"provider": "chat_completions", "model": "reviewer-v1"}
+
+    result = review_hazards(
+        evaluate_hazards(
+            [{"error_type": "false_finding"}],
+            llm_client=_SequenceClient([response]),
+            require_llm=False,
+            judge_options=options,
+        ),
+        [{"error_type": "false_finding"}],
+        llm_client=client,
+        consistency_runs=2,
+        require_llm=False,
+        judge_options=options,
+        allow_fallback=True,
+    )
+
+    consistency = result["reviewer_consistency"]
+    assert len(consistency["retest_provenance"]) == 1
+    provenance = consistency["retest_provenance"][0]
+    assert provenance["provider"] == "chat_completions"
+    assert provenance["model"] == "reviewer-v1"
+    assert provenance["role"] == "hazard_reviewer"
+    assert provenance["fallback_used"] is False
+    assert consistency["evidence_tier"] != "debug_fallback"
+    assert consistency["status"] != "blocked"
+
+
+def test_tool4_reviewer_consistency_blocks_fallback_retest_and_does_not_score_it():
+    response = {
+        "errors": [
+            {
+                "error_type": "false_finding",
+                "hazard_level": 2,
+                "explanation": "Minor overcall.",
+                "recommended_action": "review_if_relevant",
+                "confidence": 0.8,
+                "evidence_ids": ["e1"],
+                "abstain": False,
+            }
+        ]
+    }
+    client = _SequenceClient([response, "not json"])
+    options = {"provider": "chat_completions", "model": "reviewer-v1"}
+
+    result = review_hazards(
+        evaluate_hazards(
+            [{"error_type": "false_finding"}],
+            llm_client=_SequenceClient([response]),
+            require_llm=False,
+            judge_options=options,
+        ),
+        [{"error_type": "false_finding"}],
+        llm_client=client,
+        consistency_runs=2,
+        require_llm=False,
+        judge_options=options,
+        allow_fallback=True,
+    )
+
+    consistency = result["reviewer_consistency"]
+    assert consistency["status"] == "blocked"
+    assert consistency["evidence_tier"] == "debug_fallback"
+    assert consistency["fallback_used"] is True
+    assert consistency["exact_rate"] is None
+    assert consistency["within_one_rate"] is None
+    assert consistency["action_rate"] is None
+    assert consistency["retest_provenance"][0]["fallback_used"] is True
+    assert consistency["retest_provenance"][0]["implementation_type"] == "deterministic_fallback"
+
+
 def test_tool4_returns_versioned_hazard_result_contract():
     result = evaluate_hazards(
         [
