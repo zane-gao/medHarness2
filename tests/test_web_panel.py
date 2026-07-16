@@ -19,6 +19,22 @@ def test_extract_git_state_reports_branch_sha_and_dirty(tmp_path):
     assert isinstance(state["dirty"], bool)
 
 
+def test_extract_git_state_ignores_panel_output_itself(monkeypatch):
+    responses = {
+        ("branch", "--show-current"): "main\n",
+        ("rev-parse", "HEAD"): "a" * 40 + "\n",
+        ("rev-parse", "--short=7", "HEAD"): "aaaaaaa\n",
+        ("status", "--porcelain", "--untracked-files=no"): " M web/index.html\n",
+    }
+
+    def fake_check_output(args, **kwargs):
+        return responses[tuple(args[3:])]
+
+    monkeypatch.setattr(build_panel.subprocess, "check_output", fake_check_output)
+    state = build_panel.extract_git_state(build_panel.REPO)
+    assert state["dirty"] is False
+
+
 def test_dashboard_summary_preserves_explicit_zero_counts():
     summary = summarize_dashboard_payload(
         {

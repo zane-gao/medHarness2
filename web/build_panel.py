@@ -73,11 +73,25 @@ def extract_git_state(repo: Path = REPO) -> dict:
         except (OSError, subprocess.CalledProcessError):
             return None
 
+    try:
+        status = subprocess.check_output(
+            ["git", "-C", str(repo), "status", "--porcelain", "--untracked-files=no"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).rstrip("\r\n")
+    except (OSError, subprocess.CalledProcessError):
+        status = ""
+    generated = (Path(__file__).resolve().parent / "index.html").resolve()
+    tracked_changes = []
+    for line in status.splitlines():
+        path = line[3:].strip()
+        if path and (repo / path).resolve() != generated:
+            tracked_changes.append(line)
     return {
         "branch": run("branch", "--show-current"),
         "sha": run("rev-parse", "HEAD"),
         "short_sha": run("rev-parse", "--short=7", "HEAD"),
-        "dirty": bool(run("status", "--porcelain", "--untracked-files=no")),
+        "dirty": bool(tracked_changes),
     }
 
 
