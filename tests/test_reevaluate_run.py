@@ -135,6 +135,51 @@ def test_reevaluate_run_reuses_generated_reports_without_generation(tmp_path: Pa
     assert (output / "run_summary.json").exists()
 
 
+def test_reevaluate_run_blocks_validation_when_manifest_is_unavailable(tmp_path: Path):
+    source = tmp_path / "source_run"
+    source_cases = source / "workflow2_cases"
+    source_cases.mkdir(parents=True)
+    report = tmp_path / "human.txt"
+    image = tmp_path / "image.png"
+    report.write_text("FINDINGS: Clear lungs. IMPRESSION: No acute disease.", encoding="utf-8")
+    image.write_bytes(b"\x89PNG\r\n\x1a\n")
+    _write_json(
+        source / "workflow2.json",
+        {
+            "cases": [
+                {
+                    "case_id": "case1",
+                    "reader": "reader_a",
+                    "modality": "cxr",
+                    "body_part": "chest",
+                    "workflow1_output": str(source_cases / "case1.json"),
+                }
+            ],
+            "case_count": 1,
+            "failed_case_count": 0,
+            "failed_cases": [],
+        },
+    )
+    _write_json(
+        source_cases / "case1.json",
+        {
+            "input": {"report_path": str(report), "image_path": str(image)},
+            "generated_reports": [],
+            "human_evaluation": {"finding_graph": {"backend": "cxr_rule", "findings": []}},
+        },
+    )
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        extractor=ExtractorConfig(backend="cxr_rule"),
+        generator=GeneratorConfig(default_models=[], local_models=[], include_legacy_ready_models=False),
+    )
+
+    result = reevaluate_run(source, tmp_path / "reeval_run", config=cfg)
+
+    assert result["run_summary"]["validation"]["passed"] is False
+    assert "manifest_not_available_for_validation" in result["run_summary"]["validation"]["errors"]
+
+
 def test_reevaluate_run_preserves_source_real_ocr_validation_policy(tmp_path: Path):
     source = tmp_path / "source_run"
     source_cases = source / "workflow2_cases"

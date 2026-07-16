@@ -167,11 +167,11 @@ def reevaluate_run(
         )
         if (out / "manifest.jsonl").exists()
         else {
-            "passed": True,
+            "passed": False,
             "expected_cases": validation_options["expected_cases"],
             "require_real_ocr": validation_options["require_real_ocr"],
-            "errors": [],
-            "warnings": ["manifest_not_available_for_validation"],
+            "errors": ["manifest_not_available_for_validation"],
+            "warnings": [],
         }
     )
     summary = {
