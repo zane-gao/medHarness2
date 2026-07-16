@@ -150,17 +150,26 @@ def _control_store() -> RunStore:
 
 @app.get("/control-panel", response_class=HTMLResponse)
 def control_panel() -> str:
-    return dynamic_control_panel_html()
+    try:
+        return dynamic_control_panel_html()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"control_panel_failed:{type(exc).__name__}") from exc
 
 
 @app.post("/runs", status_code=201)
 def create_run(request: RunCreateRequest) -> dict[str, Any]:
-    return _control_store().create_run(run_type=request.run_type, inputs=request.inputs, config_path=request.config_path)
+    try:
+        return _control_store().create_run(run_type=request.run_type, inputs=request.inputs, config_path=request.config_path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"run_create_failed:{type(exc).__name__}") from exc
 
 
 @app.get("/runs")
 def list_runs(limit: int = Query(default=100, ge=1, le=1000)) -> dict[str, Any]:
-    return {"runs": _control_store().list_runs(limit=limit)}
+    try:
+        return {"runs": _control_store().list_runs(limit=limit)}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"run_list_failed:{type(exc).__name__}") from exc
 
 
 @app.get("/runs/{run_id}")

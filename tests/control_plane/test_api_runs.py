@@ -68,3 +68,23 @@ def test_experiment_readiness_returns_structured_failure(monkeypatch):
     response = TestClient(app, raise_server_exceptions=False).get("/experiments", params={"run_dir": "missing"})
     assert response.status_code == 500
     assert response.json()["detail"] == "experiments_readiness_failed:RuntimeError"
+
+
+def test_control_plane_entrypoints_return_structured_failures(monkeypatch):
+    monkeypatch.setattr(api_module, "_control_store", lambda: (_ for _ in ()).throw(RuntimeError("store boom")))
+    client = TestClient(app, raise_server_exceptions=False)
+
+    created = client.post("/runs", json={"run_type": "pilot", "inputs": {}})
+    assert created.status_code == 500
+    assert created.json()["detail"] == "run_create_failed:RuntimeError"
+
+    listed = client.get("/runs")
+    assert listed.status_code == 500
+    assert listed.json()["detail"] == "run_list_failed:RuntimeError"
+
+
+def test_control_panel_returns_structured_failure(monkeypatch):
+    monkeypatch.setattr(api_module, "dynamic_control_panel_html", lambda: (_ for _ in ()).throw(RuntimeError("panel boom")))
+    response = TestClient(app, raise_server_exceptions=False).get("/control-panel")
+    assert response.status_code == 500
+    assert response.json()["detail"] == "control_panel_failed:RuntimeError"
