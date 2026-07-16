@@ -9,7 +9,7 @@ from typing import Any
 from medharness2.config import PROJECT_ROOT
 from medharness2.contracts import CaseEvaluationArtifact, migrate_case_evaluation_v1
 from medharness2.data.sample_data import load_manifest
-from medharness2.tools.tool12_statistics import calculate_statistics
+from medharness2.tools.tool12_statistics import calculate_statistics, eligible_for_statistics
 from medharness2.utils.io import read_json, write_json
 from medharness2.workflows.department import run_department_comparison
 
@@ -213,9 +213,11 @@ def _build_per_reader(cases: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return per_reader
 
 
-def _mean_score(rows: list[dict[str, Any]]) -> float:
+def _mean_score(rows: list[dict[str, Any]]) -> float | None:
     values: list[float] = []
     for row in rows:
+        if not eligible_for_statistics(row):
+            continue
         if "likert_mean" in row:
             likert = float(row["likert_mean"])
             values.append((likert - 1.0) / 4.0 if likert >= 1.0 else likert)
@@ -223,7 +225,7 @@ def _mean_score(rows: list[dict[str, Any]]) -> float:
             values.append(float(row["structure_score"]))
         if "finding_coverage" in row:
             values.append(float(row["finding_coverage"]))
-    return round(sum(values) / len(values), 6) if values else 0.0
+    return round(sum(values) / len(values), 6) if values else None
 
 
 def _summary_from_manifest(rows: list[Any]) -> dict[str, Any]:

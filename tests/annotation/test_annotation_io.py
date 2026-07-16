@@ -326,3 +326,20 @@ def test_validate_pilot_annotation_package_blocks_duplicate_candidate_ids(tmp_pa
     assert result["status"] == "blocked"
     assert "case:pilot-001:duplicate_candidate_id" in result["errors"]
     assert "case:pilot-001:duplicate_blinded_model_id" in result["errors"]
+
+
+def test_pilot_source_hash_binds_case_content_not_only_case_id(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    first_output = tmp_path / "pilot-first"
+    build_pilot_annotation_package(run_dir, first_output, limit=1)
+    first = json.loads((first_output / "cases" / "pilot-001.json").read_text(encoding="utf-8"))
+
+    for source_case in (run_dir / "workflow2_cases").glob("*.json"):
+        payload = json.loads(source_case.read_text(encoding="utf-8"))
+        payload["generated_reports"][0]["report"] += " Additional finding."
+        source_case.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    second_output = tmp_path / "pilot-second"
+    build_pilot_annotation_package(run_dir, second_output, limit=1)
+    second = json.loads((second_output / "cases" / "pilot-001.json").read_text(encoding="utf-8"))
+
+    assert first["source_case_sha256"] != second["source_case_sha256"]

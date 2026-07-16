@@ -9,7 +9,7 @@ from medharness2.contracts import GeneratedReportArtifact, migrate_generated_rep
 from medharness2.llm_client import LLMClient
 from medharness2.schema import GeneratedReport
 from medharness2.tools.tool10_modelwise import modelwise_weighted
-from medharness2.tools.tool12_statistics import calculate_statistics
+from medharness2.tools.tool12_statistics import calculate_statistics, eligible_for_statistics
 from medharness2.utils.io import read_json, read_text, write_json
 from medharness2.validation.sample_run import validate_sample_run
 from medharness2.workflows.department import run_department_comparison
@@ -282,9 +282,11 @@ def _optional_int(value: Any) -> int | None:
         return None
 
 
-def _mean_score(rows: list[dict[str, Any]]) -> float:
+def _mean_score(rows: list[dict[str, Any]]) -> float | None:
     values: list[float] = []
     for row in rows:
+        if not eligible_for_statistics(row):
+            continue
         if "likert_mean" in row:
             value = float(row["likert_mean"])
             values.append((value - 1.0) / 4.0 if value >= 1.0 else value)
@@ -292,7 +294,7 @@ def _mean_score(rows: list[dict[str, Any]]) -> float:
             values.append(float(row["structure_score"]))
         if "finding_coverage" in row:
             values.append(float(row["finding_coverage"]))
-    return round(sum(values) / len(values), 6) if values else 0.0
+    return round(sum(values) / len(values), 6) if values else None
 
 
 def _evaluation_metadata(evaluation: dict[str, Any]) -> dict[str, Any]:

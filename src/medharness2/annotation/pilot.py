@@ -53,7 +53,7 @@ def build_pilot_annotation_package(
             raise ValueError(f"case {source_case_id} has no generated_reports for annotation")
         annotation_case = AnnotationCase(
             pilot_case_id=pilot_case_id,
-            source_case_sha256=hashlib.sha256(source_case_id.encode("utf-8")).hexdigest(),
+            source_case_sha256=_source_case_sha256(payload),
             modality=str(input_payload.get("modality") or "unknown"),
             body_part=str(input_payload.get("body_part") or "unknown"),
             reference_report=reference_text,
@@ -367,6 +367,12 @@ def _reference_report(
     if not raw_text.strip():
         raise ValueError(f"case {case_id} reference report is empty: {report_path}")
     return policy.deidentify_clinical_text(raw_text)
+
+
+def _source_case_sha256(payload: dict[str, Any]) -> str:
+    """Bind annotation provenance to source case content without exposing its ID."""
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _package_readme(case_count: int) -> str:

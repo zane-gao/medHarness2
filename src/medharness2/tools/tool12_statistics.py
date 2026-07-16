@@ -23,7 +23,7 @@ STATISTIC_METRICS = {
 def calculate_statistics(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     values_by_key: dict[str, list[float]] = {}
     for row in rows:
-        if not _eligible_for_statistics(row):
+        if not eligible_for_statistics(row):
             continue
         for key, value in _numeric_metrics(row).items():
             values_by_key.setdefault(key, []).append(value)
@@ -70,7 +70,12 @@ def _ci_half_width(std: float, n: int) -> float | None:
     return critical * std / math.sqrt(n)
 
 
-def _eligible_for_statistics(row: dict[str, Any]) -> bool:
+def eligible_for_statistics(row: dict[str, Any]) -> bool:
+    """Return whether a row has evidence eligible for aggregate statistics.
+
+    Reader-level aggregates use the same provenance gate as Tool 12 so a
+    fallback/mock evaluation cannot silently become an ``overall_score``.
+    """
     metadata = row.get("metadata") or row.get("provenance") or {}
     if bool(metadata.get("fallback_used")):
         return False
@@ -79,9 +84,15 @@ def _eligible_for_statistics(row: dict[str, Any]) -> bool:
     return str(row.get("source") or "").lower() not in {
         "local_vlm_fallback",
         "mock",
+        "mock_judge",
         "fallback",
         "mock_fallback",
     }
+
+
+def _eligible_for_statistics(row: dict[str, Any]) -> bool:
+    """Backward-compatible private alias for existing callers."""
+    return eligible_for_statistics(row)
 
 
 def compare_metric_groups(group_a: list[float], group_b: list[float]) -> dict[str, float | int | str]:

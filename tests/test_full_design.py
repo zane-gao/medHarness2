@@ -171,6 +171,21 @@ def test_workflow_mean_scores_use_same_likert_normalization():
     assert merge_mean_score(rows) == expected
 
 
+def test_workflow_mean_scores_exclude_fallback_rows_and_block_when_all_fallback():
+    rows = [
+        {
+            "likert_mean": 5.0,
+            "structure_score": 1.0,
+            "finding_coverage": 1.0,
+            "metadata": {"fallback_used": True},
+        },
+        {"likert_mean": 1.0, "structure_score": 0.0, "finding_coverage": 0.0},
+    ]
+    for scorer in (batch_mean_score, reevaluate_mean_score, merge_mean_score):
+        assert scorer(rows) == pytest.approx(0.0)
+        assert scorer([rows[0]]) is None
+
+
 def test_batch_readers_and_department_workflows(tmp_path: Path):
     report1 = tmp_path / "r1.txt"
     report2 = tmp_path / "r2.txt"
@@ -217,8 +232,12 @@ def test_batch_readers_and_department_workflows(tmp_path: Path):
     dept = run_department_comparison(batch_output, dept_output)
     assert dept_output.exists()
     assert dept["statistics"]
-    assert dept["reader_percentiles"]
-    assert dept["statistics"]["readers"]["overall_score"]["n"] == 2
+    # The mock judge is provenance-ineligible; do not turn its scores into
+    # reader percentiles or a fabricated zero-valued aggregate.
+    assert dept["reader_percentiles"] == {}
+    assert dept["statistics"]["readers"] == {}
+    assert dept["excluded_reader_count"] == 2
+    assert set(dept["comparisons"]["excluded_readers"]) == {"doc_a", "doc_b"}
     assert dept["denominator"]["success_rate"] == 1.0
     assert dept["denominator"]["failure_rate"] == 0.0
 

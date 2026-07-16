@@ -411,9 +411,15 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
 @app.post("/workflow/department")
 def department(request: DepartmentRequest) -> dict[str, Any]:
     result = run_department_comparison(request.batch_result_path, request.output_path)
+    # ``summary.readers`` reports readers present in the completed batch.  The
+    # workflow result separately exposes ``reader_count`` for readers eligible
+    # for statistical aggregation, plus ``excluded_reader_count``.
     return {
         "output_path": request.output_path,
-        "summary": {"cases": result["case_count"], "readers": result["reader_count"]},
+        "summary": {
+            "cases": result["case_count"],
+            "readers": result.get("reader_total_count", result["reader_count"]),
+        },
         "result": result,
     }
 

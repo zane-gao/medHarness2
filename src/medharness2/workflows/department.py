@@ -51,6 +51,7 @@ def run_department_comparison(batch_result_path: str | Path, output_path: str | 
     )
     result = {
         "batch_result_path": str(batch_result_path),
+        "reader_total_count": len(per_reader),
         "reader_count": len(reader_scores),
         "excluded_reader_count": len(excluded_readers),
         "case_count": int(batch.get("case_count", 0)),
