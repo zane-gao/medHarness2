@@ -195,6 +195,41 @@ def test_require_real_ocr_does_not_reuse_default_cache_after_model_change(tmp_pa
     assert len(second.paths) == 1
 
 
+def test_ocr_cache_does_not_reuse_when_verifier_route_changes(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+
+    first = PageOCRClient()
+    class AgreeVerifier:
+        def call(self, *args, **kwargs):
+            return '{"status":"agree"}'
+
+    extract_report_text(
+        pdf,
+        case_id="case-verifier-cache",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai", model="model-a")),
+        llm_client=first,
+        verifier_client=AgreeVerifier(),
+        verifier_options={"provider": "chat_completions", "model": "verifier-a"},
+        force=True,
+    )
+    second = PageOCRClient()
+    result = extract_report_text(
+        pdf,
+        case_id="case-verifier-cache",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai", model="model-a")),
+        llm_client=second,
+    )
+
+    assert result.method == "vlm_ocr"
+    assert len(second.paths) == 1
+
+
 def test_truncated_page_response_is_marked_in_metadata(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()

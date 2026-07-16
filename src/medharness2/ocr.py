@@ -332,7 +332,11 @@ def _cache_is_compatible(
         "model": str(verifier_options.get("model") or ""),
     }
     cached_verifier = meta.get("verifier") or {}
-    if expected_verifier["provider"] and (
+    expected_verifier_configured = bool(expected_verifier["provider"] or expected_verifier["model"])
+    cached_verifier_configured = bool(cached_verifier.get("configured"))
+    if cached_verifier_configured != expected_verifier_configured:
+        return False
+    if expected_verifier_configured and (
         str(cached_verifier.get("provider") or "").lower() != expected_verifier["provider"]
         or str(cached_verifier.get("model") or "") != expected_verifier["model"]
     ):
