@@ -866,6 +866,34 @@ def test_single_case_quality_gate_blocks_off_domain_generated_report(tmp_path: P
     assert result["pairwise_comparisons"] == []
 
 
+def test_single_case_keeps_body_part_only_mismatch_in_ranking(tmp_path: Path):
+    report = tmp_path / "human.txt"
+    image = tmp_path / "head.nii.gz"
+    output = tmp_path / "result.json"
+    report.write_text("FINDINGS: Head CT without hemorrhage. IMPRESSION: No acute abnormality.", encoding="utf-8")
+    image.write_text("dummy", encoding="utf-8")
+    generated = GeneratedReport(
+        model="head_ct_reader",
+        source="medharness_cli",
+        report="FINDINGS: CT shows a small lung nodule. IMPRESSION: Follow-up recommended.",
+        modality="ct",
+    )
+    result = run_single_case(
+        report_path=report,
+        image_path=image,
+        output_path=output,
+        modality="ct",
+        body_part="head",
+        precomputed_generated_reports=[generated],
+        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        llm_client=build_mock_client(),
+    )
+    kept = result["generated_reports"][0]
+    assert kept["metadata"]["quality_gate"]["passed"] is True
+    assert "body_part_mismatch" in kept["metadata"]["quality_gate"]["warnings"]
+    assert len(result["rankings"]) == 1
+
+
 def test_single_case_quality_gate_keeps_matching_cxr_report(tmp_path: Path):
     report = tmp_path / "human.txt"
     image = tmp_path / "chest.png"
