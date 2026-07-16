@@ -252,6 +252,8 @@ def test_department_excludes_reader_with_missing_overall_score_instead_of_zero_f
     result = run_department_comparison(batch_path, tmp_path / "workflow3.json")
 
     assert result["statistics"]["readers"]["overall_score"]["n"] == 1
+    assert result["reader_count"] == 1
+    assert result["excluded_reader_count"] == 1
     assert result["comparisons"]["doctor_group"]["scores"] == {"complete": 0.8}
     assert result["comparisons"]["excluded_readers"] == {"missing": "missing_overall_score"}
 
