@@ -140,6 +140,7 @@ def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: P
         assert "/opt/isolated/bin/python" in config_path.read_text(encoding="utf-8")
         input_path = Path(cmd[cmd.index("--input-jsonl") + 1])
         input_row = json.loads(input_path.read_text(encoding="utf-8"))
+        assert input_row["case_id"] == "target-case"
         assert Path(input_row["image_paths"][0]).is_absolute()
         out_index = cmd.index("--output-jsonl") + 1
         Path(cmd[out_index]).write_text(
@@ -189,7 +190,13 @@ def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: P
             ],
         )
     )
-    reports = generate_reports("image.png", "cxr", reference_report="human report", config=cfg)
+    reports = generate_reports(
+        "image.png",
+        "cxr",
+        reference_report="human report",
+        case_id="target-case",
+        config=cfg,
+    )
     assert reports[0].model == "maira_2"
     assert reports[0].source == "medharness_cli"
     assert reports[0].report == "FINDINGS: Clear lungs."

@@ -194,6 +194,7 @@ class ReportGeneratorRegistry:
                 modality=modality,
                 reference_report=reference_report,
                 body_part=body_part,
+                case_id=case_id,
             )
         else:
             result = self.generate_stub(entry, image_path=image_path, modality=modality, reference_report=reference_report)
@@ -316,6 +317,7 @@ class ReportGeneratorRegistry:
         modality: str,
         reference_report: str | None,
         body_part: str | None,
+        case_id: str | None = None,
     ) -> GeneratedReport:
         script = resolve_existing_path(entry.script_path)
         if not script.exists():
@@ -326,7 +328,7 @@ class ReportGeneratorRegistry:
             output_jsonl = Path(entry.output_jsonl) if entry.output_jsonl else tmp / "generation.jsonl"
             runtime_config = self._write_legacy_config_overlay(entry, tmp / "reportgen_models.overlay.yaml")
             row = _legacy_input_row(
-                case_id="medharness2_single_case",
+                case_id=str(case_id or "medharness2_single_case"),
                 image_path=image_path,
                 modality=modality,
                 body_part=body_part,
