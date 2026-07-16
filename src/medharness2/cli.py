@@ -32,6 +32,14 @@ from medharness2.validation.sample_run import validate_sample_run
 from medharness2.utils.io import write_json
 
 
+def _count_or_zero(value: object, label: str) -> int:
+    if value is None:
+        return 0
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="medharness2", description="medHarness2 MVP CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -936,11 +944,11 @@ def main(argv: list[str] | None = None) -> int:
             outputs={},
             metrics={
                 "passed": validation_passed,
-                "case_count": int(result.get("case_count", 0) or 0),
-                "manifest_count": int(result.get("manifest_count", 0) or 0),
-                "failed_case_count": int(result.get("failed_case_count", 0) or 0),
-                "mock_ocr_count": int(result.get("mock_ocr_count", 0) or 0),
-                "real_ocr_count": int(result.get("real_ocr_count", 0) or 0),
+                "case_count": _count_or_zero(result.get("case_count"), "case_count"),
+                "manifest_count": _count_or_zero(result.get("manifest_count"), "manifest_count"),
+                "failed_case_count": _count_or_zero(result.get("failed_case_count"), "failed_case_count"),
+                "mock_ocr_count": _count_or_zero(result.get("mock_ocr_count"), "mock_ocr_count"),
+                "real_ocr_count": _count_or_zero(result.get("real_ocr_count"), "real_ocr_count"),
                 "error_count": len(result.get("errors") or []),
                 "warning_count": len(result.get("warnings") or []),
             },
@@ -999,10 +1007,10 @@ def main(argv: list[str] | None = None) -> int:
             },
             metrics={
                 "passed": passed,
-                "case_count": int(result.get("sample", {}).get("case_count", 0) or 0),
+                "case_count": _count_or_zero(result.get("sample", {}).get("case_count"), "case_count"),
                 "blocker_count": len(result.get("blockers") or []),
                 "warning_count": len(result.get("warnings") or []),
-                "fallback_count": int(result.get("routing", {}).get("cases_requiring_fallback", 0) or 0),
+                "fallback_count": _count_or_zero(result.get("routing", {}).get("cases_requiring_fallback"), "cases_requiring_fallback"),
             },
         )
         print(f"wrote medHarness2 preflight output to {args.output}")

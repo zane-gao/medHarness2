@@ -7,6 +7,7 @@ import pytest
 
 from medharness2.checkpoints import StageCheckpointStore
 from medharness2.cli import main
+from medharness2.cli import _count_or_zero
 from medharness2.config import AppConfig, GeneratorConfig, LLMConfig, ModelRoleConfig, load_config
 from medharness2.llm_client import build_mock_client
 from medharness2.modules.pairwise_report import evaluate_pairwise
@@ -19,6 +20,12 @@ def test_single_report_module_returns_composite_inputs():
     result = evaluate_single_report("FINDINGS: Mild right lung opacity. IMPRESSION: Mild opacity.", modality="cxr", llm_client=build_mock_client())
     assert result["composite_inputs"]["likert_mean"] > 0
     assert result["finding_graph"]["findings"]
+
+
+@pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
+def test_cli_registry_counts_reject_invalid_values(bad):
+    with pytest.raises(ValueError, match="count"):
+        _count_or_zero(bad, "count")
 
 
 def test_reference_report_coverage_is_self_recall_not_template_size():
