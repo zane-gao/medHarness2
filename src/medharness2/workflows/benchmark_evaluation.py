@@ -1085,8 +1085,16 @@ def _formal_statistical_comparisons(result_rows: list[dict[str, Any]]) -> dict[s
     for left_index, left_model in enumerate(models):
         for right_model in models[left_index + 1 :]:
             for metric in metrics:
-                left = [float((row.get("metrics") or {})[metric]) for row in grouped[left_model] if isinstance((row.get("metrics") or {}).get(metric), (int, float))]
-                right = [float((row.get("metrics") or {})[metric]) for row in grouped[right_model] if isinstance((row.get("metrics") or {}).get(metric), (int, float))]
+                left = [
+                    float((row.get("metrics") or {})[metric])
+                    for row in grouped[left_model]
+                    if _finite_stat_value((row.get("metrics") or {}).get(metric))
+                ]
+                right = [
+                    float((row.get("metrics") or {})[metric])
+                    for row in grouped[right_model]
+                    if _finite_stat_value((row.get("metrics") or {}).get(metric))
+                ]
                 comparison_id = f"{left_model}__vs__{right_model}__{metric}"
                 result = compare_metric_groups(left, right)
                 item = {"id": comparison_id, "model_a": left_model, "model_b": right_model, "metric": metric, **result}
@@ -1116,6 +1124,15 @@ def _formal_statistical_comparisons(result_rows: list[dict[str, Any]]) -> dict[s
         "eligible_case_count": len(eligible),
         "model_count": len(models),
     }
+
+
+def _finite_stat_value(value: Any) -> bool:
+    """Accept only finite numeric observations; bool is not a measurement."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(float(value))
+    )
 
 
 def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
