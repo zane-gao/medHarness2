@@ -198,4 +198,15 @@ def _is_real_ocr_meta(meta: dict[str, Any]) -> bool:
     provider = str(meta.get("provider") or "").lower()
     if method == "pdf_text_layer" or provider == "local_pdf_text":
         return True
-    return method == "vlm_ocr" and bool(provider) and provider != "mock"
+    return method == "vlm_ocr" and provider in {
+        "openai",
+        "openai_responses",
+        "chat_completions",
+        "openai_chat",
+        "codex_proxy",
+        "codex",
+        "local_vlm_cli",
+        "medharness_cli_vlm",
+        "local_hf_vlm",
+        "hf_vlm_local",
+    }

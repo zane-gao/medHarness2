@@ -95,6 +95,33 @@ def test_extract_report_text_reuses_real_ocr_cache_when_real_ocr_required(tmp_pa
     assert result.method == "cache"
 
 
+def test_extract_report_text_does_not_trust_unknown_provider_cache(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    _write_blank_pdf(pdf)
+    ocr_dir = tmp_path / "ocr"
+    ocr_dir.mkdir()
+    (ocr_dir / "case1.txt").write_text("untrusted cached text\n", encoding="utf-8")
+    (ocr_dir / "case1.ocr.json").write_text(
+        json.dumps({"case_id": "case1", "method": "vlm_ocr", "provider": "future_magic_provider"}) + "\n",
+        encoding="utf-8",
+    )
+    client = StaticOCRClient()
+
+    result = extract_report_text(
+        pdf,
+        case_id="case1",
+        output_dir=ocr_dir,
+        config=AppConfig(llm=LLMConfig(provider="chat_completions")),
+        llm_client=client,
+        require_real=True,
+    )
+
+    assert client.calls == 1
+    assert result.text.startswith("FINDINGS: OCR text")
+    meta = json.loads((ocr_dir / "case1.ocr.json").read_text(encoding="utf-8"))
+    assert meta["provider"] == "chat_completions"
+
+
 def test_extract_report_text_force_refreshes_cache(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     _write_blank_pdf(pdf)
