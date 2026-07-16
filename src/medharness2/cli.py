@@ -219,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
         result = plan_generation_benchmark(args.manifest, config=cfg, model_keys=args.models)
         write_json(args.output, result)
         print(f"wrote benchmark plan to {args.output}; status={result['status']}")
-        return 0
+        return 0 if result["status"] == "ready" else 1
     if args.command == "ocr-benchmark":
         result = evaluate_ocr_candidates(args.manifest, args.output)
         print(f"wrote OCR benchmark to {args.output}; status={result['status']} evaluated={result['evaluated_count']}")

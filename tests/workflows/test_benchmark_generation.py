@@ -8,6 +8,7 @@ import pytest
 
 from medharness2.config import AppConfig, GeneratorConfig
 from medharness2.workflows.benchmark_generation import plan_generation_benchmark, run_generation_benchmark
+from medharness2.cli import main
 
 
 def _manifest(path: Path) -> Path:
@@ -86,6 +87,34 @@ def test_formal_benchmark_plan_rejects_exploratory_models(tmp_path: Path):
     assert plan["blocking_violations"][0]["reason"] == "no_formal_candidate"
     assert plan["case_coverage"]["covered_case_count"] == 0
     assert plan["case_coverage"]["uncovered_case_count"] == 1
+
+
+def test_cli_benchmark_plan_returns_nonzero_when_not_ready(tmp_path: Path):
+    manifest = _manifest(tmp_path / "manifest.jsonl")
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        "generator:\n"
+        "  include_legacy_ready_models: false\n"
+        "  cloud_fallback_enabled: false\n"
+        "  default_models: [benchmark-model]\n"
+        "  local_models:\n"
+        "    - key: benchmark-model\n"
+        "      title: Benchmark model\n"
+        "      source: local_stub\n"
+        "      supported_modalities: [cxr]\n"
+        "      supported_body_parts: [chest]\n"
+        "      ready: true\n"
+        "      report_trained: true\n"
+        "      fresh_inference: true\n"
+        "      evidence_tier: exploratory_fresh\n",
+        encoding="utf-8",
+    )
+    output = tmp_path / "plan.json"
+
+    code = main(["benchmark", "plan", "--manifest", str(manifest), "--output", str(output), "--config", str(config)])
+
+    assert code == 1
+    assert json.loads(output.read_text(encoding="utf-8"))["status"] == "not_ready"
 
 
 def test_formal_benchmark_plan_defaults_to_all_compatible_models(tmp_path: Path):
