@@ -125,6 +125,7 @@ workstreams:
       - src/medharness2/validation/live_smoke.py
       - tests/test_ocr_pipeline.py
       - tests/test_live_smoke.py
+      - docs/ocr_model_selection_20260715.md
     next_gate: 生成北川 10 例视觉核验 manifest，运行至少两个 OCR 候选各两次，并执行 `medharness2 live-smoke --config config/dmx_strong.yaml`。
   generation:
     status: in_progress
