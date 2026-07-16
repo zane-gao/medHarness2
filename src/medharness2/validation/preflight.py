@@ -43,6 +43,8 @@ def run_sample_preflight(
         model_sources=model_sources,
     )
     cases = list(route.get("cases") or [])
+    if not cases:
+        blockers.append("no_cases_discovered")
     fallback_count = int(route.get("summary", {}).get("cases_requiring_fallback", 0) or 0)
     if fallback_count:
         warnings.append("cases_require_generation_fallback")

@@ -26,6 +26,22 @@ def test_preflight_blocks_mock_ocr_when_real_ocr_required(tmp_path: Path):
     assert result["routing"]["cases_with_local_candidates"] == 1
 
 
+def test_preflight_blocks_existing_but_empty_sample_root(tmp_path: Path):
+    sample_root = tmp_path / "empty-sample"
+    sample_root.mkdir()
+
+    result = run_sample_preflight(
+        sample_root,
+        tmp_path / "preflight.json",
+        config=AppConfig(llm=LLMConfig(provider="mock")),
+        require_real_ocr=False,
+    )
+
+    assert result["passed"] is False
+    assert result["sample"]["case_count"] == 0
+    assert "no_cases_discovered" in result["blockers"]
+
+
 def test_preflight_accepts_chat_completions_ocr_provider_with_api_key(monkeypatch, tmp_path: Path):
     sample_root = _write_minimal_sample(tmp_path)
     monkeypatch.setenv("DMX_API_KEY", "test-key")
