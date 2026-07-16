@@ -616,6 +616,15 @@ def validate_run(request: ValidateRunRequest) -> dict[str, Any]:
         require_real_ocr=request.require_real_ocr,
         require_workflows=request.require_workflows,
     )
+    _record_registry(
+        request.output_dir,
+        stage="workflow.validate-run",
+        status="passed" if result.get("passed") else "failed",
+        inputs={"output_dir": request.output_dir, "expected_cases": request.expected_cases},
+        outputs={"validation": str(Path(request.output_dir) / "run_summary.json")},
+        metrics={"passed": bool(result.get("passed")), "error_count": len(result.get("errors") or [])},
+        warnings=list(result.get("errors") or []),
+    )
     return {"summary": {"passed": result["passed"], "errors": result["errors"]}, "result": result}
 
 
@@ -631,6 +640,15 @@ def preflight(request: PreflightRequest) -> dict[str, Any]:
         limit=request.limit,
         model_keys=model_keys,
         model_sources=request.model_sources,
+    )
+    _record_registry(
+        Path(request.output_path).parent,
+        stage="workflow.preflight",
+        status="passed" if result.get("passed") else "failed",
+        inputs={"sample_root": request.sample_root, "expected_cases": request.limit},
+        outputs={"preflight": request.output_path, "route_plan": str(result.get("paths", {}).get("route_plan") or "")},
+        metrics={"passed": bool(result.get("passed")), "case_count": int(result.get("sample", {}).get("case_count", 0) or 0), "blocker_count": len(result.get("blockers") or [])},
+        warnings=list(result.get("blockers") or []),
     )
     return {
         "output_path": request.output_path,

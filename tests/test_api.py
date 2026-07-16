@@ -320,6 +320,7 @@ def test_api_preflight_reports_blockers(tmp_path: Path):
     assert body["summary"]["passed"] is False
     assert "real_ocr_required_but_provider_is_mock" in body["summary"]["blockers"]
     assert output.exists()
+    assert json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))["entries"][-1]["status"] == "failed"
 
 
 def test_api_sample_full(tmp_path: Path):
