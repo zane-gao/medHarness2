@@ -18,6 +18,8 @@ def hazardwise_weighted(
     weights = hazard_weights or DEFAULT_HAZARD_WEIGHTS
     result: list[dict[str, Any]] = []
     for row in rows:
+        if not _eligible(row):
+            continue
         item = dict(row)
         error_type = str(item.get("error_type") or "unknown")
         level = str(int(float(item.get("hazard_level") or 1)))
@@ -32,6 +34,20 @@ def hazardwise_weighted(
         item["hazard_weight"] = weight
         result.append(item)
     return result
+
+
+def _eligible(row: dict[str, Any]) -> bool:
+    metadata = row.get("metadata") or row.get("provenance") or {}
+    if bool(metadata.get("fallback_used")):
+        return False
+    if str(row.get("evidence_tier") or "").lower() in {"mock", "debug_fallback"}:
+        return False
+    return str(row.get("source") or "").lower() not in {
+        "mock",
+        "mock_fallback",
+        "fallback",
+        "local_vlm_fallback",
+    }
 
 
 def _is_number(value: Any) -> bool:

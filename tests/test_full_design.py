@@ -63,6 +63,26 @@ def test_tool11_applies_hazard_weights_to_numeric_metrics():
     assert result[1]["hazard_weight"] == 1.0
 
 
+def test_tool11_excludes_fallback_hazard_rows():
+    rows = [
+        {
+            "error_type": "false_finding",
+            "hazard_level": 5,
+            "metrics": {"error_rate": 0.1},
+            "provenance": {"fallback_used": True},
+        },
+        {
+            "error_type": "false_finding",
+            "hazard_level": 2,
+            "metrics": {"error_rate": 0.2},
+            "provenance": {"fallback_used": False},
+        },
+    ]
+    result = hazardwise_weighted(rows)
+    assert len(result) == 1
+    assert result[0]["metrics"]["error_rate"] == pytest.approx(0.25)
+
+
 def test_tool12_statistics_and_percentile_rank():
     stats = calculate_statistics([{"score": 0.5}, {"score": 0.7}, {"score": 0.9}])
     assert stats["score"]["mean"] == pytest.approx(0.7)
