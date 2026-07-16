@@ -302,6 +302,7 @@ def main(argv: list[str] | None = None) -> int:
             args.output_dir,
             command=command,
             stage="experiments.run",
+            status="failed" if result.get("errors") else "passed",
             inputs={"run_dir": args.run_dir, "protocol_dir": args.protocol_dir or "experiments/protocols"},
             outputs=outputs,
             metrics=metrics,
@@ -316,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"wrote medHarness2 experiment results to {Path(args.output_dir) / 'results.json'}")
         print(f"experiments={result['experiment_count']}")
-        return 0
+        return 1 if result.get("errors") else 0
     if args.command == "figures" and args.figures_command == "build":
         result = build_figures(args.experiment_dir, args.output_dir)
         metrics = {"figure_count": result["figure_count"]}

@@ -135,6 +135,16 @@ def test_cli_experiments_run(tmp_path: Path):
     assert registry["entries"][-1]["outputs"]["experiment_protocol"] == str(output_dir / "experiment_protocol.json")
 
 
+def test_cli_experiments_run_rejects_missing_source_run(tmp_path: Path):
+    output_dir = tmp_path / "experiments"
+    code = main(["experiments", "run", "--run-dir", str(tmp_path / "missing"), "--output-dir", str(output_dir)])
+    assert code == 1
+    payload = json.loads((output_dir / "results.json").read_text(encoding="utf-8"))
+    assert payload["errors"] == ["run_dir_not_found"]
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_build_figures_writes_svg_and_manifest(tmp_path: Path):
     run_dir = _write_minimal_run(tmp_path / "run")
     exp_dir = tmp_path / "experiments"

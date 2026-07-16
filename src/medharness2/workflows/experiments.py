@@ -37,6 +37,13 @@ def run_experiments(
     out.mkdir(parents=True, exist_ok=True)
     education_generation = _ensure_education_outputs(root)
     result = build_experiment_results(root, protocol_dir=protocol_dir)
+    input_errors: list[str] = []
+    if not root.is_dir():
+        input_errors.append("run_dir_not_found")
+    elif not (root / "workflow2.json").is_file():
+        input_errors.append("workflow2_not_found")
+    if input_errors:
+        result["errors"] = input_errors
     result["automation"] = {"education_generation": education_generation}
     result["warnings"] = list(education_generation.get("warnings") or [])
     protocol = build_experiment_protocol(result, protocol_dir=protocol_dir)
@@ -61,6 +68,7 @@ def experiment_registry_metrics(result: dict[str, Any]) -> dict[str, Any]:
         "not_ready_experiment_count": int(status_counts.get("not_ready", 0)),
         "education_generation_status": str(education.get("status") or "unknown"),
         "education_suggestion_count": int(education.get("suggestion_count") or 0),
+        "error_count": len(result.get("errors") or []),
     }
 
 
