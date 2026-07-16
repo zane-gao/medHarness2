@@ -137,7 +137,7 @@ workstreams:
     next_gate: Expand the frozen CXR chest exploratory matrix, add clinician labels and formal validation IDs, then promote only models that pass the locked benchmark.
   clinical_validation:
     status: not_started
-    summary: Ten pilot cases are packaged; the annotation validator confirms reader A, reader B, and adjudication are all not_started (0/10 complete), rejects path traversal, duplicate/unlisted case files, candidate-count drift, premature adjudication, and manifest/status mismatches.
+    summary: Ten pilot cases are packaged; the annotation validator confirms reader A, reader B, and adjudication are all not_started (0/10 complete), rejects path traversal, duplicate/unlisted case files, candidate-count drift, empty reference/candidate text, duplicate candidate identifiers, premature adjudication, and manifest/status mismatches.
     evidence_paths:
       - annotation/pilot10/manifest.jsonl
       - annotation/pilot10/annotation.schema.json
