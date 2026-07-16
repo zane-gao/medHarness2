@@ -526,14 +526,15 @@ def _default_error(error: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_error(error: dict[str, Any]) -> dict[str, Any]:
     error_type = str(error.get("error_type") or "mismatched_finding")
-    try:
-        level = int(error.get("hazard_level", DEFAULT_HAZARD.get(error_type, 3)))
-    except (TypeError, ValueError):
+    raw_level = error.get("hazard_level", DEFAULT_HAZARD.get(error_type, 3))
+    if isinstance(raw_level, int) and not isinstance(raw_level, bool):
+        level = max(1, min(5, raw_level))
+    else:
         level = DEFAULT_HAZARD.get(error_type, 3)
     normalized = {
         **error,
         "error_type": error_type,
-        "hazard_level": max(1, min(5, level)),
+        "hazard_level": level,
         "explanation": str(error.get("explanation") or f"MVP hazard estimate for {error_type}."),
         "recommended_action": str(error.get("recommended_action") or "review_if_relevant"),
     }

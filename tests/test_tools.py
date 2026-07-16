@@ -1089,6 +1089,14 @@ def test_tool4_adds_hazard_levels():
     assert result["errors"][0]["hazard_level"] == 4
 
 
+@pytest.mark.parametrize("bad", [True, 1.5, "4", "oops"])
+def test_tool4_normalization_does_not_coerce_invalid_hazard_levels(bad):
+    from medharness2.tools.tool4_hazard import _normalize_error
+
+    normalized = _normalize_error({"error_type": "omission_finding", "hazard_level": bad})
+    assert normalized["hazard_level"] == 4
+
+
 @pytest.mark.parametrize("bad", [True, 1.5, "2", 0, -1])
 def test_tool4_rejects_invalid_max_retries_without_coercion(bad):
     with pytest.raises(ValueError, match="max_retries"):
