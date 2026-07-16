@@ -632,15 +632,27 @@ def validate_run(request: ValidateRunRequest) -> dict[str, Any]:
 def preflight(request: PreflightRequest) -> dict[str, Any]:
     cfg = load_config(request.config_path) if request.config_path else load_config()
     model_keys = ["*"] if request.all_compatible_local_models else request.model_keys
-    result = run_sample_preflight(
-        request.sample_root,
-        request.output_path,
-        config=cfg,
-        require_real_ocr=request.require_real_ocr,
-        limit=request.limit,
-        model_keys=model_keys,
-        model_sources=request.model_sources,
-    )
+    try:
+        result = run_sample_preflight(
+            request.sample_root,
+            request.output_path,
+            config=cfg,
+            require_real_ocr=request.require_real_ocr,
+            limit=request.limit,
+            model_keys=model_keys,
+            model_sources=request.model_sources,
+        )
+    except Exception as exc:
+        _record_registry(
+            Path(request.output_path).parent,
+            stage="workflow.preflight",
+            status="failed",
+            inputs={"sample_root": request.sample_root},
+            outputs={"preflight": request.output_path},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
+        )
+        raise HTTPException(status_code=500, detail=f"preflight_failed:{type(exc).__name__}") from exc
     _record_registry(
         Path(request.output_path).parent,
         stage="workflow.preflight",

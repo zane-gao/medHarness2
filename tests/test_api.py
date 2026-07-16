@@ -323,6 +323,18 @@ def test_api_preflight_reports_blockers(tmp_path: Path):
     assert json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))["entries"][-1]["status"] == "failed"
 
 
+def test_api_preflight_returns_structured_failure_for_missing_sample_root(tmp_path: Path):
+    output = tmp_path / "preflight.json"
+    response = TestClient(app).post(
+        "/workflow/preflight",
+        json={"sample_root": str(tmp_path / "missing"), "output_path": str(output)},
+    )
+
+    assert response.status_code == 500
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_api_sample_full(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
