@@ -177,6 +177,8 @@ def test_cli_workflow_education_returns_nonzero_when_blocked(tmp_path: Path):
     assert code == 1
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["status"] == "blocked_insufficient_data"
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
 
 
 def _workflow1_payload() -> dict:

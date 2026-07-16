@@ -902,6 +902,7 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.output).parent,
             command=command,
             stage="workflow.education",
+            status="failed" if result.get("status") in {"blocked", "blocked_insufficient_data"} else "passed",
             inputs={"eval_report": args.eval_report or "", "eval_radiologist": args.eval_radiologist or ""},
             outputs={"education": args.output},
             metrics={
