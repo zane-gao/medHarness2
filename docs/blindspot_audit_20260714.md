@@ -16,6 +16,7 @@
 > **2026-07-16 后续增量**：`dmx_strong.yaml` 已提供 Doubao Seed 候选主 OCR（`ocr_primary`）和独立 Qwen OCR verifier（`ocr_verifier`）路由；两者只作为冻结 benchmark 候选，不能据模型名称直接宣布 winner。多页 OCR verifier 现在按原始 PDF 页码逐页抽查，保留页级审计结果及 verifier provider/model/role provenance；`validate-run --require-real-ocr` 与 OCR 核心统一真实 provider 白名单，未知 provider 不再被误计为真实 OCR；Tool1 增加解释 grounding 诊断字段，但不自动改分。全量回归测试为 401 passed、18 warnings。
 > **2026-07-16 OCR 评测收尾增量**：OCR provenance 新增 `source_page_count`/`retained_page_count`，保留旧 `page_count` 兼容；候选 benchmark 现在拒绝不等覆盖、重复 case-model 行后再选 provisional winner。旧 OCR sidecar 缓存仍可兼容复用，专用 OCR role 继续严格校验模型路由；preflight 现在透传 role 模型到本地 CLI/HF 能力检查。
 > **2026-07-16 抽取收尾增量**：规则抽取去重不再把缺失/非法 measurement 隐式转换为 `0.0`；未知 measurement 与明确 `0 mm` 保持可区分，新增 CXR 回归测试覆盖该边界。该修复不改变既有 finding schema 或路由接口。
+> **2026-07-16 聚合输入收尾增量**：显式提供空的 workflow2 `cases`/`failed_cases` 或 workflow3 `reader_percentiles` 时，不再被历史兼容默认值绕过一致性校验；manifest 中合法但非对象的 JSONL 行现在保留真实行号并 fail-closed。全量回归测试为 504 passed、18 warnings。
 > **2026-07-16 评委输入边界增量**：Tool1/Tool2 对外部评委 prompt 的报告文本增加长度上限、头尾保留和明确的 quoted-data 边界；Tool2 prompt/stage 版本升级为 `tool2-hybrid-v3`，避免 checkpoint 将新旧提示词混用。全量回归测试为 410 passed、18 warnings。
 > **2026-07-16 统计汇总增量**：Tool12 纳入 reader-level `overall_score`；Workflow3 department 输出补齐 source/success/failure 分母及成功率、失败率，避免 reader 统计只呈现分数而丢失失败病例分母。全量回归测试为 412 passed、18 warnings。
 > **2026-07-16 排名语义增量**：Tool9 近 cutoff 候选仍保留供复核，但不再把它们标成正式 `selected_top_n`；新增 `near_cutoff_review` 区分复核候选，避免 analyze/education 下游误把不确定候选纳入正式 Top-N。
