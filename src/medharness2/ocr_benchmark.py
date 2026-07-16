@@ -211,7 +211,11 @@ def _read_manifest(path: Path) -> list[Any]:
         return []
     if path.suffix.lower() == ".jsonl":
         rows: list[Any] = []
-        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError) as exc:
+            return [{"_manifest_error": f"read_error:{type(exc).__name__}"}]
+        for line_no, line in enumerate(lines, 1):
             if not line.strip():
                 continue
             try:

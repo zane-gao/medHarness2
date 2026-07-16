@@ -24,12 +24,25 @@ def run_live_judge_smoke(
         result = {"status": "blocked", "reason": f"missing_role:{role}"}
         write_json(output_path, result)
         return result
+    configured_provider = str(route.provider or "").strip().lower()
+    provider = configured_provider or str(cfg.llm.provider or "").strip().lower()
     if not route.api_key_env or not os.environ.get(route.api_key_env):
         result = {
             "status": "blocked",
             "reason": "missing_api_key",
             "role": role,
             "api_key_env": route.api_key_env,
+        }
+        write_json(output_path, result)
+        return result
+    if provider in {"", "mock", "deterministic", "fallback"}:
+        result = {
+            "status": "blocked",
+            "reason": "unsupported_provider_for_live_smoke",
+            "role": role,
+            "provider": provider or "unknown",
+            "model": route.model,
+            "fallback_used": False,
         }
         write_json(output_path, result)
         return result

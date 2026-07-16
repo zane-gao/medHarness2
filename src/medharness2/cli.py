@@ -115,6 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     single.add_argument("--report", required=True)
     single.add_argument("--image", required=True)
     single.add_argument("--output", required=True)
+    single.add_argument("--case-id")
     single.add_argument("--modality")
     single.add_argument("--top-n", type=int)
     single.add_argument("--model", action="append", dest="models")
@@ -375,6 +376,7 @@ def main(argv: list[str] | None = None) -> int:
             report_path=Path(args.report),
             image_path=Path(args.image),
             output_path=Path(args.output),
+            case_id=args.case_id,
             modality=args.modality,
             top_n=args.top_n,
             model_keys=_model_keys(args),
@@ -389,6 +391,7 @@ def main(argv: list[str] | None = None) -> int:
                 "report": args.report,
                 "image": args.image,
                 "modality": args.modality or "",
+                "case_id": args.case_id or "",
                 "top_n": args.top_n,
                 "models": _model_keys(args) or [],
                 "model_sources": args.model_sources or [],

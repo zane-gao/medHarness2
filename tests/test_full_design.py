@@ -11,6 +11,7 @@ from medharness2.tools.tool10_modelwise import modelwise_weighted
 from medharness2.tools.tool11_hazardwise import hazardwise_weighted
 from medharness2.tools.tool12_statistics import calculate_statistics, percentile_rank, correct_pvalues_holm, compare_metric_groups
 from medharness2.tools.tool6_structure_diff import compare_structure
+from medharness2.tools.tool9_rank import select_top_k
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
 from medharness2.workflows.batch_readers import _mean_score as batch_mean_score
@@ -161,6 +162,54 @@ def test_statistics_exposes_group_test_and_holm_correction():
     assert 0.0 <= comparison["p_value"] <= 1.0
     corrected = correct_pvalues_holm({"a": 0.01, "b": 0.04, "c": 0.2})
     assert corrected["a"] <= corrected["b"] <= corrected["c"]
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+def test_statistics_ignores_non_finite_metric_values(bad_value: float):
+    """Non-finite model output must not crash or poison aggregate statistics."""
+    stats = calculate_statistics([{"score": bad_value}, {"score": 0.5}])
+
+    assert stats["score"]["n"] == 1
+    assert stats["score"]["mean"] == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+def test_tool9_excludes_non_finite_candidates_from_ranking(bad_value: float):
+    ranked = select_top_k(
+        [
+            {
+                "model": "bad",
+                "composite_inputs": {
+                    "likert_mean": bad_value,
+                    "structure_score": 0.5,
+                    "finding_coverage": 0.5,
+                },
+            },
+            {
+                "model": "ok",
+                "composite_inputs": {
+                    "likert_mean": 4.0,
+                    "structure_score": 0.5,
+                    "finding_coverage": 0.5,
+                },
+            },
+        ],
+        top_k=2,
+    )
+
+    assert [row["model"] for row in ranked] == ["ok"]
+
+
+@pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])
+def test_tool10_ignores_non_finite_metric_values(bad_value: float):
+    result = modelwise_weighted(
+        [
+            {"model": "bad", "metrics": {"score": bad_value}},
+            {"model": "ok", "metrics": {"score": 0.5}},
+        ]
+    )
+
+    assert result["score"] == pytest.approx(0.5)
 
 
 def test_workflow_mean_scores_use_same_likert_normalization():

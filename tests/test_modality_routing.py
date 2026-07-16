@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from medharness2.config import AppConfig
+from medharness2.config import AppConfig, GeneratorConfig
 from medharness2.generators.registry import GeneratorEntry, ReportGeneratorRegistry
 from medharness2.tools.tool7_modality import _normalize_modality_token, recognize_modality
 from medharness2.tools.tool2_extract import _canonical_observation_code
@@ -20,6 +20,58 @@ def test_registry_prefers_matching_body_part_without_requiring_it():
     }
     selected = registry.compatible_entries("ct", body_part="chest")
     assert [entry.key for entry in selected] == ["ct_match", "ct_other"]
+
+
+def test_registry_expands_wildcard_default_models_for_each_modality():
+    registry = ReportGeneratorRegistry(
+        AppConfig(
+            generator=GeneratorConfig(
+                default_models=["*"],
+                include_legacy_ready_models=False,
+                local_models=[
+                    {
+                        "key": "cxr_model",
+                        "title": "CXR",
+                        "source": "artifact_reuse",
+                        "supported_modalities": ["cxr"],
+                        "ready": True,
+                    },
+                    {
+                        "key": "ct_model",
+                        "title": "CT",
+                        "source": "artifact_reuse",
+                        "supported_modalities": ["ct"],
+                        "ready": True,
+                    },
+                ],
+            )
+        )
+    )
+
+    assert [entry.key for entry in registry.select("cxr")] == ["cxr_model"]
+    assert [entry.key for entry in registry.select("ct")] == ["ct_model"]
+
+
+def test_registry_normalizes_modality_aliases_before_selection():
+    registry = ReportGeneratorRegistry(
+        AppConfig(
+            generator=GeneratorConfig(
+                default_models=["alias_model"],
+                include_legacy_ready_models=False,
+                local_models=[
+                    {
+                        "key": "alias_model",
+                        "title": "MRI",
+                        "source": "artifact_reuse",
+                        "supported_modalities": ["mri"],
+                        "ready": True,
+                    }
+                ],
+            )
+        )
+    )
+
+    assert [entry.key for entry in registry.select("MRI")] == ["alias_model"]
 
 
 def test_modality_token_normalization_handles_common_vlm_phrasing():

@@ -360,6 +360,17 @@ def test_ocr_candidate_benchmark_blocks_missing_manifest(tmp_path: Path):
     assert result["selection"]["status"] == "blocked"
 
 
+def test_ocr_candidate_benchmark_blocks_invalid_utf8_jsonl_manifest(tmp_path: Path):
+    manifest = tmp_path / "ocr_manifest.jsonl"
+    manifest.write_bytes(b'{"case_id":"case1"}\n\xff\n')
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "blocked"
+    assert result["selection"]["status"] == "blocked"
+    assert any("manifest:" in item for item in result["blocked_items"])
+
+
 def test_ocr_candidate_benchmark_blocks_unequal_model_coverage(tmp_path: Path):
     manifest = tmp_path / "ocr_manifest.json"
     manifest.write_text(

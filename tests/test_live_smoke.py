@@ -36,3 +36,56 @@ def test_live_smoke_validates_synthetic_json(tmp_path: Path, monkeypatch):
     assert result["status"] == "succeeded"
     assert result["response_schema_valid"] is True
     assert result["fallback_used"] is False
+
+
+def test_live_smoke_blocks_mock_provider_even_when_api_key_is_set(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("SMOKE_KEY", "test-only")
+    cfg = AppConfig(
+        model_roles={
+            "general_judge": ModelRoleConfig(
+                provider="mock",
+                model="mock-model",
+                api_key_env="SMOKE_KEY",
+            )
+        }
+    )
+
+    class UnexpectedClient:
+        def call(self, *args, **kwargs):
+            raise AssertionError("mock provider must be blocked before a call")
+
+    result = run_live_judge_smoke(
+        tmp_path / "smoke.json",
+        config=cfg,
+        client=UnexpectedClient(),
+    )
+
+    assert result["status"] == "blocked"
+    assert result["reason"] == "unsupported_provider_for_live_smoke"
+    assert result["provider"] == "mock"
+
+
+def test_live_smoke_blocks_inherited_mock_provider_when_api_key_is_set(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("SMOKE_KEY", "test-only")
+    cfg = AppConfig(
+        model_roles={
+            "general_judge": ModelRoleConfig(
+                model="mock-model",
+                api_key_env="SMOKE_KEY",
+            )
+        }
+    )
+
+    class UnexpectedClient:
+        def call(self, *args, **kwargs):
+            raise AssertionError("inherited mock provider must be blocked before a call")
+
+    result = run_live_judge_smoke(
+        tmp_path / "smoke.json",
+        config=cfg,
+        client=UnexpectedClient(),
+    )
+
+    assert result["status"] == "blocked"
+    assert result["reason"] == "unsupported_provider_for_live_smoke"
+    assert result["provider"] == "mock"

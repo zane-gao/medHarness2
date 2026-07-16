@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 
@@ -36,7 +37,9 @@ def _numeric_metrics(payload: dict[str, Any]) -> dict[str, float]:
         if isinstance(value, bool):
             continue
         if isinstance(value, (int, float)):
-            result[key] = float(value)
+            number = float(value)
+            if math.isfinite(number):
+                result[key] = number
     return result
 
 

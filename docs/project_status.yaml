@@ -7,7 +7,7 @@ baseline:
   branch: main
   git_sha: 618b72e
   dirty_worktree: true
-  pytest_passed: 474
+  pytest_passed: 479
   pytest_warnings: 18
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -89,7 +89,7 @@ workstreams:
     next_gate: 冻结 10 例（CR4/CT4/MRI2）视觉核验文本，接入豆包/PaddleOCR/Qwen 候选并做双次重复调用；按 clinical CER 和 material-error rate 选择 primary，verifier 仅输出 disagreement artifact。
   routing:
     status: validated
-    summary: 路由器已改为三种主要模态（cxr/ct/mri）硬约束；body_part 不再阻塞兼容模型，只作为候选排序信号。VLM 模态识别补充 MRI/CT/X-ray 常见句式归一化，并覆盖 DICOM、图片扩展名和 unknown 路径测试。
+    summary: 路由器已改为三种主要模态（cxr/ct/mri）硬约束；body_part 不再阻塞兼容模型，只作为候选排序信号。配置中的 `default_models: ["*"]` 现在会按模态展开全部兼容候选，不再把 wildcard 当作普通模型名；完整 52 例 dmx_strong preflight 已验证 52/52 有本地候选、0 fallback。VLM 模态识别补充 MRI/CT/X-ray 常见句式归一化，并覆盖 DICOM、图片扩展名和 unknown 路径测试。
     evidence_paths:
       - src/medharness2/generators/registry.py
       - src/medharness2/tools/tool7_modality.py
@@ -119,7 +119,7 @@ workstreams:
     next_gate: 在北川冻结集上重跑候选模型和双次重复调用，验证 fallback_count、recall、seed/cache、评委一致性和临床错误率，再决定 formal benchmark promotion。
   benchmark_gates:
     status: in_progress
-    summary: 已提供 `ocr-benchmark` 冻结集评测 CLI（CER、数字/否定词、截断率、provisional winner）和 `live-smoke` 真实评委连通性/JSON 门禁。缺少 gold、candidate、声明路径或凭据时返回 blocked，不会用 0 分或 mock 结果冒充完成。
+    summary: 已提供 `ocr-benchmark` 冻结集评测 CLI（CER、数字/否定词、截断率、provisional winner）和 `live-smoke` 真实评委连通性/JSON 门禁。缺少 gold、candidate、声明路径或凭据时返回 blocked；mock/deterministic/fallback provider 即使配置了 key 也会被 live-smoke 拒绝；损坏 UTF-8 manifest 也会明确 blocked，不会用 0 分或 mock 结果冒充完成。
     evidence_paths:
       - src/medharness2/ocr_benchmark.py
       - src/medharness2/validation/live_smoke.py
@@ -165,7 +165,7 @@ workstreams:
     next_gate: Re-enable strict data-governance review before any external clinical-data run.
   control_panel:
     status: validated
-    summary: The internal project-status dashboard has been rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Current and legacy reader panels preserve missing scores/percentiles as null and exclude or show them as unavailable instead of rendering zero/P0. Reader totals are now separated from statistically eligible reader counts, so mock/fallback rows are excluded from aggregates without changing completed-reader accounting. Static checks and source inspection passed. Current full regression is 474 passed with 18 warnings. Playwright desktop/mobile execution was not completed because this environment lacks the @playwright/test package and Chromium browser, so visual regression remains an environment follow-up rather than evidence of failure.
+    summary: The internal project-status dashboard has been rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Current and legacy reader panels preserve missing scores/percentiles as null and exclude or show them as unavailable instead of rendering zero/P0. Reader totals are now separated from statistically eligible reader counts, so mock/fallback rows are excluded from aggregates without changing completed-reader accounting. Static checks and source inspection passed. Current full regression is 479 passed with 18 warnings. Playwright desktop/mobile execution was not completed because this environment lacks the @playwright/test package and Chromium browser, so visual regression remains an environment follow-up rather than evidence of failure.
     evidence_paths:
       - web/build_panel.py
       - web/panel_template.html

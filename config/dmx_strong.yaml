@@ -136,7 +136,7 @@ generator:
   include_legacy_ready_models: true
   legacy_config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
   default_models:
-    - chexagent
+    - "*"
 
 ranking:
   top_n: 3

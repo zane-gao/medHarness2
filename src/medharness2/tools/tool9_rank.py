@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 
@@ -71,6 +72,8 @@ def _clamp01(value: Any) -> float:
         number = float(value)
     except (TypeError, ValueError):
         return 0.0
+    if not math.isfinite(number):
+        return 0.0
     return max(0.0, min(1.0, number))
 
 
@@ -79,6 +82,8 @@ def _clamp01_or_none(value: Any) -> float | None:
         number = float(value)
     except (TypeError, ValueError):
         return None
+    if not math.isfinite(number):
+        return None
     return max(0.0, min(1.0, number))
 
 
@@ -86,6 +91,8 @@ def _likert01(value: Any) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError):
+        return 0.0
+    if not math.isfinite(number):
         return 0.0
     if 0.0 <= number < 1.0:
         return _clamp01(number)
@@ -96,6 +103,8 @@ def _likert01_or_none(value: Any) -> float | None:
     try:
         number = float(value)
     except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number):
         return None
     if 0.0 <= number < 1.0:
         return max(0.0, min(1.0, number))

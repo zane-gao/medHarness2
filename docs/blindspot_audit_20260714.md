@@ -45,6 +45,7 @@
 > **2026-07-16 合约收尾增量**：`workflow3_aggregate` schema 现在显式包含 `reader_total_count`，并校验其不小于统计有效 reader 数；单病例入口同时保留显式 `case_id` 到产物与 input 的绑定，避免输出文件名意外覆盖病例身份。相关验证已补回归测试。
 > **2026-07-16 隐私/OCR 收尾增量**：annotation 候选文本继续统一走临床脱敏；结构化 `source_case_sha256` 由公共隐私扫描器作为不透明 provenance 元数据处理，避免哈希数字片段被误判为手机号/身份证；OCR sidecar 缺少 `case_id` 时不再复用缓存。全量回归测试为 473 passed、18 warnings。
 > **2026-07-16 最终验证增量**：补齐 API 与单病例入口的显式 `case_id` 传递、旧第四位置 `report_text` 兼容回归，并校验 reader 总数/有效统计数合约；最终全量回归为 474 passed、18 warnings。
+> **2026-07-16 路由与门禁收尾增量**：`default_models: ["*"]` 现在会真正展开三模态兼容候选；完整 52 例 `dmx_strong` preflight 验证 52/52 本地候选、0 fallback。live-smoke 拒绝 mock/deterministic/fallback provider，即使存在 API key 也不发起调用；损坏 UTF-8 OCR manifest 明确 blocked；CLI single-case 显式 `case_id` 参数已补齐。全量回归测试为 479 passed、18 warnings。
 > **2026-07-16 reader provenance 增量**：reader `overall_score` 现在复用 Tool 12 的 fallback/mock provenance gate；全 fallback reader 返回 `null`，Workflow 3 记录 `excluded_readers`，不再把兜底结果或 0 分伪装成可比较的 reader 百分位。reader 等权 pooled mean 与 Tool 9 的 `0.4/0.3/0.3` 候选排名权重仍明确区分。
 > **2026-07-16 reader 计数增量**：department 输出的 `reader_count` 现在只统计有有效 `overall_score` 的 reader，并单独记录 `excluded_reader_count`，避免 reader 总数与 percentile/统计群体不一致。
 > **2026-07-16 兼容/标注安全增量**：恢复 `run_single_case` 历史第四个位置参数作为 `report_text` 的兼容语义；pilot 包重建在已有标注或无效包时拒绝删除旧病例文件；损坏 manifest 继续以 blocked 状态展示。全量回归测试为 443 passed、18 warnings。

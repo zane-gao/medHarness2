@@ -715,6 +715,38 @@ def test_cli_single_case(tmp_path: Path):
     assert entry["metrics"]["generated_report_count"] == len(payload["generated_reports"])
 
 
+def test_cli_single_case_preserves_explicit_case_id(tmp_path: Path):
+    report = tmp_path / "human.txt"
+    image = tmp_path / "dummy.dcm"
+    output = tmp_path / "result.json"
+    report.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal.", encoding="utf-8")
+    image.write_text("dummy", encoding="utf-8")
+
+    code = main(
+        [
+            "workflow",
+            "single-case",
+            "--report",
+            str(report),
+            "--image",
+            str(image),
+            "--output",
+            str(output),
+            "--modality",
+            "cxr",
+            "--case-id",
+            "cli-explicit-case",
+            "--top-n",
+            "1",
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["case_id"] == "cli-explicit-case"
+    assert payload["input"]["case_id"] == "cli-explicit-case"
+
+
 def test_cli_benchmark_evaluate_uses_explicit_config_and_resume_flag(
     tmp_path: Path,
     monkeypatch,

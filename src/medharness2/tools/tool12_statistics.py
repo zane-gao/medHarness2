@@ -59,6 +59,7 @@ def _numeric_metrics(row: dict[str, Any]) -> dict[str, float]:
         for key, value in payload.items()
         if key in STATISTIC_METRICS
         if isinstance(value, (int, float)) and not isinstance(value, bool)
+        if math.isfinite(float(value))
     }
 
 

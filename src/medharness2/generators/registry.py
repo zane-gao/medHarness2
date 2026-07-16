@@ -128,8 +128,9 @@ class ReportGeneratorRegistry:
         body_part: str | None = None,
         sources: set[str] | None = None,
     ) -> list[GeneratorEntry]:
-        if requested and "*" in requested:
-            return self.compatible_entries(modality, body_part=body_part, sources=sources)
+        modality_key = _normalize_route_modality(modality)
+        if (requested and "*" in requested) or (requested is None and "*" in self.config.generator.default_models):
+            return self.compatible_entries(modality_key, body_part=body_part, sources=sources)
         keys = requested or self.config.generator.default_models
         selected: list[GeneratorEntry] = []
         for key in keys:
@@ -140,7 +141,7 @@ class ReportGeneratorRegistry:
                 continue
             supported = {m.lower() for m in entry.supported_modalities}
             body_supported = {part.lower() for part in entry.supported_body_parts}
-            modality_ok = "unknown" in supported or modality.lower() in supported
+            modality_ok = "unknown" in supported or modality_key in {_normalize_route_modality(item) for item in supported}
             if modality_ok:
                 selected.append(entry)
         return selected
@@ -151,13 +152,14 @@ class ReportGeneratorRegistry:
         body_part: str | None = None,
         sources: set[str] | None = None,
     ) -> list[GeneratorEntry]:
+        modality_key = _normalize_route_modality(modality)
         result: list[GeneratorEntry] = []
         for entry in self.entries.values():
             if sources and entry.source not in sources:
                 continue
             supported = {m.lower() for m in entry.supported_modalities}
             body_supported = {part.lower() for part in entry.supported_body_parts}
-            modality_ok = "unknown" in supported or modality.lower() in supported
+            modality_ok = "unknown" in supported or modality_key in {_normalize_route_modality(item) for item in supported}
             if modality_ok:
                 result.append(entry)
         return sorted(
@@ -864,6 +866,17 @@ def _normalize_modalities(values: list[Any]) -> list[str]:
         if key in {"xray", "x-ray", "xr", "cr", "dx"}:
             result.append("cxr")
     return list(dict.fromkeys(result))
+
+
+def _normalize_route_modality(value: Any) -> str:
+    key = str(value or "").strip().lower().replace("-", "")
+    if key in {"xray", "xr", "cr", "dx"}:
+        return "cxr"
+    if key in {"mr", "mri"}:
+        return "mri"
+    if key == "ct":
+        return "ct"
+    return key
 
 
 def _body_part_ok(body_part: str | None, supported: set[str]) -> bool:
