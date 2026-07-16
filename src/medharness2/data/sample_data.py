@@ -65,6 +65,9 @@ def prepare_sample_dataset(
 ) -> list[CaseManifest]:
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
+    ocr_primary_route = cfg.model_roles.get("ocr_primary")
+    ocr_provider = str((ocr_primary_route.provider if ocr_primary_route else cfg.llm.provider) or "mock").lower()
+    verifier_route = cfg.model_roles.get("ocr_verifier")
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = build_sample_manifest(sample_root, out_dir / "manifest.raw.jsonl")
@@ -88,7 +91,7 @@ def prepare_sample_dataset(
         report_text_path = row.report_text
         warnings = [*row.warnings, *prepared.warnings]
         if run_ocr and row.report_pdf:
-            if cfg.llm.provider.lower() == "mock":
+            if ocr_provider == "mock":
                 if require_real_ocr:
                     warnings.append("real_ocr_required_but_provider_is_mock")
                 else:
@@ -114,6 +117,8 @@ def prepare_sample_dataset(
                         output_dir=out_dir / "ocr",
                         config=cfg,
                         llm_client=client,
+                        verifier_client=client if verifier_route else None,
+                        verifier_options=verifier_route.as_call_options() if verifier_route else None,
                         require_real=require_real_ocr,
                         force=force_ocr,
                     )

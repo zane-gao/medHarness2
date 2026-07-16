@@ -94,6 +94,8 @@ def test_dmx_strong_profile_routes_every_llm_backed_tool_to_verified_strong_mode
     assert cfg.llm.provider == "chat_completions"
     assert cfg.llm.api_key_env == "DMX_API_KEY"
     assert set(cfg.model_roles) >= {
+        "ocr_primary",
+        "ocr_verifier",
         "general_judge",
         "finding_extractor",
         "alignment_auditor",
@@ -114,6 +116,8 @@ def test_dmx_strong_profile_routes_every_llm_backed_tool_to_verified_strong_mode
         assert cfg.model_roles[role].model == "gpt-5.6-terra"
         assert cfg.model_roles[role].api_key_env == "DMX_API_KEY"
     assert cfg.model_roles["finding_extractor"].max_tokens == 2048
+    assert cfg.model_roles["ocr_primary"].model == "doubao-seed-2-1-pro-260628"
+    assert cfg.model_roles["ocr_verifier"].model == "qwen-vl-ocr-latest"
     assert cfg.model_roles["hazard_reviewer"].model == "claude-opus-4-8"
     assert cfg.model_roles["hazard_reviewer"].omit_temperature is False
     assert cfg.model_roles["hazard_reviewer"].temperature == 0.0

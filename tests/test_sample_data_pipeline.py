@@ -10,7 +10,7 @@ import pydicom
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid
 
-from medharness2.config import AppConfig, LLMConfig
+from medharness2.config import AppConfig, LLMConfig, ModelRoleConfig
 from medharness2.data.sample_data import build_sample_manifest
 from medharness2.data.sample_data import prepare_sample_dataset
 from medharness2.ocr import extract_report_text
@@ -430,6 +430,43 @@ def test_prepare_sample_dataset_refreshes_mock_cache_when_real_ocr_required(tmp_
     assert "mock_ocr_used" not in rows[0].warnings
     meta = json.loads((out_dir / "ocr" / "CR001.ocr.json").read_text(encoding="utf-8"))
     assert meta["provider"] == "openai"
+
+
+def test_prepare_sample_dataset_uses_configured_ocr_roles_even_when_top_level_is_mock(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    _write_dicom(case_dir / "Y1", modality="CR", body_part="CHEST")
+    _write_blank_pdf(sample_root / "CR" / "CR001" / "report.pdf")
+    pd.DataFrame({"ID": ["CR001"], "Reader": ["reader_a"]}).to_excel(sample_root / "readers.xlsx", index=False)
+
+    class RoutedClient(StaticOCRClient):
+        def call(self, prompt, image_path=None, **kwargs):
+            if kwargs.get("model") == "verifier-model":
+                return '{"status":"agree","reason":"ok"}'
+            assert kwargs.get("model") == "primary-model"
+            return super().call(prompt, image_path=image_path, **kwargs)
+
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        model_roles={
+            "ocr_primary": ModelRoleConfig(provider="chat_completions", model="primary-model"),
+            "ocr_verifier": ModelRoleConfig(provider="chat_completions", model="verifier-model"),
+        },
+    )
+    rows = prepare_sample_dataset(
+        sample_root,
+        tmp_path / "out",
+        config=cfg,
+        llm_client=RoutedClient(),
+        require_real_ocr=True,
+    )
+
+    assert rows[0].report_text
+    assert "real_ocr_required_but_provider_is_mock" not in rows[0].warnings
+    meta = json.loads((tmp_path / "out" / "ocr" / "CR001.ocr.json").read_text(encoding="utf-8"))
+    assert meta["model"] == "primary-model"
+    assert meta["quality_audit"]["status"] == "agree"
 
 
 def _write_blank_pdf(path: Path) -> None:

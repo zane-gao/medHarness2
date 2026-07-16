@@ -24,6 +24,26 @@ privacy:
     - public_nonclinical
 
 model_roles:
+  # OCR candidates only: the frozen Beichuan benchmark must select the winner.
+  # The verifier is audit-only and must never rewrite primary OCR text.
+  ocr_primary:
+    provider: chat_completions
+    model: doubao-seed-2-1-pro-260628
+    api_key_env: DMX_API_KEY
+    base_url: https://www.DMXAPI.cn/v1
+    transport_max_retries: 2
+    timeout_sec: 180
+    temperature: 0.0
+    max_tokens: 4096
+  ocr_verifier:
+    provider: chat_completions
+    model: qwen-vl-ocr-latest
+    api_key_env: DMX_API_KEY
+    base_url: https://www.DMXAPI.cn/v1
+    transport_max_retries: 2
+    timeout_sec: 180
+    temperature: 0.0
+    max_tokens: 4096
   hazard_primary:
     provider: chat_completions
     model: gpt-5.6-terra

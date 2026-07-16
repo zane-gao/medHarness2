@@ -36,12 +36,16 @@ def extract_report_text(
     llm_client: Any | None = None,
     verifier_client: Any | None = None,
     verifier_options: dict[str, Any] | None = None,
+    ocr_role: str = "ocr_primary",
     min_direct_chars: int = 20,
     require_real: bool = False,
     force: bool = False,
 ) -> ReportTextResult:
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
+    primary_options = _ocr_role_options(cfg, ocr_role)
+    primary_provider = str(primary_options.get("provider") or cfg.llm.provider).lower()
+    primary_model = str(primary_options.get("model") or cfg.llm.model)
     pdf = Path(report_pdf)
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -67,10 +71,10 @@ def extract_report_text(
         method = "pdf_text_layer"
         provider = "local_pdf_text"
     else:
-        if require_real and cfg.llm.provider.lower() not in REAL_OCR_PROVIDERS:
+        if require_real and primary_provider not in REAL_OCR_PROVIDERS:
             raise RuntimeError(
                 "require_real OCR needs a supported non-mock provider for scanned PDFs; "
-                f"got {cfg.llm.provider!r}"
+                f"got {primary_provider!r}"
             )
         prompt = (
             "Transcribe this single radiology-report page exactly. Return only visible report text; "
@@ -104,6 +108,7 @@ def extract_report_text(
                         image_path=image_path,
                         response_format="text",
                         payload_classification="raw_medical_document",
+                        **primary_options,
                     )
                 ).strip()
                 page_results.append(page_text)
@@ -149,7 +154,7 @@ def extract_report_text(
                     }
                     warnings.append("ocr_verifier_failed")
         method = "vlm_ocr"
-        provider = cfg.llm.provider
+        provider = primary_provider
         if not text:
             warnings.append("empty_vlm_ocr_result")
         page_count = len(page_results)
@@ -163,7 +168,8 @@ def extract_report_text(
                 "case_id": case_id,
                 "method": method,
                 "provider": provider,
-                "model": cfg.llm.model if method == "vlm_ocr" else "",
+                "model": primary_model if method == "vlm_ocr" else "",
+                "role": ocr_role if method == "vlm_ocr" and primary_options else "default",
                 "source_pdf": str(pdf),
                 "warnings": warnings,
                 "page_count": page_count,
@@ -191,6 +197,11 @@ def _extract_pdf_text(pdf: Path) -> str:
     except Exception:
         return ""
     return "\n".join(page.get_text().strip() for page in doc).strip()
+
+
+def _ocr_role_options(config: AppConfig, role: str) -> dict[str, Any]:
+    route = config.model_roles.get(role) if role else None
+    return route.as_call_options() if route is not None else {}
 
 
 def _render_pdf_pages(pdf: Path, output_dir: Path) -> list[str]:

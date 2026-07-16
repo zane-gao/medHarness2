@@ -5,7 +5,7 @@ from pathlib import Path
 
 import fitz
 
-from medharness2.config import AppConfig, LLMConfig
+from medharness2.config import AppConfig, LLMConfig, ModelRoleConfig
 from medharness2.ocr import extract_report_text
 from medharness2.ocr_benchmark import evaluate_ocr_candidates
 
@@ -72,6 +72,45 @@ def test_scanned_pdf_ocr_skips_deterministic_blank_pages(tmp_path: Path):
     assert meta["page_count"] == 1
     assert meta["pages"][1]["skipped"] is True
     assert meta["pages"][1]["skip_reason"] == "blank_page"
+
+
+def test_scanned_pdf_ocr_uses_configured_primary_role_and_records_route(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=200)
+    page.insert_text((30, 60), "visible page")
+    doc.save(pdf)
+
+    class RecordingClient(PageOCRClient):
+        def call(self, prompt, image_path=None, **kwargs):
+            assert kwargs["provider"] == "chat_completions"
+            assert kwargs["model"] == "doubao-seed-2-1-pro-260628"
+            return super().call(prompt, image_path=image_path, **kwargs)
+
+    result = extract_report_text(
+        pdf,
+        case_id="case-route",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(
+            llm=LLMConfig(provider="mock"),
+            model_roles={
+                "ocr_primary": ModelRoleConfig(
+                    provider="chat_completions",
+                    model="doubao-seed-2-1-pro-260628",
+                    api_key_env="DMX_API_KEY",
+                    base_url="https://www.DMXAPI.cn/v1",
+                )
+            },
+        ),
+        llm_client=RecordingClient(),
+        force=True,
+    )
+
+    assert result.text.startswith("FINDINGS:")
+    meta = json.loads((tmp_path / "ocr" / "case-route.ocr.json").read_text(encoding="utf-8"))
+    assert meta["provider"] == "chat_completions"
+    assert meta["model"] == "doubao-seed-2-1-pro-260628"
+    assert meta["role"] == "ocr_primary"
 
 
 def test_truncated_page_response_is_marked_in_metadata(tmp_path: Path):
