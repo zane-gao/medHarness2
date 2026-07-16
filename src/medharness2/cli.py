@@ -315,6 +315,7 @@ def main(argv: list[str] | None = None) -> int:
             args.run_dir,
             command=command,
             stage="experiments.run",
+            status="failed" if result.get("errors") else "passed",
             inputs={"run_dir": args.run_dir, "protocol_dir": args.protocol_dir or "experiments/protocols"},
             outputs={"experiment_dir": args.output_dir, **outputs},
             metrics=metrics,

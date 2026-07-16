@@ -136,13 +136,16 @@ def test_cli_experiments_run(tmp_path: Path):
 
 
 def test_cli_experiments_run_rejects_missing_source_run(tmp_path: Path):
+    run_dir = tmp_path / "missing"
     output_dir = tmp_path / "experiments"
-    code = main(["experiments", "run", "--run-dir", str(tmp_path / "missing"), "--output-dir", str(output_dir)])
+    code = main(["experiments", "run", "--run-dir", str(run_dir), "--output-dir", str(output_dir)])
     assert code == 1
     payload = json.loads((output_dir / "results.json").read_text(encoding="utf-8"))
     assert payload["errors"] == ["run_dir_not_found"]
     registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
     assert registry["entries"][-1]["status"] == "failed"
+    source_registry = json.loads((run_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert source_registry["entries"][-1]["status"] == "failed"
 
 
 def test_build_figures_writes_svg_and_manifest(tmp_path: Path):
