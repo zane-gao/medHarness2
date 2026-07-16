@@ -93,6 +93,7 @@ def test_tool1_uses_real_model_role_and_records_provenance():
     assert result["_metadata"]["provider"] == "chat_completions"
     assert result["_metadata"]["role"] == "general_judge"
     assert result["_metadata"]["fallback_used"] is False
+    assert result["_metadata"]["explanation_grounding"]["diagnostic_only"] is True
 
 
 def test_tool1_retries_incomplete_real_llm_response():

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from statistics import mean
 from typing import Any
 from urllib.parse import urlparse
@@ -69,6 +70,7 @@ def evaluate_likert(
             model_role,
             options,
         )
+        metadata["explanation_grounding"] = _explanation_grounding(normalized, report_text)
         if consistency_runs > 1:
             repeats = []
             for _ in range(consistency_runs - 1):
@@ -91,6 +93,7 @@ def evaluate_likert(
             f"Tool 1 Likert failed schema validation after {attempts} attempts: {detail}"
         )
     normalized = _normalize_likert(default, image_path=image_path)
+    grounding = _explanation_grounding(normalized, report_text)
     normalized["_metadata"] = _metadata(
         "deterministic_fallback",
         True,
@@ -101,6 +104,7 @@ def evaluate_likert(
         model_role,
         options,
     )
+    normalized["_metadata"]["explanation_grounding"] = grounding
     return normalized
 
 
@@ -216,6 +220,26 @@ def _client_identity(client: Any, options: dict[str, Any]) -> tuple[str, str]:
     provider = str(options.get("provider") or getattr(llm, "provider", None) or "custom")
     model = str(options.get("model") or getattr(llm, "model", None) or type(client).__name__)
     return provider, model
+
+
+def _explanation_grounding(result: dict[str, Any], report_text: str) -> dict[str, Any]:
+    report_tokens = {token.lower() for token in _tokens(report_text) if len(token) >= 3}
+    rows: dict[str, Any] = {}
+    for metric in LIKERT_METRICS:
+        explanation = str((result.get(metric) or {}).get("explanation") or "")
+        explanation_tokens = {token.lower() for token in _tokens(explanation) if len(token) >= 3}
+        overlap = sorted(report_tokens & explanation_tokens)
+        rows[metric] = {
+            "report_token_overlap_count": len(overlap),
+            "report_token_overlap": overlap[:20],
+            "ungrounded_explanation": not bool(overlap),
+        }
+    rows["diagnostic_only"] = True
+    return rows
+
+
+def _tokens(text: str) -> list[str]:
+    return re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]", text)
 
 
 def _metadata(
