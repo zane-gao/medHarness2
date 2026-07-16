@@ -153,6 +153,7 @@ def evaluate_generation_benchmark(
                     evaluation_spec_sha256=evaluation_spec_sha256,
                     evaluation_config_snapshot=evaluation_config_snapshot,
                     evaluation_config_sha256=evaluation_config_sha256,
+                    required_general_judge_consistency_runs=cfg.model_roles["general_judge"].consistency_runs,
                 )
                 resumed_count += 1
                 was_resumed = True
@@ -208,7 +209,10 @@ def evaluate_generation_benchmark(
                 )
                 if checkpoint_store is not None:
                     checkpointing = checkpoint_store.summary()
-                llm_verification = verify_real_llm_case_evaluation(case_evaluation)
+                llm_verification = verify_real_llm_case_evaluation(
+                    case_evaluation,
+                    required_general_judge_consistency_runs=cfg.model_roles["general_judge"].consistency_runs,
+                )
                 artifact = {
                     "schema_version": "2.0",
                     "artifact_type": "generation_benchmark_case_evaluation",
@@ -349,7 +353,11 @@ def evaluate_generation_benchmark(
     return summary
 
 
-def verify_real_llm_case_evaluation(payload: dict[str, Any]) -> dict[str, Any]:
+def verify_real_llm_case_evaluation(
+    payload: dict[str, Any],
+    *,
+    required_general_judge_consistency_runs: int = 1,
+) -> dict[str, Any]:
     evidence: list[dict[str, Any]] = []
     human = dict(payload.get("human_evaluation") or {})
     generated = list(payload.get("generated_evaluations") or [])
@@ -359,6 +367,17 @@ def verify_real_llm_case_evaluation(payload: dict[str, Any]) -> dict[str, Any]:
             "Real LLM verification requires one reference evaluation, one candidate evaluation, and one pairwise comparison"
         )
 
+    required_consistency_runs = max(1, int(required_general_judge_consistency_runs))
+    _verify_likert_consistency(
+        (human.get("likert") or {}).get("_metadata"),
+        label="T1.reference",
+        required_runs=required_consistency_runs,
+    )
+    _verify_likert_consistency(
+        ((generated[0].get("likert") or {}).get("_metadata")),
+        label="T1.candidate",
+        required_runs=required_consistency_runs,
+    )
     evidence.append(
         _verify_metadata(
             (human.get("likert") or {}).get("_metadata"),
@@ -732,6 +751,32 @@ def _normalize_verified_evidence(
     }
 
 
+def _verify_likert_consistency(
+    metadata: dict[str, Any] | None,
+    *,
+    label: str,
+    required_runs: int,
+) -> None:
+    """Enforce configured T1 retest coverage before formal promotion."""
+    if required_runs <= 1:
+        return
+    if not isinstance(metadata, dict):
+        raise ValueError(f"{label} is missing Likert consistency metadata")
+    try:
+        actual_runs = int(metadata.get("consistency_runs"))
+        compared_count = int(metadata.get("consistency_compared_count"))
+    except (TypeError, ValueError):
+        raise ValueError(f"{label} has invalid Likert consistency metadata") from None
+    if actual_runs != required_runs:
+        raise ValueError(f"{label} consistency_runs mismatch: {actual_runs} != {required_runs}")
+    if compared_count != required_runs - 1:
+        raise ValueError(f"{label} consistency comparison is incomplete")
+    if metadata.get("consistency_errors"):
+        raise ValueError(f"{label} consistency retest contains errors")
+    if metadata.get("consistency_exact") is not True:
+        raise ValueError(f"{label} consistency retest did not reach exact agreement")
+
+
 def _validate_resumable_artifact(
     artifact: dict[str, Any],
     *,
@@ -744,6 +789,7 @@ def _validate_resumable_artifact(
     evaluation_spec_sha256: str,
     evaluation_config_snapshot: dict[str, Any],
     evaluation_config_sha256: str,
+    required_general_judge_consistency_runs: int = 1,
 ) -> None:
     if artifact.get("status") != "succeeded":
         raise ValueError("Existing evaluation artifact is not successful")
@@ -783,7 +829,10 @@ def _validate_resumable_artifact(
         raw_path
     ):
         raise ValueError("Existing case evaluation hash mismatch")
-    verification = verify_real_llm_case_evaluation(read_json(raw_path))
+    verification = verify_real_llm_case_evaluation(
+        read_json(raw_path),
+        required_general_judge_consistency_runs=required_general_judge_consistency_runs,
+    )
     if verification != artifact.get("llm_verification"):
         raise ValueError("Existing evaluation LLM verification mismatch")
 

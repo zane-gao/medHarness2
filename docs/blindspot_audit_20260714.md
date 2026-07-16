@@ -20,6 +20,7 @@
 > **2026-07-16 Tool1 重测配置增量**：`single_report` 现在透传 `general_judge.consistency_runs` 到 Tool1，并把该参数纳入 checkpoint 输入；此前强配置虽支持重测字段，但单病例评分路径未实际执行，现已补回归测试验证双次调用与一致性 provenance。
 > **2026-07-16 Tool1 异常边界增量**：Tool1 现在与 Tool4 统一，仅将明确的客户端/传输异常和响应校验异常纳入重试；通用 `RuntimeError`、`AttributeError` 等编程错误直接抛出，不再被转换为确定性评分。新增连接失败重试与 fail-fast 回归测试。
 > **2026-07-16 强配置稳定性增量**：`config/dmx_strong.yaml` 现在同时为 `general_judge` 和 `hazard_reviewer` 设置 `consistency_runs: 2`；Tool1 的 Likert 主评分不再默认只采样一次，正式运行会留下重测一致性 provenance。真实 provider 的一致率仍需冻结集验证。
+> **2026-07-16 正式 benchmark T1 门禁增量**：`verify_real_llm_case_evaluation` 现在接收配置要求的 `general_judge.consistency_runs`；当强配置要求双次调用时，reference/candidate 两份 T1 产物必须完整记录比较次数、无重测错误且 `consistency_exact=true`，否则正式 benchmark 验证拒绝通过。默认单次配置仍保持兼容。
 > **2026-07-16 抽取收尾增量**：规则抽取去重不再把缺失/非法 measurement 隐式转换为 `0.0`；未知 measurement 与明确 `0 mm` 保持可区分，新增 CXR 回归测试覆盖该边界。该修复不改变既有 finding schema 或路由接口。
 > **2026-07-16 聚合输入收尾增量**：显式提供空的 workflow2 `cases`/`failed_cases` 或 workflow3 `reader_percentiles` 时，不再被历史兼容默认值绕过一致性校验；manifest 中合法但非对象的 JSONL 行现在保留真实行号并 fail-closed。全量回归测试为 504 passed、18 warnings。
 > **2026-07-16 统计分母收尾增量**：department、analyze-run 和实验摘要现在保留显式 `0` 的 source/success/failure/reader 计数，不再使用 `or` 把合法零值误判为缺失并回退到病例行数。全量回归测试为 509 passed、18 warnings。

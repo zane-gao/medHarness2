@@ -549,6 +549,31 @@ def test_verify_real_llm_case_evaluation_counts_validated_attempts_by_role():
     assert verification["validated_attempt_counts"]["alignment_auditor"] == 1
 
 
+def test_verify_real_llm_case_evaluation_enforces_configured_t1_retest():
+    payload = _strict_case_evaluation()
+    for evaluation in [payload["human_evaluation"], payload["generated_evaluations"][0]]:
+        metadata = evaluation["likert"]["_metadata"]
+        metadata.update(
+            {
+                "consistency_runs": 2,
+                "consistency_compared_count": 1,
+                "consistency_errors": [],
+                "consistency_exact": True,
+            }
+        )
+
+    verification = verify_real_llm_case_evaluation(
+        payload, required_general_judge_consistency_runs=2
+    )
+    assert verification["role_counts"]["general_judge"] == 2
+
+    payload["generated_evaluations"][0]["likert"]["_metadata"]["consistency_exact"] = False
+    with pytest.raises(ValueError, match="consistency retest"):
+        verify_real_llm_case_evaluation(
+            payload, required_general_judge_consistency_runs=2
+        )
+
+
 def test_verify_real_llm_case_evaluation_rejects_incomplete_t5_adjudication():
     payload = _strict_case_evaluation()
     audit = payload["pairwise_comparisons"][0]["comparison"]["alignment_audit"]
