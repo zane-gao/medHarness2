@@ -109,9 +109,9 @@ def prepare_sample_dataset(
                             force=force_ocr,
                         )
                         quality_status = str(ocr.metadata.get("quality_status") or "passed")
-                        report_text_path = ocr.cache_path if quality_status != "blocked" else ""
-                        if quality_status == "blocked":
-                            warnings.append("ocr_quality_blocked")
+                        report_text_path = ocr.cache_path if quality_status == "passed" else ""
+                        if quality_status in {"blocked", "review_required"}:
+                            warnings.append(f"ocr_quality_{quality_status}")
                         warnings.extend(ocr.warnings)
                     except Exception as exc:
                         warnings.append(f"ocr_failed:{type(exc).__name__}")
@@ -129,9 +129,9 @@ def prepare_sample_dataset(
                         force=force_ocr,
                     )
                     quality_status = str(ocr.metadata.get("quality_status") or "passed")
-                    report_text_path = ocr.cache_path if quality_status != "blocked" else ""
-                    if quality_status == "blocked":
-                        warnings.append("ocr_quality_blocked")
+                    report_text_path = ocr.cache_path if quality_status == "passed" else ""
+                    if quality_status in {"blocked", "review_required"}:
+                        warnings.append(f"ocr_quality_{quality_status}")
                     warnings.extend(ocr.warnings)
                 except Exception as exc:
                     warnings.append(f"ocr_failed:{type(exc).__name__}")

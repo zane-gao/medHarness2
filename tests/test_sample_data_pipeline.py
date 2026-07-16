@@ -615,6 +615,39 @@ def test_prepare_sample_dataset_uses_configured_ocr_roles_even_when_top_level_is
     assert meta["quality_audit"]["status"] == "agree"
 
 
+def test_prepare_sample_dataset_blocks_verifier_review_text(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    _write_dicom(case_dir / "Y1", modality="CR", body_part="CHEST")
+    _write_blank_pdf(sample_root / "CR" / "CR001" / "report.pdf")
+    pd.DataFrame({"ID": ["CR001"], "Reader": ["reader_a"]}).to_excel(sample_root / "readers.xlsx", index=False)
+
+    class DisagreeClient(StaticOCRClient):
+        def call(self, prompt, image_path=None, **kwargs):
+            if kwargs.get("model") == "verifier-model":
+                return '{"status":"disagreement","reason":"check"}'
+            return super().call(prompt, image_path=image_path, **kwargs)
+
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        model_roles={
+            "ocr_primary": ModelRoleConfig(provider="chat_completions", model="primary-model"),
+            "ocr_verifier": ModelRoleConfig(provider="chat_completions", model="verifier-model"),
+        },
+    )
+    rows = prepare_sample_dataset(
+        sample_root,
+        tmp_path / "out",
+        config=cfg,
+        llm_client=DisagreeClient(),
+        require_real_ocr=True,
+    )
+
+    assert rows[0].report_text == ""
+    assert "ocr_quality_review_required" in rows[0].warnings
+
+
 def _write_blank_pdf(path: Path) -> None:
     doc = fitz.open()
     page = doc.new_page(width=200, height=200)

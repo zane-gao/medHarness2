@@ -117,7 +117,7 @@ Workflow (端到端 + 文件 I/O)
 ### OCR 地基质量状态 — `ocr.py` / `data/sample_data.py`
 
 - 页级 OCR sidecar 记录 `quality_status`：`passed`、`review_required` 或 `blocked`。
-- 空 OCR、疑似截断页或整体截断会进入 `blocked`；样本准备阶段保留 warning 和审计产物，但不把 blocked 缓存路径作为可用 `report_text`。
+- 空 OCR、疑似截断页或整体截断会进入 `blocked`；verifier 分歧/失败进入 `review_required`。样本准备阶段保留 warning 和审计产物，但只有 `passed` 才把缓存路径作为可用 `report_text`。
 - verifier 只做 audit：disagreement、失败和非法响应进入 `review_required`，不改写 primary OCR 文本。
 - `ocr-benchmark` 对带 provenance 的 gold/candidate sidecar 同样 fail-closed：`quality_status=blocked` 或 `review_required` 的文本不会进入 CER、数字和否定词统计；传统无 provenance 纯文本 manifest 保持兼容。
 
