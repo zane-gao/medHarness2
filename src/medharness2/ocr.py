@@ -78,7 +78,13 @@ def extract_report_text(
                 method="cache",
                 cache_path=str(cache_path),
                 warnings=list(cached_meta.get("warnings") or []),
-                metadata={"cached_ocr": cached_meta, "quality_audit": cached_meta.get("quality_audit")},
+                metadata={
+                    "cached_ocr": cached_meta,
+                    "quality_audit": cached_meta.get("quality_audit"),
+                    "quality_status": cached_meta.get("quality_status") or _ocr_quality_status(
+                        list(cached_meta.get("warnings") or []), cached_meta.get("quality_audit"), cache_path.read_text(encoding="utf-8")
+                    ),
+                },
             )
 
     warnings: list[str] = []
@@ -200,6 +206,11 @@ def extract_report_text(
     if method == "pdf_text_layer":
         page_meta = []
         retained_page_count = 0
+    quality_status = _ocr_quality_status(warnings, quality_audit, text)
+    if quality_status == "blocked":
+        warnings.append("ocr_quality_blocked")
+    elif quality_status == "review_required":
+        warnings.append("ocr_quality_review_required")
     cache_path.write_text(text + ("\n" if text and not text.endswith("\n") else ""), encoding="utf-8")
     meta_path.write_text(
         json.dumps(
@@ -227,6 +238,7 @@ def extract_report_text(
                 "source_pdf_sha256": source_pdf_sha256,
                 "prompt_version": "ocr-page-v2",
                 "quality_audit": quality_audit,
+                "quality_status": quality_status,
             },
             ensure_ascii=False,
             indent=2,
@@ -255,6 +267,7 @@ def extract_report_text(
                 "configured": verifier_client is not None,
             },
             "quality_audit": quality_audit,
+            "quality_status": quality_status,
         },
     )
 
@@ -411,6 +424,27 @@ def _looks_truncated(text: str) -> bool:
     return stripped[-1].isascii() and stripped[-1].isalnum() and not stripped.lower().endswith(
         ("stable", "normal", "negative", "正常")
     )
+
+
+def _ocr_quality_status(
+    warnings: list[str], quality_audit: dict[str, Any] | None, text: str,
+) -> str:
+    """Classify OCR evidence without silently upgrading weak text to usable input."""
+    warning_set = {str(item) for item in warnings}
+    if not text.strip() or "empty_vlm_ocr_result" in warning_set or any(
+        item.startswith("ocr_possible_truncation") for item in warning_set
+    ):
+        return "blocked"
+    audit_statuses: list[str] = []
+    if isinstance(quality_audit, dict):
+        pages = quality_audit.get("pages")
+        if isinstance(pages, list):
+            audit_statuses = [str(item.get("status") or "").lower() for item in pages if isinstance(item, dict)]
+        else:
+            audit_statuses = [str(quality_audit.get("status") or "").lower()]
+    if any(status in {"disagreement", "verifier_failed", "invalid_verifier_response"} for status in audit_statuses):
+        return "review_required"
+    return "passed"
 
 
 def _read_meta(path: Path) -> dict[str, Any]:

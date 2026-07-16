@@ -215,8 +215,10 @@ def test_truncated_page_response_is_marked_in_metadata(tmp_path: Path):
         force=True,
     )
     assert "ocr_possible_truncation" in result.warnings
+    assert result.metadata["quality_status"] == "blocked"
     meta = json.loads((tmp_path / "ocr" / "case-truncated.ocr.json").read_text(encoding="utf-8"))
     assert "ocr_possible_truncation" in meta["warnings"]
+    assert meta["quality_status"] == "blocked"
 
 
 def test_complete_chinese_page_response_is_not_marked_truncated(tmp_path: Path):
@@ -240,6 +242,7 @@ def test_complete_chinese_page_response_is_not_marked_truncated(tmp_path: Path):
     )
 
     assert "ocr_possible_truncation" not in result.warnings
+    assert result.metadata["quality_status"] == "passed"
 
 
 def test_ocr_verifier_is_audit_only_and_cannot_change_primary_text(tmp_path: Path):
@@ -273,6 +276,7 @@ def test_ocr_verifier_is_audit_only_and_cannot_change_primary_text(tmp_path: Pat
     meta = json.loads((tmp_path / "ocr" / "case-verifier.ocr.json").read_text(encoding="utf-8"))
     assert meta["quality_audit"]["status"] == "disagreement"
     assert meta["quality_audit"]["spans"] == ["audit only"]
+    assert meta["quality_status"] == "review_required"
 
 
 def test_ocr_verifier_failure_does_not_fail_primary_ocr(tmp_path: Path):

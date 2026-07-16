@@ -502,6 +502,28 @@ def test_prepare_sample_dataset_continues_when_ocr_fails(tmp_path: Path):
     assert summary["warning_counts"]["ocr_failed:RuntimeError"] == 1
 
 
+def test_prepare_sample_dataset_blocks_truncated_ocr_text(tmp_path: Path):
+    sample_root = tmp_path / "sample"
+    case_dir = sample_root / "CR" / "CR001" / "W1"
+    case_dir.mkdir(parents=True)
+    _write_dicom(case_dir / "Y1", modality="CR", body_part="CHEST")
+    _write_blank_pdf(sample_root / "CR" / "CR001" / "report.pdf")
+    pd.DataFrame({"ID": ["CR001"], "Reader": ["reader_a"]}).to_excel(sample_root / "readers.xlsx", index=False)
+
+    class TruncatedClient:
+        def call(self, *args, **kwargs):
+            return "FINDINGS: unfinished sentence"
+
+    rows = prepare_sample_dataset(
+        sample_root,
+        tmp_path / "out",
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=TruncatedClient(),
+    )
+    assert rows[0].report_text == ""
+    assert "ocr_quality_blocked" in rows[0].warnings
+
+
 def test_prepare_sample_dataset_marks_mock_ocr(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"

@@ -108,7 +108,10 @@ def prepare_sample_dataset(
                             llm_client=client,
                             force=force_ocr,
                         )
-                        report_text_path = ocr.cache_path
+                        quality_status = str(ocr.metadata.get("quality_status") or "passed")
+                        report_text_path = ocr.cache_path if quality_status != "blocked" else ""
+                        if quality_status == "blocked":
+                            warnings.append("ocr_quality_blocked")
                         warnings.extend(ocr.warnings)
                     except Exception as exc:
                         warnings.append(f"ocr_failed:{type(exc).__name__}")
@@ -125,7 +128,10 @@ def prepare_sample_dataset(
                         require_real=require_real_ocr,
                         force=force_ocr,
                     )
-                    report_text_path = ocr.cache_path
+                    quality_status = str(ocr.metadata.get("quality_status") or "passed")
+                    report_text_path = ocr.cache_path if quality_status != "blocked" else ""
+                    if quality_status == "blocked":
+                        warnings.append("ocr_quality_blocked")
                     warnings.extend(ocr.warnings)
                 except Exception as exc:
                     warnings.append(f"ocr_failed:{type(exc).__name__}")

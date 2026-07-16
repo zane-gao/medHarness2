@@ -114,6 +114,12 @@ Workflow (端到端 + 文件 I/O)
 - **输出**：`[{index, model, score, metrics{}, score_ci_lower, score_ci_upper, uncertainty_status, uncertainty_overlap, requires_review, rank, selected_top_n}]`。
 - **关键**：workflow 只把**质量门控通过**的候选喂进来（见 Workflow 1）。
 
+### OCR 地基质量状态 — `ocr.py` / `data/sample_data.py`
+
+- 页级 OCR sidecar 记录 `quality_status`：`passed`、`review_required` 或 `blocked`。
+- 空 OCR、疑似截断页或整体截断会进入 `blocked`；样本准备阶段保留 warning 和审计产物，但不把 blocked 缓存路径作为可用 `report_text`。
+- verifier 只做 audit：disagreement、失败和非法响应进入 `review_required`，不改写 primary OCR 文本。
+
 ### Tool 10 · 按模型加权 — `tools/tool10_modelwise.py`
 
 - **入口**：`modelwise_weighted(rows, weights=None) -> dict`
