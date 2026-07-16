@@ -12,6 +12,7 @@ from medharness2.utils.io import write_json
 
 
 NEGATION_TOKENS = ("no", "not", "without", "否认", "未见", "未发现", "无")
+_TEXT_PATH_SUFFIXES = frozenset({".txt", ".text", ".md", ".json", ".jsonl", ".csv", ".tsv", ".ocr"})
 
 
 def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) -> dict[str, Any]:
@@ -36,10 +37,14 @@ def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) 
             hard_blocked = True
             continue
         case_id = str(item.get("case_id") or "")
-        gold = _resolve_text(item.get("gold_text"), base_dir=manifest_file.parent)
+        gold_value = item.get("gold_text")
+        gold = _resolve_text(gold_value, base_dir=manifest_file.parent)
         candidates = item.get("candidates") or {}
         if not case_id or not gold or not isinstance(candidates, dict):
             blocked.append(case_id or "unknown_case")
+            if _is_declared_text_path(gold_value, base_dir=manifest_file.parent) and not gold:
+                blocked[-1] = f"missing_gold:{case_id or 'unknown_case'}"
+                hard_blocked = True
             continue
         if not candidates:
             # An otherwise valid gold row with no candidates must never be
@@ -50,7 +55,11 @@ def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) 
         for model, value in candidates.items():
             text = _resolve_text(value, base_dir=manifest_file.parent)
             if not text:
-                blocked.append(f"{case_id}:{model}")
+                if _is_declared_text_path(value, base_dir=manifest_file.parent):
+                    blocked.append(f"missing_candidate:{case_id}:{model}")
+                    hard_blocked = True
+                else:
+                    blocked.append(f"{case_id}:{model}")
                 continue
             model_name = str(model)
             provenance_blockers = _validate_candidate_provenance(
@@ -222,12 +231,7 @@ def _read_manifest(path: Path) -> list[Any]:
 
 
 def _resolve_text(value: Any, *, base_dir: Path | None = None) -> str:
-    if isinstance(value, str):
-        path = Path(value)
-        if not path.is_absolute() and base_dir is not None:
-            path = base_dir / path
-    else:
-        path = None
+    path, declared_path = _declared_text_path(value, base_dir=base_dir)
     if path is not None and path.is_file():
         try:
             if path.suffix.lower() == ".json":
@@ -236,9 +240,53 @@ def _resolve_text(value: Any, *, base_dir: Path | None = None) -> str:
             return path.read_text(encoding="utf-8").strip()
         except (OSError, TypeError, ValueError):
             return ""
+    if declared_path:
+        return ""
     if isinstance(value, dict):
         return str(value.get("text") or value.get("ocr_text") or "").strip()
     return str(value or "").strip()
+
+
+def _declared_text_path(value: Any, *, base_dir: Path | None = None) -> tuple[Path | None, bool]:
+    """Return a manifest-declared text path without mistaking prose for one.
+
+    Structured ``{"path": ...}`` values are always path declarations.  For
+    legacy string manifests, common text/artifact suffixes and path-like
+    strings retain the historical file-loading behavior; ordinary inline prose
+    remains inline text.
+    """
+    raw: str | None = None
+    if isinstance(value, dict):
+        for key in ("path", "file", "file_path", "text_path"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                raw = candidate.strip()
+                break
+    elif isinstance(value, str):
+        candidate = value.strip()
+        if candidate:
+            path = Path(candidate)
+            path_like = (
+                path.is_absolute()
+                or path.exists()
+                or path.suffix.lower() in _TEXT_PATH_SUFFIXES
+                or (not any(char.isspace() for char in candidate) and ("/" in candidate or "\\" in candidate))
+                or candidate.startswith(("./", "../", "~"))
+            )
+            if path_like:
+                raw = candidate
+    if raw is None:
+        return None, False
+    path = Path(raw).expanduser()
+    if not path.is_absolute() and base_dir is not None:
+        path = base_dir / path
+    return path, True
+
+
+def _is_declared_text_path(value: Any, *, base_dir: Path | None = None) -> bool:
+    """Return whether a value explicitly or unambiguously names a text file."""
+    _, declared = _declared_text_path(value, base_dir=base_dir)
+    return declared
 
 
 _CLINICAL_HEADING_RE = re.compile(
@@ -263,6 +311,13 @@ def _clinical_text(text: str) -> str:
 
 def _candidate_payload(value: Any, *, base_dir: Path | None = None) -> dict[str, Any]:
     if isinstance(value, dict):
+        path, declared_path = _declared_text_path(value, base_dir=base_dir)
+        if declared_path and path is not None and path.is_file() and path.suffix.lower() == ".json":
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, TypeError, ValueError):
+                return {}
+            return payload if isinstance(payload, dict) else {}
         return value
     path = Path(value) if isinstance(value, str) else None
     if path is not None and not path.is_absolute() and base_dir is not None:

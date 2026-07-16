@@ -166,3 +166,14 @@ def test_panel_uses_canonical_pilot10_status_labels():
 
     assert 'complete:"已完成"' in template
     assert 'blocked:"已阻断"' in template
+
+
+def test_extract_blindspot_audit_parses_heading_and_medium_issue_formats():
+    audit = build_panel.extract_blindspot_audit(Path("docs/blindspot_audit_20260714.md"))
+
+    assert audit["critical_issues"]
+    assert audit["critical_issues"][0]["id"] == "C1"
+    assert audit["medium_issues"]
+    assert audit["medium_issues"][0]["id"] == "M1"
+    assert any(item["id"] == "H8" for item in audit["high_issues"])
+    assert audit["fix_priority"]["tier1"]

@@ -377,3 +377,34 @@ def test_ocr_candidate_benchmark_blocks_duplicate_case_model_rows(tmp_path: Path
     result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
     assert result["selection"]["reason"] == "duplicate_case_model_rows"
     assert result["selection"]["blocked_items"] == ["duplicate:case1:a"]
+
+
+@pytest.mark.parametrize(
+    ("field", "missing_value"),
+    [
+        ("gold_text", "missing_gold.txt"),
+        ("candidate", "missing_candidate.txt"),
+        ("gold_text", {"path": "missing_gold.txt"}),
+        ("candidate", {"path": "missing_candidate.txt"}),
+    ],
+)
+def test_ocr_candidate_benchmark_blocks_missing_declared_text_paths(
+    tmp_path: Path, field: str, missing_value: object
+):
+    row = {
+        "case_id": "case1",
+        "gold_text": "gold text",
+        "candidates": {"model-a": "candidate text"},
+    }
+    if field == "gold_text":
+        row[field] = missing_value
+    else:
+        row["candidates"]["model-a"] = missing_value
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(json.dumps([row]), encoding="utf-8")
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "blocked"
+    assert result["selection"]["status"] == "blocked"
+    assert any("missing" in item for item in result["blocked_items"])
