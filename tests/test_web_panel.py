@@ -103,3 +103,5 @@ def test_build_data_exposes_project_meta_and_source_health(tmp_path, monkeypatch
     assert "source_health" in data
     assert data["source_health"]["core_run"]["available"] is True
     assert set(data["source_health"]) >= {"core_run", "dmx_evaluation", "generation_benchmark", "ocr_audit", "experiment_results", "pilot10_manifest"}
+    assert "source_case_count" in data["kpi"]
+    assert "failure_rate" in data["kpi"]

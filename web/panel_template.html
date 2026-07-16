@@ -877,6 +877,7 @@ document.getElementById("run-lead").innerHTML =
 
 const KPIS = [
   [K.case_count, "个病例", `CT ${MODALITY_COUNTS.ct||0} / 胸片 ${MODALITY_COUNTS.cxr||0} / MRI ${MODALITY_COUNTS.mri||0}`],
+  [K.source_case_count, "源病例", `成功 ${K.successful_case_count||0} · 失败 ${((K.failure_rate||0)*100).toFixed(1)}%`],
   [K.reader_count, "位医生", "真实报告作者"],
   [K.generated_report_count, "份 AI 候选报告", `${Object.keys(MODEL_COUNTS).length} 个模型参与`],
   [K.quality_passed, "份过质检", `另有 ${K.quality_failed} 份被门禁拦下`],

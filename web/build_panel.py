@@ -741,6 +741,10 @@ def build_data(run_dir: Path) -> dict:
         "source_health": source_health(source_paths, root=REPO),
         "kpi": {
             "case_count": analysis_summary.get("case_count"),
+            "source_case_count": analysis_summary.get("source_case_count", analysis_summary.get("case_count")),
+            "successful_case_count": analysis_summary.get("successful_case_count", analysis_summary.get("case_count")),
+            "success_rate": analysis_summary.get("success_rate"),
+            "failure_rate": analysis_summary.get("failure_rate"),
             "reader_count": analysis_summary.get("reader_count"),
             "generated_report_count": analysis_summary.get("generated_report_count"),
             "quality_passed": analysis_summary.get("quality_gate_passed_count"),
