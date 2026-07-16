@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from medharness2.contracts import (
     CaseEvaluationArtifact,
     FindingGraph,
@@ -304,3 +306,33 @@ def test_reevaluate_expected_cases_rejects_implicit_integer_coercion():
     assert _optional_int(1.5) is None
     assert _optional_int("2") is None
     assert _optional_int(2) == 2
+
+
+def test_migration_warning_strings_are_not_split_into_characters():
+    from medharness2.contracts.migrations import migrate_generated_report_v1
+
+    migrated = migrate_generated_report_v1(
+        {
+            "model": "legacy",
+            "source": "artifact_reuse",
+            "report": "text",
+            "modality": "cxr",
+            "warnings": "legacy_warning",
+        }
+    )
+    assert migrated["warnings"] == ["legacy_warning"]
+
+
+def test_migration_warning_lists_reject_non_string_items():
+    from medharness2.contracts.migrations import migrate_generated_report_v1
+
+    with pytest.raises(TypeError, match="generated_report.warnings"):
+        migrate_generated_report_v1(
+            {
+                "model": "legacy",
+                "source": "artifact_reuse",
+                "report": "text",
+                "modality": "cxr",
+                "warnings": {"unexpected": True},
+            }
+        )

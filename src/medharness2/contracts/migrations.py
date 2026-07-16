@@ -116,7 +116,7 @@ def migrate_generated_report_v1(
 ) -> dict[str, Any]:
     source = str(payload.get("source") or "unknown")
     metadata = deepcopy(dict(payload.get("metadata") or {}))
-    warnings = list(payload.get("warnings") or [])
+    warnings = _string_list(payload.get("warnings"), "generated_report.warnings")
     assumed_reference_assisted = legacy_reference_assisted and source == "medharness_cli"
     if assumed_reference_assisted:
         metadata["legacy_reference_assisted_generation_assumed"] = True
@@ -140,7 +140,7 @@ def migrate_generated_report_v1(
 def migrate_case_evaluation_v1(payload: dict[str, Any], *, case_id: str) -> dict[str, Any]:
     source = deepcopy(payload)
     unknown = {key: value for key, value in source.items() if key not in _CASE_FIELDS}
-    warnings = [str(item) for item in source.get("migration_warnings") or []]
+    warnings = _string_list(source.get("migration_warnings"), "migration_warnings")
     if unknown:
         warnings.append("preserved_unknown_top_level_fields")
     if any(str(item.get("source") or "") == "medharness_cli" for item in source.get("generated_reports") or []):
@@ -468,6 +468,17 @@ def _string_values(value: Any) -> list[str]:
         return []
     values = value if isinstance(value, (list, tuple, set)) else [value]
     return [str(item) for item in values if str(item)]
+
+
+def _string_list(value: Any, label: str) -> list[str]:
+    """Normalize legacy warning lists without splitting scalar strings."""
+    if value in (None, ""):
+        return []
+    if isinstance(value, str):
+        return [value]
+    if not isinstance(value, (list, tuple, set)) or any(not isinstance(item, str) for item in value):
+        raise TypeError(f"{label} must be a string or a list of strings")
+    return list(value)
 
 
 def _legacy_provenance(*, role: str, model: str) -> dict[str, Any]:
