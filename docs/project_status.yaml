@@ -7,7 +7,7 @@ baseline:
   branch: main
   git_sha: b5657b9
   dirty_worktree: true
-  pytest_passed: 370
+  pytest_passed: 371
   pytest_warnings: 17
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -97,7 +97,7 @@ workstreams:
     next_gate: 在冻结三模态清单上跑真实资产路由 smoke，确认每例至少有一个兼容候选且部位缺失不产生空路由。
   scientific_metrics:
     status: in_progress
-    summary: 已修复 Likert 归一化、统计字段污染、fallback/mock 过滤、单样本 CI 伪确定性、教育 provenance、排名 cutoff 近似并列保留、正式 benchmark 的 Welch+Holm 汇总、并列百分位、小样本 t 区间、散文 JSON、参考图 recall、seed/cache、非 CXR slug、Retry-After、Tool2 宽泛异常、评委 prompt 数据边界、失败病例分母、Tool1 重测一致性记录、placeholder provenance、迁移失败原因、hazard canonical 字段优先级、DMX 顶层 mock 路由和生成 fallback 标记。仍需真实北川冻结集验证临床 CER 和临床标签一致性。
+    summary: 已修复 Likert 归一化、三条 reader 聚合路径的归一化口径漂移、统计字段污染、fallback/mock 过滤、单样本 CI 伪确定性、教育 provenance、排名 cutoff 近似并列保留、正式 benchmark 的 Welch+Holm 汇总、并列百分位、小样本 t 区间、散文 JSON、参考图 recall、seed/cache、非 CXR slug、Retry-After、Tool2 宽泛异常、评委 prompt 数据边界、失败病例分母、Tool1 重测一致性记录、placeholder provenance、迁移失败原因、hazard canonical 字段优先级、DMX 顶层 mock 路由和生成 fallback 标记。仍需真实北川冻结集验证临床 CER 和临床标签一致性。
     evidence_paths:
       - src/medharness2/tools/tool9_rank.py
       - src/medharness2/tools/tool10_modelwise.py
@@ -106,6 +106,7 @@ workstreams:
       - tests/test_full_design.py
       - tests/test_workflow_education.py
       - tests/workflows/test_benchmark_evaluation.py
+      - tests/test_full_design.py
       - tests/test_llm_client.py
       - src/medharness2/checkpoints.py
       - src/medharness2/workflows/single_case.py

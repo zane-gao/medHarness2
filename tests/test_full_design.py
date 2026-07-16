@@ -13,6 +13,9 @@ from medharness2.tools.tool12_statistics import calculate_statistics, percentile
 from medharness2.tools.tool6_structure_diff import compare_structure
 from medharness2.workflows.batch_readers import run_batch_readers
 from medharness2.workflows.department import run_department_comparison
+from medharness2.workflows.batch_readers import _mean_score as batch_mean_score
+from medharness2.workflows.reevaluate_run import _mean_score as reevaluate_mean_score
+from medharness2.workflows.merge_batches import _mean_score as merge_mean_score
 from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full
 
 
@@ -89,6 +92,14 @@ def test_statistics_exposes_group_test_and_holm_correction():
     assert 0.0 <= comparison["p_value"] <= 1.0
     corrected = correct_pvalues_holm({"a": 0.01, "b": 0.04, "c": 0.2})
     assert corrected["a"] <= corrected["b"] <= corrected["c"]
+
+
+def test_workflow_mean_scores_use_same_likert_normalization():
+    rows = [{"likert_mean": 1.0}, {"likert_mean": 5.0}]
+    expected = pytest.approx(0.5)
+    assert batch_mean_score(rows) == expected
+    assert reevaluate_mean_score(rows) == expected
+    assert merge_mean_score(rows) == expected
 
 
 def test_batch_readers_and_department_workflows(tmp_path: Path):

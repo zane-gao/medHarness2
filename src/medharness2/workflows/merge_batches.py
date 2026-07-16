@@ -178,7 +178,7 @@ def _mean_score(rows: list[dict[str, Any]]) -> float:
     for row in rows:
         if "likert_mean" in row:
             likert = float(row["likert_mean"])
-            values.append(likert / 5.0 if likert > 1 else likert)
+            values.append((likert - 1.0) / 4.0 if likert >= 1.0 else likert)
         if "structure_score" in row:
             values.append(float(row["structure_score"]))
         if "finding_coverage" in row:
