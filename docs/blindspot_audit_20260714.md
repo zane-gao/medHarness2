@@ -26,6 +26,7 @@
 > **2026-07-16 OCR 就绪/截断语义增量**：兼容模式 preflight 在真实 OCR 未就绪时保留 `passed=true` 但新增 `ocr_not_ready:<blocker>` warning，避免被误读为全链路 ready；主 OCR 截断检测与 benchmark 的终止标点语义对齐，完整中文报告不再因缺少英文栏目名被误报截断。真实 52 例 preflight 复跑为路由 52/52、fallback 0，同时明确 `ocr_not_ready:missing_llm_api_key`。全量回归测试为 516 passed、18 warnings。
 > **2026-07-16 validation 一致性增量**：`validate_sample_run` 的 workflow2/workflow3 计数一致性检查保留显式零值，不再用 `or 0` 改写缺失与合法零的区别；全量回归测试仍为 514 passed、18 warnings。
 > **2026-07-16 dashboard 统计一致性增量**：控制面板摘要和最终 KPI 渲染层现在保留显式 `case_count`、`reader_count`、`experiment_count`、`figure_count` 和质量计数的零值，不再被 stale analysis 或旧图表列表覆盖；全量回归测试为 516 passed、18 warnings。
+> **2026-07-16 formal benchmark 统计一致性增量**：正式 benchmark 的 T5 adjudication 与 T4 hazard agreement summary 现在保留显式 0 计数，不再把 0 次比较/同意错误推导成 hazard error 数量；全量回归测试为 517 passed、18 warnings。
 > **2026-07-16 验证账本收尾增量**：补充显式空聚合数组/百分位映射的失败测试，并为多个非对象 manifest 行保留实际 JSONL 行号；当前全量回归为 516 passed、18 warnings。该收尾只强化本地验证边界，不改变外部真实证据门禁状态。
 > **2026-07-16 评委输入边界增量**：Tool1/Tool2 对外部评委 prompt 的报告文本增加长度上限、头尾保留和明确的 quoted-data 边界；Tool2 prompt/stage 版本升级为 `tool2-hybrid-v3`，避免 checkpoint 将新旧提示词混用。全量回归测试为 410 passed、18 warnings。
 > **2026-07-16 统计汇总增量**：Tool12 纳入 reader-level `overall_score`；Workflow3 department 输出补齐 source/success/failure 分母及成功率、失败率，避免 reader 统计只呈现分数而丢失失败病例分母。全量回归测试为 412 passed、18 warnings。

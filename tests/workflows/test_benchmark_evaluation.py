@@ -543,6 +543,23 @@ def test_case_evaluation_metrics_require_clinical_validation_without_llm_disagre
     assert metrics["t5_retained_error_count"] == 0
 
 
+def test_case_evaluation_metrics_preserve_explicit_zero_agreement_counts():
+    payload = _strict_case_evaluation()
+    comparison = payload["pairwise_comparisons"][0]["comparison"]
+    comparison["hazards"]["errors"] = [{"hazard_level": 2}]
+    comparison["hazard_review"]["agreement_summary"] = {
+        "compared_count": 0,
+        "exact_agreement_count": 0,
+        "within_one_count": 0,
+        "action_agreement_count": 0,
+    }
+
+    metrics = _case_evaluation_metrics(payload)
+
+    assert metrics["hazard_compared_count"] == 0
+    assert metrics["hazard_exact_agreement_count"] == 0
+
+
 def _benchmark_fixture(
     root: Path,
     *,

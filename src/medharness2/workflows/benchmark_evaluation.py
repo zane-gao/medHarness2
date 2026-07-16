@@ -1098,25 +1098,21 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
         "deterministic_alignment_error_count": len(
             (comparison.get("alignment") or {}).get("error_candidates") or []
         ),
-        "t5_rejected_error_count": int(
-            adjudication_summary.get("rejected_error_count") or 0
-        ),
-        "t5_retained_error_count": int(
-            adjudication_summary.get("retained_error_count") or 0
-        ),
-        "t5_modified_error_count": int(
-            adjudication_summary.get("modified_error_count") or 0
-        ),
-        "t5_abstained_error_count": int(
-            adjudication_summary.get("abstained_error_count") or 0
-        ),
+        "t5_rejected_error_count": int(adjudication_summary.get("rejected_error_count", 0)),
+        "t5_retained_error_count": int(adjudication_summary.get("retained_error_count", 0)),
+        "t5_modified_error_count": int(adjudication_summary.get("modified_error_count", 0)),
+        "t5_abstained_error_count": int(adjudication_summary.get("abstained_error_count", 0)),
         "hazard_error_count": len(hazard_errors),
         "max_hazard_level": max(hazard_levels) if hazard_levels else 0,
         "hazard_disagreement_count": len(hazard_review.get("disagreements") or []),
-        "hazard_compared_count": int(agreement_summary.get("compared_count") or len(hazard_errors)),
-        "hazard_exact_agreement_count": int(agreement_summary.get("exact_agreement_count") or 0),
-        "hazard_within_one_count": int(agreement_summary.get("within_one_count") or 0),
-        "hazard_action_agreement_count": int(agreement_summary.get("action_agreement_count") or 0),
+        "hazard_compared_count": int(
+            agreement_summary["compared_count"]
+            if "compared_count" in agreement_summary
+            else len(hazard_errors)
+        ),
+        "hazard_exact_agreement_count": int(agreement_summary.get("exact_agreement_count", 0)),
+        "hazard_within_one_count": int(agreement_summary.get("within_one_count", 0)),
+        "hazard_action_agreement_count": int(agreement_summary.get("action_agreement_count", 0)),
         "hazard_adjudication_decision_count": len(adjudication_decisions),
         "hazard_adjudication_abstained_count": sum(
             bool(decision.get("abstain"))
