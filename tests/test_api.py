@@ -287,6 +287,7 @@ def test_api_merge_batches(tmp_path: Path):
     assert body["summary"]["validation_passed"] is True
     assert body["summary"]["cases"] == 1
     assert (output_dir / "workflow3.json").exists()
+    assert json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))["entries"][-1]["stage"] == "workflow.merge-batches"
     response = client.post(
         "/workflow/analyze-run",
         json={"output_dir": str(output_dir), "analysis_dir": str(tmp_path / "analysis")},

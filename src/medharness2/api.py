@@ -535,16 +535,38 @@ def department(request: DepartmentRequest) -> dict[str, Any]:
 
 @app.post("/workflow/merge-batches")
 def merge_batches(request: MergeBatchesRequest) -> dict[str, Any]:
-    result = merge_batch_results(
-        request.batch_result_paths,
+    try:
+        result = merge_batch_results(
+            request.batch_result_paths,
+            request.output_dir,
+            manifest_path=request.manifest_path,
+            expected_cases=request.expected_cases,
+        )
+        validation = validate_sample_run(
+            request.output_dir,
+            expected_cases=request.expected_cases,
+            require_real_ocr=request.require_real_ocr,
+        )
+    except Exception as exc:
+        _record_registry(
+            request.output_dir,
+            stage="workflow.merge-batches",
+            status="failed",
+            inputs={"batch_results": request.batch_result_paths},
+            outputs={"output_dir": request.output_dir},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
+        )
+        raise HTTPException(status_code=500, detail=f"merge_batches_failed:{type(exc).__name__}") from exc
+    errors = list(validation.get("errors") or [])
+    _record_registry(
         request.output_dir,
-        manifest_path=request.manifest_path,
-        expected_cases=request.expected_cases,
-    )
-    validation = validate_sample_run(
-        request.output_dir,
-        expected_cases=request.expected_cases,
-        require_real_ocr=request.require_real_ocr,
+        stage="workflow.merge-batches",
+        status="passed" if validation.get("passed") else "failed",
+        inputs={"batch_results": request.batch_result_paths},
+        outputs={"workflow2": str(Path(request.output_dir) / "workflow2.json"), "workflow3": str(Path(request.output_dir) / "workflow3.json")},
+        metrics={"case_count": result["case_count"], "failed_case_count": result["failed_case_count"], "validation_passed": bool(validation.get("passed"))},
+        warnings=errors,
     )
     return {
         "output_dir": request.output_dir,
