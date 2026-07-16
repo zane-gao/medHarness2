@@ -1587,6 +1587,18 @@ def test_tool9_excludes_fallback_rows_from_ranking():
     assert [row["model"] for row in ranked] == ["real"]
 
 
+def test_tool9_keeps_near_cutoff_candidates_for_review():
+    ranked = select_top_k(
+        [
+            {"model": "a", "composite_inputs": {"likert_mean": 4.0, "structure_score": 0.8, "finding_coverage": 0.8}},
+            {"model": "b", "composite_inputs": {"likert_mean": 3.98, "structure_score": 0.8, "finding_coverage": 0.8}},
+        ],
+        top_k=1,
+    )
+    assert [row["model"] for row in ranked] == ["a", "b"]
+    assert all(row["near_cutoff"] is True for row in ranked)
+
+
 def test_tool1_can_record_retest_consistency_without_replacing_primary_score():
     class StableClient:
         def __init__(self):

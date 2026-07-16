@@ -6,7 +6,7 @@
 
 > **修复状态**：H5、H9、H10、H11、H12、H14、H15、H17、M1、M2、M3、M6 已有代码与回归测试证据；H7 已完成小样本 t 区间但正式显著性/多重比较尚未实现；H13 已把 seed/route 纳入 checkpoint 输入，但仍需真实重复运行验证；M7/M12 仍需要 gated live judge smoke；C1/H1-H4 按用户指示暂缓。
 
-> **2026-07-16 增量**：M4（Tool2 宽泛异常）、M5（报告文本 prompt 边界）、M9（失败病例分母）、M10/M11/M13（fallback provenance）和 M7 的 Tool1 重测记录已补代码与测试。H8 新增 Welch 近似比较与 Holm 校正 API；真实分析仍必须在冻结数据上运行并记录方法。
+> **2026-07-16 增量**：M4（Tool2 宽泛异常）、M5（报告文本 prompt 边界）、M9（失败病例分母）、M10/M11/M13（fallback provenance）和 M7 的 Tool1 重测记录已补代码与测试。H8 新增 Welch 近似比较与 Holm 校正 API，并已接入正式 benchmark summary；样本不足的比较标为 blocked。H6 的排名 cutoff 近似并列候选现在会一并保留并标记 `near_cutoff`；真实分析仍必须在冻结数据上运行并记录方法。
 
 > **当前未完成门禁**：真实北川 OCR 候选 benchmark、真实多模态 verifier smoke、临床 pilot10 标注、正式显著性分析和 gated live judge smoke。它们需要外部模型/临床数据/凭据，当前环境没有可安全替代的证据，因此不能标记为已完成。
 

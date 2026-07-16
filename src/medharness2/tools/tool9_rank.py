@@ -3,7 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 
-def select_top_k(evaluations: list[dict[str, Any]], weights: dict[str, float] | None = None, top_k: int = 3) -> list[dict[str, Any]]:
+def select_top_k(
+    evaluations: list[dict[str, Any]],
+    weights: dict[str, float] | None = None,
+    top_k: int = 3,
+    *,
+    near_cutoff_tolerance: float = 0.01,
+) -> list[dict[str, Any]]:
     metric_weights = weights or {"likert_mean": 0.4, "structure_score": 0.3, "finding_coverage": 0.3}
     rows: list[dict[str, Any]] = []
     for index, evaluation in enumerate(evaluations):
@@ -24,7 +30,14 @@ def select_top_k(evaluations: list[dict[str, Any]], weights: dict[str, float] | 
     for rank, row in enumerate(ranked, start=1):
         row["rank"] = rank
         row["selected_top_n"] = rank <= top_k
-    return ranked[:top_k]
+    selected = ranked[:top_k]
+    if selected and top_k < len(ranked):
+        cutoff = selected[-1]["score"]
+        selected = [row for row in ranked if cutoff - row["score"] <= near_cutoff_tolerance]
+        for row in selected:
+            row["near_cutoff"] = True
+            row["near_cutoff_tolerance"] = near_cutoff_tolerance
+    return selected
 
 
 def _numeric_metrics(evaluation: dict[str, Any]) -> dict[str, float]:

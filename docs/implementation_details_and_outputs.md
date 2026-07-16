@@ -109,6 +109,7 @@ Workflow (端到端 + 文件 I/O)
 ### Tool 9 · Top-N 排名 — `tools/tool9_rank.py`
 
 - **入口**：`select_top_k(evaluations, weights=None, top_k=3) -> list`
+- **并列门禁**：Top-N cutoff 差值不超过 `near_cutoff_tolerance=0.01` 的候选会一并保留，并标记 `near_cutoff`，避免仅凭点估计静默淘汰近似并列模型。
 - **实现**：取每份评估的 `composite_inputs`（likert_mean/structure_score/finding_coverage），`_numeric_metrics` 归一化到 [0,1]（likert >1 时除以 5），按权重 `{likert_mean 0.4, structure 0.3, coverage 0.3}`（来自 `config.ranking.weights`）加权平均、除以权重和，降序排序，标 `rank` 与 `selected_top_n`，返回前 top_k。
 - **输出**：`[{index, model, score, metrics{}, rank, selected_top_n}]`。
 - **关键**：workflow 只把**质量门控通过**的候选喂进来（见 Workflow 1）。
