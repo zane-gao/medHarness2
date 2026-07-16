@@ -316,13 +316,13 @@ def _read_manifest(path: Path, errors: list[str]) -> list[dict[str, Any]]:
         return []
     rows: list[dict[str, Any]] = []
     try:
-        for line in path.read_text(encoding="utf-8").splitlines():
+        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if line.strip():
                 row = json.loads(line)
                 if isinstance(row, dict):
                     rows.append(row)
                 else:
-                    errors.append(f"invalid_manifest_jsonl:row_{len(rows) + 1}:not_object")
+                    errors.append(f"invalid_manifest_jsonl:row_{line_no}:not_object")
     except Exception as exc:
         errors.append(f"invalid_manifest_jsonl:{type(exc).__name__}")
     return rows
