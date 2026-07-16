@@ -33,6 +33,14 @@ from medharness2.validation.sample_run import validate_sample_run
 app = FastAPI(title="medHarness2 API", version="0.1.0")
 
 
+def _count_or_zero(value: Any, label: str) -> int:
+    if value is None:
+        return 0
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
 class SingleCaseRequest(BaseModel):
     case_id: str | None = None
     report_text: str | None = None
@@ -569,10 +577,10 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
     _record_registry(
         Path(request.output_path).parent,
         stage="workflow.batch-readers",
-        status="failed" if errors or int(result.get("failed_case_count", 0) or 0) else "passed",
+        status="failed" if errors or _count_or_zero(result.get("failed_case_count"), "failed_case_count") else "passed",
         inputs={"manifest": request.manifest_path},
         outputs={"workflow2": request.output_path},
-        metrics={"case_count": int(result.get("case_count", 0) or 0), "failed_case_count": int(result.get("failed_case_count", 0) or 0), "reader_count": len(result.get("per_reader") or {})},
+        metrics={"case_count": _count_or_zero(result.get("case_count"), "case_count"), "failed_case_count": _count_or_zero(result.get("failed_case_count"), "failed_case_count"), "reader_count": len(result.get("per_reader") or {})},
         warnings=errors,
     )
     return {
@@ -604,7 +612,7 @@ def department(request: DepartmentRequest) -> dict[str, Any]:
         status="failed" if errors else "passed",
         inputs={"batch_result": request.batch_result_path},
         outputs={"workflow3": request.output_path},
-        metrics={"case_count": int(result.get("case_count", 0) or 0), "reader_count": int(result.get("reader_count", 0) or 0)},
+        metrics={"case_count": _count_or_zero(result.get("case_count"), "case_count"), "reader_count": _count_or_zero(result.get("reader_count"), "reader_count")},
         warnings=errors,
     )
     # ``summary.readers`` reports readers present in the completed batch.  The
@@ -771,7 +779,7 @@ def preflight(request: PreflightRequest) -> dict[str, Any]:
         status="passed" if result.get("passed") else "failed",
         inputs={"sample_root": request.sample_root, "expected_cases": request.limit},
         outputs={"preflight": request.output_path, "route_plan": str(result.get("paths", {}).get("route_plan") or "")},
-        metrics={"passed": bool(result.get("passed")), "case_count": int(result.get("sample", {}).get("case_count", 0) or 0), "blocker_count": len(result.get("blockers") or [])},
+        metrics={"passed": bool(result.get("passed")), "case_count": _count_or_zero(result.get("sample", {}).get("case_count"), "case_count"), "blocker_count": len(result.get("blockers") or [])},
         warnings=list(result.get("blockers") or []),
     )
     return {

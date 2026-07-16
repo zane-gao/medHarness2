@@ -6,7 +6,15 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 import medharness2.api as api_module
-from medharness2.api import app
+from medharness2.api import _count_or_zero, app
+
+
+def test_api_registry_counts_reject_invalid_values():
+    import pytest
+
+    for bad in (True, 1.5, -1, "2"):
+        with pytest.raises(ValueError, match="count"):
+            _count_or_zero(bad, "count")
 
 
 def test_api_single_case_accepts_report_text(tmp_path: Path):
