@@ -93,7 +93,19 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
     rows: list[dict[str, Any]] = []
     if not manifest_path.exists():
         return {"status": "blocked", "case_count": 0, "complete_case_count": 0, "errors": ["missing_manifest"]}
-    for index, line in enumerate(manifest_path.read_text(encoding="utf-8").splitlines(), start=1):
+    try:
+        manifest_lines = manifest_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        return {
+            "status": "blocked",
+            "case_count": 0,
+            "complete_case_count": 0,
+            "in_progress_case_count": 0,
+            "not_started_case_count": 0,
+            "errors": [f"manifest:read_error:{type(exc).__name__}"],
+            "warnings": [],
+        }
+    for index, line in enumerate(manifest_lines, start=1):
         if not line.strip():
             continue
         try:
@@ -108,19 +120,59 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
 
     complete = 0
     in_progress = 0
-    for row in rows:
-        pilot_case_id = str(row.get("pilot_case_id") or "")
-        relative = str(row.get("annotation_path") or "")
-        if not pilot_case_id or not relative:
-            errors.append(f"manifest:{pilot_case_id or 'unknown'}:missing_identity")
+    not_started = 0
+    referenced_paths: set[Path] = set()
+    seen_case_ids: dict[str, int] = {}
+    seen_annotation_paths: dict[Path, int] = {}
+    cases_root = (root / "cases").resolve()
+    root_resolved = root.resolve()
+    if root_resolved not in cases_root.parents:
+        errors.append("cases:outside_package")
+    for row_index, row in enumerate(rows, start=1):
+        raw_case_id = row.get("pilot_case_id")
+        raw_relative = row.get("annotation_path")
+        pilot_case_id = raw_case_id.strip() if isinstance(raw_case_id, str) else ""
+        relative = raw_relative.strip() if isinstance(raw_relative, str) else ""
+        row_label = pilot_case_id or f"row_{row_index}"
+        if not pilot_case_id:
+            errors.append(f"manifest:{row_label}:missing_identity")
             continue
-        case_path = root / relative
-        if not case_path.exists():
+        if pilot_case_id in seen_case_ids:
+            errors.append(
+                f"manifest:{pilot_case_id}:duplicate_case_id:rows_{seen_case_ids[pilot_case_id]}_{row_index}"
+            )
+        else:
+            seen_case_ids[pilot_case_id] = row_index
+        if not relative:
+            errors.append(f"manifest:{pilot_case_id}:missing_annotation_path")
+            continue
+        raw_path = Path(relative)
+        if raw_path.is_absolute():
+            errors.append(f"case:{pilot_case_id}:annotation_path_absolute")
+            continue
+        try:
+            case_path = (root / raw_path).resolve(strict=False)
+        except OSError as exc:
+            errors.append(f"case:{pilot_case_id}:annotation_path_resolution:{type(exc).__name__}")
+            continue
+        # Case files are package inputs, so never follow a manifest path outside
+        # the package's cases directory (including symlinks and ``..`` paths).
+        if cases_root not in case_path.parents or case_path == cases_root:
+            errors.append(f"case:{pilot_case_id}:annotation_path_outside_cases")
+            continue
+        if case_path in seen_annotation_paths:
+            errors.append(
+                f"manifest:{pilot_case_id}:duplicate_annotation_path:rows_{seen_annotation_paths[case_path]}_{row_index}"
+            )
+        else:
+            seen_annotation_paths[case_path] = row_index
+        referenced_paths.add(case_path)
+        if not case_path.is_file():
             errors.append(f"case:{pilot_case_id}:missing_file")
             continue
         try:
             case = AnnotationCase.model_validate_json(case_path.read_text(encoding="utf-8"))
-        except Exception as exc:
+        except (OSError, UnicodeError, ValueError) as exc:
             errors.append(f"case:{pilot_case_id}:invalid_contract:{type(exc).__name__}")
             continue
         if case.pilot_case_id != pilot_case_id:
@@ -129,19 +181,66 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
             errors.append(f"case:{pilot_case_id}:modality_mismatch")
         if case.body_part != str(row.get("body_part") or "unknown"):
             errors.append(f"case:{pilot_case_id}:body_part_mismatch")
-        statuses = {slot: case.annotations[slot].status for slot in ("reader_a", "reader_b", "adjudication")}
-        if statuses["adjudication"] == "complete" and not (
+        candidate_count = row.get("candidate_count")
+        if candidate_count is not None and (
+            isinstance(candidate_count, bool) or not isinstance(candidate_count, int) or candidate_count < 0
+        ):
+            errors.append(f"case:{pilot_case_id}:invalid_candidate_count")
+        elif candidate_count is not None and candidate_count != len(case.candidate_reports):
+            errors.append(f"case:{pilot_case_id}:candidate_count_mismatch:{candidate_count}!={len(case.candidate_reports)}")
+        expected_slots = ("reader_a", "reader_b", "adjudication")
+        missing_slots = [slot for slot in expected_slots if slot not in case.annotations]
+        if missing_slots:
+            for slot in missing_slots:
+                errors.append(f"case:{pilot_case_id}:missing_annotation_slot:{slot}")
+            continue
+        statuses = {slot: case.annotations[slot].status for slot in expected_slots}
+        if statuses["adjudication"] != "not_started" and not (
             statuses["reader_a"] == "complete" and statuses["reader_b"] == "complete"
         ):
             errors.append(f"case:{pilot_case_id}:adjudication_before_readers")
+        for slot, annotation in case.annotations.items():
+            if annotation.status == "not_started" and (
+                annotation.findings
+                or annotation.hazards
+                or annotation.overall_notes.strip()
+                or annotation.confidence is not None
+            ):
+                errors.append(f"case:{pilot_case_id}:{slot}:content_before_start")
         derived = _annotation_status(statuses)
-        declared = str(row.get("status") or "not_started")
+        declared = row.get("status")
+        if not isinstance(declared, str) or not declared.strip():
+            errors.append(f"case:{pilot_case_id}:missing_status")
+            declared = ""
+        else:
+            declared = declared.strip()
         if declared != derived:
             errors.append(f"case:{pilot_case_id}:status_mismatch:{declared}!={derived}")
         if derived == "complete":
             complete += 1
         elif derived == "in_progress":
             in_progress += 1
+        else:
+            not_started += 1
+
+    # A package must not silently omit a generated case file from its manifest.
+    # This catches partial/corrupt uploads and stale rows after manual edits.
+    if cases_root.exists() and cases_root.is_dir():
+        try:
+            case_files = {
+                path.resolve()
+                for path in cases_root.rglob("*")
+                if path.is_file() and path.suffix.lower() == ".json"
+            }
+        except OSError as exc:
+            errors.append(f"cases:scan_error:{type(exc).__name__}")
+        else:
+            for case_path in sorted(case_files - referenced_paths, key=str):
+                try:
+                    relative_path = case_path.relative_to(root_resolved)
+                except ValueError:
+                    relative_path = case_path
+                errors.append(f"case:{relative_path.as_posix()}:unlisted_file")
 
     if not rows:
         errors.append("manifest:empty")
@@ -153,7 +252,7 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
         "case_count": len(rows),
         "complete_case_count": complete,
         "in_progress_case_count": in_progress,
-        "not_started_case_count": len(rows) - complete - in_progress,
+        "not_started_case_count": not_started,
         "errors": list(dict.fromkeys(errors)),
         "warnings": warnings,
     }

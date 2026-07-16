@@ -131,3 +131,38 @@ def test_validate_pilot_annotation_package_blocks_adjudication_before_both_reade
 
     assert result["status"] == "blocked"
     assert "case:pilot-001:adjudication_before_readers" in result["errors"]
+
+
+def test_validate_pilot_annotation_package_rejects_paths_outside_cases_and_unlisted_files(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    output_dir = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, output_dir, limit=1)
+    outside = tmp_path / "outside.json"
+    outside.write_text((output_dir / "cases" / "pilot-001.json").read_text(encoding="utf-8"), encoding="utf-8")
+    extra = output_dir / "cases" / "extra.json"
+    extra.write_text((output_dir / "cases" / "pilot-001.json").read_text(encoding="utf-8"), encoding="utf-8")
+    row = json.loads((output_dir / "manifest.jsonl").read_text(encoding="utf-8"))
+    row["annotation_path"] = "../outside.json"
+    (output_dir / "manifest.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    result = validate_pilot_annotation_package(output_dir)
+
+    assert result["status"] == "blocked"
+    assert "case:pilot-001:annotation_path_outside_cases" in result["errors"]
+    assert "case:cases/extra.json:unlisted_file" in result["errors"]
+
+
+def test_validate_pilot_annotation_package_rejects_duplicate_ids_and_paths(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    output_dir = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, output_dir, limit=1)
+    row = json.loads((output_dir / "manifest.jsonl").read_text(encoding="utf-8"))
+    (output_dir / "manifest.jsonl").write_text(
+        "\n".join(json.dumps(row) for _ in range(2)) + "\n", encoding="utf-8"
+    )
+
+    result = validate_pilot_annotation_package(output_dir)
+
+    assert result["status"] == "blocked"
+    assert any(error.startswith("manifest:pilot-001:duplicate_case_id:") for error in result["errors"])
+    assert any(error.startswith("manifest:pilot-001:duplicate_annotation_path:") for error in result["errors"])

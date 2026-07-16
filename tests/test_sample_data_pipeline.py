@@ -109,6 +109,44 @@ def test_extract_report_text_reuses_real_ocr_cache_when_real_ocr_required(tmp_pa
     assert result.method == "cache"
 
 
+def test_extract_report_text_rejects_cache_sidecar_for_different_case(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    _write_blank_pdf(pdf)
+    ocr_dir = tmp_path / "ocr"
+    ocr_dir.mkdir()
+    (ocr_dir / "target.txt").write_text("text from another case\n", encoding="utf-8")
+    (ocr_dir / "target.ocr.json").write_text(
+        json.dumps(
+            {
+                "case_id": "other-case",
+                "method": "vlm_ocr",
+                "provider": "openai",
+                "model": "gpt-5.6-sol",
+                "role": "default",
+                "prompt_version": "ocr-page-v2",
+                "source_pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest(),
+                "verifier": {"configured": False, "provider": "", "model": "", "role": ""},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    client = StaticOCRClient()
+    result = extract_report_text(
+        pdf,
+        case_id="target",
+        output_dir=ocr_dir,
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=client,
+        require_real=True,
+    )
+
+    assert client.calls == 1
+    assert result.method == "vlm_ocr"
+    assert result.text.startswith("FINDINGS: OCR text")
+
+
 def test_extract_report_text_does_not_trust_unknown_provider_cache(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     _write_blank_pdf(pdf)

@@ -64,6 +64,7 @@ def extract_report_text(
         cached_meta = _read_meta(meta_path)
         if _cache_is_compatible(
             cached_meta,
+            case_id=case_id,
             source_pdf_sha256=source_pdf_sha256,
             provider=primary_provider,
             model=primary_model,
@@ -278,6 +279,7 @@ def _ocr_role_options(config: AppConfig, role: str) -> dict[str, Any]:
 def _cache_is_compatible(
     meta: dict[str, Any],
     *,
+    case_id: str,
     source_pdf_sha256: str,
     provider: str,
     model: str,
@@ -287,6 +289,11 @@ def _cache_is_compatible(
 ) -> bool:
     """Only reuse OCR text when its source and route provenance still match."""
     if not meta or meta.get("source_pdf_sha256") != source_pdf_sha256:
+        return False
+    # The cache filename is caller-controlled; bind the sidecar to the case as
+    # well so a copied/renamed OCR artifact cannot cross case boundaries.
+    cached_case_id = str(meta.get("case_id") or "")
+    if cached_case_id and cached_case_id != str(case_id):
         return False
     method = str(meta.get("method") or "").lower()
     if method == "pdf_text_layer":

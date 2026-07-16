@@ -1741,19 +1741,34 @@ def test_tool9_selects_top_k():
 
 
 def test_tool9_normalizes_likert_five_point_scale_to_zero_one():
-    ranked = select_top_k([{"model": "a", "composite_inputs": {"likert_mean": 1}}], top_k=1)
+    ranked = select_top_k(
+        [{"model": "a", "composite_inputs": {"likert_mean": 1, "structure_score": 0, "finding_coverage": 0}}],
+        top_k=1,
+    )
     assert ranked[0]["metrics"]["likert_mean"] == 0.0
 
 
 def test_tool9_excludes_fallback_rows_from_ranking():
     ranked = select_top_k(
         [
-            {"model": "real", "composite_inputs": {"likert_mean": 4}, "metadata": {"fallback_used": False}},
+            {"model": "real", "composite_inputs": {"likert_mean": 4, "structure_score": 0.5, "finding_coverage": 0.5}, "metadata": {"fallback_used": False}},
             {"model": "fallback", "composite_inputs": {"likert_mean": 5}, "metadata": {"fallback_used": True}},
         ],
         top_k=2,
     )
     assert [row["model"] for row in ranked] == ["real"]
+
+
+def test_tool9_excludes_incomplete_metrics_instead_of_treating_missing_as_zero():
+    ranked = select_top_k(
+        [
+            {"model": "complete", "composite_inputs": {"likert_mean": 3, "structure_score": 0.8, "finding_coverage": 0.8}},
+            {"model": "missing", "composite_inputs": {"likert_mean": 5, "structure_score": 1.0}},
+        ],
+        top_k=2,
+    )
+
+    assert [row["model"] for row in ranked] == ["complete"]
 
 
 def test_tool9_and_tool10_exclude_mock_fallback_source_and_tier():
