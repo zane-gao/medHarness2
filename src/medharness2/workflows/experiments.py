@@ -325,7 +325,11 @@ def _image_to_text_models(run_dir: Path, analysis: dict[str, Any]) -> dict[str, 
 def _modality_recognition(run_summary: dict[str, Any], workflow2: dict[str, Any]) -> dict[str, Any]:
     validation = run_summary.get("validation") or {}
     summary = validation.get("summary") or {}
-    modalities = summary.get("modality_counts") or Counter(str(case.get("modality") or "unknown") for case in workflow2.get("cases") or [])
+    modalities = (
+        summary["modality_counts"]
+        if "modality_counts" in summary
+        else Counter(str(case.get("modality") or "unknown") for case in workflow2.get("cases") or [])
+    )
     return {
         "id": "modality_recognition",
         "title": "Validation of Modality Recognition VLM",
