@@ -289,3 +289,20 @@ def test_build_pilot_annotation_package_rejects_case_without_candidates(tmp_path
         assert "has no generated_reports" in str(exc)
     else:
         raise AssertionError("case without candidates must fail explicitly")
+
+
+def test_validate_pilot_annotation_package_blocks_empty_reference_and_candidate_text(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    output_dir = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, output_dir, limit=1)
+    case_path = output_dir / "cases" / "pilot-001.json"
+    payload = json.loads(case_path.read_text(encoding="utf-8"))
+    payload["reference_report"] = "  "
+    payload["candidate_reports"][0]["report_text"] = ""
+    case_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    result = validate_pilot_annotation_package(output_dir)
+
+    assert result["status"] == "blocked"
+    assert "case:pilot-001:empty_reference_report" in result["errors"]
+    assert "case:pilot-001:empty_candidate_report:candidate-01" in result["errors"]

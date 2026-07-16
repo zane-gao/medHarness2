@@ -194,6 +194,8 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
             errors.append(f"case:{pilot_case_id}:modality_mismatch")
         if case.body_part != str(row.get("body_part") or "unknown"):
             errors.append(f"case:{pilot_case_id}:body_part_mismatch")
+        if not case.reference_report.strip():
+            errors.append(f"case:{pilot_case_id}:empty_reference_report")
         candidate_count = row.get("candidate_count")
         if candidate_count is not None and (
             isinstance(candidate_count, bool) or not isinstance(candidate_count, int) or candidate_count < 0
@@ -203,6 +205,9 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
             errors.append(f"case:{pilot_case_id}:candidate_count_mismatch:{candidate_count}!={len(case.candidate_reports)}")
         if not case.candidate_reports:
             errors.append(f"case:{pilot_case_id}:no_candidate_reports")
+        for candidate in case.candidate_reports:
+            if not candidate.report_text.strip():
+                errors.append(f"case:{pilot_case_id}:empty_candidate_report:{candidate.candidate_id}")
         expected_slots = ("reader_a", "reader_b", "adjudication")
         missing_slots = [slot for slot in expected_slots if slot not in case.annotations]
         if missing_slots:
