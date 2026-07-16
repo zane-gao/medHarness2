@@ -74,6 +74,8 @@ class GeneratorEntry:
     formal_validation_id: str = ""
 
     def __post_init__(self) -> None:
+        self.max_new_tokens = _strict_positive_int(self.max_new_tokens, "max_new_tokens", 160)
+        self.timeout_sec = _strict_positive_int(self.timeout_sec, "timeout_sec", 1800)
         if not self.evidence_tier:
             self.evidence_tier = infer_evidence_tier(self.source)
 

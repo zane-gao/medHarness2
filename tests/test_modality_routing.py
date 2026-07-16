@@ -32,6 +32,20 @@ def test_registry_rejects_invalid_generation_limits_without_coercion(field, bad)
         ReportGeneratorRegistry(config)
 
 
+@pytest.mark.parametrize("field", ["max_new_tokens", "timeout_sec"])
+@pytest.mark.parametrize("bad", [True, 1.5, "160", 0, -1])
+def test_generator_entry_rejects_invalid_generation_limits_without_coercion(field, bad):
+    kwargs = {
+        "key": "bad_model",
+        "title": "Bad model",
+        "source": "artifact_reuse",
+        "supported_modalities": ["cxr"],
+        field: bad,
+    }
+    with pytest.raises(ValueError, match=field):
+        GeneratorEntry(**kwargs)
+
+
 def test_registry_prefers_matching_body_part_without_requiring_it():
     registry = ReportGeneratorRegistry(AppConfig())
     registry.entries = {
