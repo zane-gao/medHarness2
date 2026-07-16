@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from medharness2.config import AppConfig, GeneratorConfig, LLMConfig
+from medharness2.config import AppConfig, GeneratorConfig, LLMConfig, ModelRoleConfig
 from medharness2.tools.tool10_modelwise import modelwise_weighted
 from medharness2.tools.tool11_hazardwise import hazardwise_weighted
 from medharness2.tools.tool12_statistics import calculate_statistics, percentile_rank, correct_pvalues_holm, compare_metric_groups
@@ -440,6 +440,35 @@ def test_batch_readers_continues_when_case_workflow_fails(tmp_path: Path):
     assert result["case_count"] == 0
     assert result["failed_case_count"] == 1
     assert result["failed_cases"][0]["case_id"] == "bad_case"
+    assert "FileNotFoundError" in result["failed_cases"][0]["error"]
+
+
+def test_batch_readers_does_not_placeholder_when_real_ocr_role_is_configured(tmp_path: Path):
+    manifest = tmp_path / "manifest.jsonl"
+    manifest.write_text(
+        json.dumps(
+            {
+                "case_id": "missing",
+                "reader": "doc_a",
+                "modality": "cxr",
+                "body_part": "chest",
+                "report_text": "",
+                "image_paths": [],
+                "derived_assets": {},
+                "warnings": [],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    cfg = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        model_roles={"ocr_primary": ModelRoleConfig(provider="chat_completions", model="ocr-model")},
+        generator=GeneratorConfig(cloud_fallback_enabled=True, default_models=[], local_models=[]),
+    )
+    result = run_batch_readers(manifest, tmp_path / "workflow2.json", config=cfg)
+    assert result["case_count"] == 0
+    assert result["failed_case_count"] == 1
     assert "FileNotFoundError" in result["failed_cases"][0]["error"]
 
 

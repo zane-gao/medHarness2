@@ -42,9 +42,14 @@ def run_batch_readers(
         model_keys=model_keys,
         model_sources=model_sources,
     )
+    ocr_primary_route = cfg.model_roles.get("ocr_primary")
+    allow_placeholder_report = ocr_primary_route is None and str(cfg.llm.provider).lower() == "mock"
     for row in rows:
         try:
-            report_text, report_path = _resolve_report_text(row.report_text)
+            report_text, report_path = _resolve_report_text(
+                row.report_text,
+                allow_placeholder=allow_placeholder_report,
+            )
             if report_text is None and (report_path is None or not report_path.exists()):
                 raise FileNotFoundError(f"report text file not found: {row.report_text or '<empty>'}")
             image_path = row.derived_assets.get("primary_image") or row.volume_path or (row.image_paths[0] if row.image_paths else "")
@@ -191,9 +196,11 @@ def _case_generation_prompt(row: CaseManifest) -> str:
     )
 
 
-def _resolve_report_text(value: str) -> tuple[str | None, Path | None]:
+def _resolve_report_text(value: str, *, allow_placeholder: bool = False) -> tuple[str | None, Path | None]:
     if not value:
-        return "FINDINGS: Report text unavailable.\nIMPRESSION: Report text unavailable.", None
+        if allow_placeholder:
+            return "FINDINGS: Report text unavailable.\nIMPRESSION: Report text unavailable.", None
+        return None, None
     path = Path(value)
     if path.exists():
         return None, path
