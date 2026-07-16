@@ -39,6 +39,7 @@
 > **2026-07-16 OCR cache 语义增量**：进一步锁定 cache 合约：同一 case/source/provider/model/role 才可复用，模型切换必须重新 OCR；新增模型变更回归测试，修复了旧 default cache 兼容逻辑过宽导致的 stale OCR 风险。全量回归测试为 463 passed、18 warnings。
 > **2026-07-16 pilot 候选完整性增量**：pilot10 构建器和 validator 现在拒绝没有任何 `generated_reports`/`candidate_reports` 的病例；空候选任务不再被包装成可开始的临床标注包，前端会显示 `blocked`。全量回归测试为 464 passed、18 warnings。
 > **2026-07-16 pilot 文本完整性增量**：validator 进一步拒绝空的 `reference_report` 和空的 candidate `report_text`，避免手工/历史包把没有真实阅读材料的任务误计为 `not_started`。全量回归测试为 465 passed、18 warnings。
+> **2026-07-16 pilot 标识完整性增量**：validator 现在拒绝重复的 `candidate_id` 或 `blinded_model_id`，避免读者 hazard 归属和后续统计出现歧义。全量回归测试为 466 passed、18 warnings。
 > **2026-07-16 reader 计数增量**：department 输出的 `reader_count` 现在只统计有有效 `overall_score` 的 reader，并单独记录 `excluded_reader_count`，避免 reader 总数与 percentile/统计群体不一致。
 > **2026-07-16 兼容/标注安全增量**：恢复 `run_single_case` 历史第四个位置参数作为 `report_text` 的兼容语义；pilot 包重建在已有标注或无效包时拒绝删除旧病例文件；损坏 manifest 继续以 blocked 状态展示。全量回归测试为 443 passed、18 warnings。
 > **2026-07-16 hazard 聚合增量**：`tool11_hazardwise` 不再把缺失 `error_type`/`hazard_level` 的记录默认成未知权重或最低风险；不完整记录会被排除并等待补齐。全量回归测试为 444 passed、18 warnings。

@@ -306,3 +306,23 @@ def test_validate_pilot_annotation_package_blocks_empty_reference_and_candidate_
     assert result["status"] == "blocked"
     assert "case:pilot-001:empty_reference_report" in result["errors"]
     assert "case:pilot-001:empty_candidate_report:candidate-01" in result["errors"]
+
+
+def test_validate_pilot_annotation_package_blocks_duplicate_candidate_ids(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    output_dir = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, output_dir, limit=1)
+    case_path = output_dir / "cases" / "pilot-001.json"
+    payload = json.loads(case_path.read_text(encoding="utf-8"))
+    payload["candidate_reports"].append(dict(payload["candidate_reports"][0]))
+    payload["candidate_reports"][1]["blinded_model_id"] = "model-01"
+    case_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    manifest = json.loads((output_dir / "manifest.jsonl").read_text(encoding="utf-8"))
+    manifest["candidate_count"] = 2
+    (output_dir / "manifest.jsonl").write_text(json.dumps(manifest, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    result = validate_pilot_annotation_package(output_dir)
+
+    assert result["status"] == "blocked"
+    assert "case:pilot-001:duplicate_candidate_id" in result["errors"]
+    assert "case:pilot-001:duplicate_blinded_model_id" in result["errors"]

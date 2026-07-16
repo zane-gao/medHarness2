@@ -205,6 +205,12 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
             errors.append(f"case:{pilot_case_id}:candidate_count_mismatch:{candidate_count}!={len(case.candidate_reports)}")
         if not case.candidate_reports:
             errors.append(f"case:{pilot_case_id}:no_candidate_reports")
+        candidate_ids = [candidate.candidate_id for candidate in case.candidate_reports]
+        if len(candidate_ids) != len(set(candidate_ids)):
+            errors.append(f"case:{pilot_case_id}:duplicate_candidate_id")
+        blinded_ids = [candidate.blinded_model_id for candidate in case.candidate_reports]
+        if len(blinded_ids) != len(set(blinded_ids)):
+            errors.append(f"case:{pilot_case_id}:duplicate_blinded_model_id")
         for candidate in case.candidate_reports:
             if not candidate.report_text.strip():
                 errors.append(f"case:{pilot_case_id}:empty_candidate_report:{candidate.candidate_id}")
