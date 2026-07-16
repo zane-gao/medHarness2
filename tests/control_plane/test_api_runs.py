@@ -45,3 +45,18 @@ def test_control_api_exposes_model_roles_and_experiment_readiness(monkeypatch, t
     experiments = client.get("/experiments", params={"run_dir": run_dir})
     assert experiments.status_code == 200
     assert {item["status"] for item in experiments.json()["experiments"]} == {"pilot"}
+
+
+def test_catalog_api_returns_structured_failure_for_missing_config(tmp_path):
+    client = TestClient(app, raise_server_exceptions=False)
+    malformed = tmp_path / "malformed.yaml"
+    malformed.write_text("- not-a-mapping\n", encoding="utf-8")
+    config_path = str(malformed)
+
+    roles = client.get("/catalog/model-roles", params={"config_path": config_path})
+    assert roles.status_code == 500
+    assert roles.json()["detail"] == "catalog_model_roles_failed:ValueError"
+
+    tools = client.get("/catalog/tools", params={"config_path": config_path})
+    assert tools.status_code == 500
+    assert tools.json()["detail"] == "catalog_tools_failed:ValueError"

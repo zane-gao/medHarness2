@@ -210,15 +210,21 @@ def experiment_readiness(run_dir: str) -> dict[str, Any]:
 
 @app.get("/catalog/model-roles")
 def catalog_model_roles(config_path: str | None = None) -> dict[str, Any]:
-    cfg = load_config(config_path) if config_path else load_config()
-    catalog = build_capability_catalog(cfg)
+    try:
+        cfg = load_config(config_path) if config_path else load_config()
+        catalog = build_capability_catalog(cfg)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"catalog_model_roles_failed:{type(exc).__name__}") from exc
     return {"model_roles": (catalog.get("providers") or {}).get("model_roles") or {}}
 
 
 @app.get("/catalog/tools")
 def catalog_tools(config_path: str | None = None) -> dict[str, Any]:
-    cfg = load_config(config_path) if config_path else load_config()
-    return build_capability_catalog(cfg)
+    try:
+        cfg = load_config(config_path) if config_path else load_config()
+        return build_capability_catalog(cfg)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"catalog_tools_failed:{type(exc).__name__}") from exc
 
 
 @app.post("/workflow/single-case")
