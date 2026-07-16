@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from medharness2.tools.tool2_extract import extract_findings
+from medharness2.extractors.rules import _deduplicate_findings
 
 
 def test_cxr_plugin_preserves_existing_bilingual_behavior():
@@ -56,6 +57,32 @@ def test_cxr_plugin_deduplicates_repeated_mentions_of_one_finding():
     assert len(nodules) == 1
     assert nodules[0]["anatomy_code"] == "right upper lobe"
     assert nodules[0]["measurements"][0]["normalized_mm"] == 8.0
+
+
+def test_rule_dedup_does_not_treat_missing_measurement_as_zero():
+    base = {
+        "observation_code": "nodule",
+        "anatomy_code": "right upper lobe",
+        "laterality": "right",
+        "certainty": "present",
+        "source_text": "right upper lobe nodule",
+    }
+    findings = [
+        {
+            **base,
+            "finding_id": "f1",
+            "measurements": [{"value": "unknown", "unit": "mm"}],
+        },
+        {
+            **base,
+            "finding_id": "f2",
+            "measurements": [{"value": 0.0, "unit": "mm", "normalized_mm": 0.0}],
+        },
+    ]
+
+    deduplicated = _deduplicate_findings(findings)
+
+    assert len(deduplicated) == 2
 
 
 def test_cxr_rule_output_uses_the_same_controlled_ontology_as_hybrid_t2():

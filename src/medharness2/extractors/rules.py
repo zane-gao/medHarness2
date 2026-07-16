@@ -171,11 +171,25 @@ def _measurements_can_merge(a: list[dict[str, Any]], b: list[dict[str, Any]]) ->
     return _measurement_signature(a) == _measurement_signature(b)
 
 
-def _measurement_signature(measurements: list[dict[str, Any]]) -> tuple[tuple[float, str], ...]:
+def _measurement_signature(
+    measurements: list[dict[str, Any]],
+) -> tuple[tuple[float | None, str], ...]:
     return tuple(
-        (float(item.get("normalized_mm") or 0.0), str(item.get("unit") or ""))
+        (
+            _optional_float(item.get("normalized_mm")),
+            str(item.get("unit") or ""),
+        )
         for item in measurements
     )
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _find_alias_matches(text: str, aliases_by_canonical: dict[str, list[str]]) -> list[dict[str, Any]]:

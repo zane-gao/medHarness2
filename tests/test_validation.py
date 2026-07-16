@@ -148,6 +148,19 @@ def test_validate_sample_run_accepts_subset_workflow_without_summary(tmp_path: P
     assert result["summary"]["case_count"] == 2
 
 
+def test_validate_sample_run_rejects_empty_workflow_aggregate_objects(tmp_path: Path):
+    """An existing but empty workflow file must not bypass contract validation."""
+    _write_manifest(tmp_path / "manifest.jsonl", 1, with_report_text=True)
+    _write_json(tmp_path / "workflow2.json", {})
+    _write_json(tmp_path / "workflow3.json", {})
+
+    result = validate_sample_run(tmp_path, expected_cases=1)
+
+    assert result["passed"] is False
+    assert "workflow2_aggregate:ValidationError" in result["errors"]
+    assert "workflow3_aggregate:ValidationError" in result["errors"]
+
+
 def test_validate_sample_run_rejects_malformed_aggregate_reader_payload(tmp_path: Path):
     _write_manifest(tmp_path / "manifest.jsonl", 1, with_report_text=True)
     _write_json(tmp_path / "workflow2.json", {
