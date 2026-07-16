@@ -234,6 +234,28 @@ def test_department_propagates_failed_case_denominator(tmp_path: Path):
     assert result["denominator"]["failure_rate"] == pytest.approx(2 / 3, abs=1e-4)
 
 
+def test_department_excludes_reader_with_missing_overall_score_instead_of_zero_filling(tmp_path: Path):
+    batch_path = tmp_path / "workflow2.json"
+    batch_path.write_text(
+        json.dumps({
+            "case_count": 1,
+            "failed_case_count": 0,
+            "cases": [],
+            "per_reader": {
+                "complete": {"case_count": 1, "overall_score": 0.8},
+                "missing": {"case_count": 1},
+            },
+        }),
+        encoding="utf-8",
+    )
+
+    result = run_department_comparison(batch_path, tmp_path / "workflow3.json")
+
+    assert result["statistics"]["readers"]["overall_score"]["n"] == 1
+    assert result["comparisons"]["doctor_group"]["scores"] == {"complete": 0.8}
+    assert result["comparisons"]["excluded_readers"] == {"missing": "missing_overall_score"}
+
+
 def test_batch_readers_batches_medharness_cli_generation(monkeypatch, tmp_path: Path):
     script = tmp_path / "run_report_generation.py"
     script.write_text("# fake legacy script\n", encoding="utf-8")

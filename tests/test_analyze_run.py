@@ -63,6 +63,22 @@ def test_cli_analyze_run(tmp_path: Path):
     assert entry["metrics"]["generated_report_count"] == 3
 
 
+def test_analyze_reader_summary_keeps_missing_overall_score_empty(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    workflow2 = json.loads((run_dir / "workflow2.json").read_text(encoding="utf-8"))
+    workflow2["per_reader"]["reader_b"].pop("overall_score", None)
+    (run_dir / "workflow2.json").write_text(json.dumps(workflow2), encoding="utf-8")
+    workflow3 = json.loads((run_dir / "workflow3.json").read_text(encoding="utf-8"))
+    workflow3["reader_percentiles"]["reader_b"].pop("overall_score", None)
+    (run_dir / "workflow3.json").write_text(json.dumps(workflow3), encoding="utf-8")
+
+    analyze_run(run_dir, tmp_path / "analysis")
+
+    rows = _read_csv(tmp_path / "analysis" / "reader_summary.csv")
+    missing = next(row for row in rows if row["reader"] == "reader_b")
+    assert missing["overall_score"] == ""
+
+
 def test_cli_analyze_run_records_failed_registry_on_exception(tmp_path: Path):
     run_dir = tmp_path / "missing_workflow_outputs"
     run_dir.mkdir()

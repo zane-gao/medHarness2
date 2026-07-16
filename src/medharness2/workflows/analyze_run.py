@@ -270,7 +270,7 @@ def _reader_rows(workflow2: dict[str, Any], workflow3: dict[str, Any]) -> list[d
             {
                 "reader": reader,
                 "case_count": payload.get("case_count", percentile.get("case_count", 0)),
-                "overall_score": payload.get("overall_score", percentile.get("overall_score", 0.0)),
+                "overall_score": payload.get("overall_score", percentile.get("overall_score")),
                 "percentile": percentile.get("percentile", ""),
             }
         )

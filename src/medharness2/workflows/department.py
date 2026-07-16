@@ -10,7 +10,17 @@ from medharness2.utils.io import read_json, write_json
 def run_department_comparison(batch_result_path: str | Path, output_path: str | Path) -> dict[str, Any]:
     batch = read_json(batch_result_path)
     per_reader = dict(batch.get("per_reader") or {})
-    reader_scores = {reader: float(payload.get("overall_score", 0.0)) for reader, payload in per_reader.items()}
+    reader_scores: dict[str, float] = {}
+    excluded_readers: dict[str, str] = {}
+    for reader, payload in per_reader.items():
+        raw_score = payload.get("overall_score")
+        if raw_score is None or isinstance(raw_score, bool):
+            excluded_readers[reader] = "missing_overall_score"
+            continue
+        try:
+            reader_scores[reader] = float(raw_score)
+        except (TypeError, ValueError):
+            excluded_readers[reader] = "invalid_overall_score"
     population = list(reader_scores.values())
     reader_percentiles = {
         reader: {
@@ -52,6 +62,7 @@ def run_department_comparison(batch_result_path: str | Path, output_path: str | 
         "reader_percentiles": reader_percentiles,
         "comparisons": {
             "doctor_group": {"scores": reader_scores},
+            "excluded_readers": excluded_readers,
             "model_group": {"case_metric_count": len(model_group_rows)},
         },
     }
