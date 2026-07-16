@@ -15,6 +15,7 @@ from medharness2.contracts import (
     HazardReviewArtifact,
     StructureAuditArtifact,
 )
+from medharness2.ocr import REAL_OCR_PROVIDERS
 
 
 def validate_sample_run(
@@ -376,7 +377,7 @@ def _count_real_ocr_provenance(root: Path, rows: list[dict[str, Any]]) -> tuple[
         provider = str(meta.get("provider") or "").lower()
         if method == "pdf_text_layer" or provider == "local_pdf_text":
             real_count += 1
-        elif method == "vlm_ocr" and provider and provider != "mock":
+        elif method == "vlm_ocr" and provider in REAL_OCR_PROVIDERS:
             real_count += 1
         elif provider == "mock":
             mock_count += 1

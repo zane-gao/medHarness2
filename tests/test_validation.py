@@ -39,6 +39,14 @@ def test_validate_sample_run_accepts_real_ocr_metadata(tmp_path: Path):
     assert result["real_ocr_count"] == 2
 
 
+def test_validate_sample_run_rejects_unknown_vlm_provider(tmp_path: Path):
+    _write_run(tmp_path, warning_counts={}, failed_case_count=0, ocr_provider="future_magic_provider")
+    result = validate_sample_run(tmp_path, expected_cases=2, require_real_ocr=True)
+    assert result["passed"] is False
+    assert "ocr_provenance_unknown" in result["errors"]
+    assert result["unknown_ocr_count"] == 2
+
+
 def test_validate_sample_run_reports_missing_workflow_outputs(tmp_path: Path):
     _write_json(tmp_path / "summary.json", {"case_count": 1, "warning_counts": {}})
     _write_manifest(tmp_path / "manifest.jsonl", 1)
