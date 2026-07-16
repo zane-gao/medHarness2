@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "web"))
 import build_panel
-from medharness2.dashboard import summarize_dashboard_payload
+from medharness2.dashboard import _format_gate_status, summarize_dashboard_payload
 from medharness2.dashboard import _render_kpis, _render_health_strip
 
 
@@ -64,6 +64,15 @@ def test_dashboard_summary_rejects_invalid_external_counts(field_path, label, ba
     target[field_path[-1]] = bad
     with pytest.raises(ValueError, match=label):
         summarize_dashboard_payload(payload)
+
+
+@pytest.mark.parametrize("field", ["passed", "total"])
+@pytest.mark.parametrize("bad", [True, 1.5, "2", -1])
+def test_dashboard_gate_status_rejects_invalid_counts(field, bad):
+    item = {"gate_summary": {"passed": 1, "total": 2}, "validation_gates": []}
+    item["gate_summary"][field] = bad
+    with pytest.raises(ValueError, match=field):
+        _format_gate_status(item)
 
 
 def test_dashboard_kpis_preserve_explicit_zero_counts():

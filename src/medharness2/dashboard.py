@@ -384,7 +384,7 @@ def _format_medical_model_policy(required: Any) -> str:
 def _format_gate_status(item: dict[str, Any]) -> str:
     summary = item.get("gate_summary") or {}
     failed = [str(gate.get("id") or "") for gate in item.get("validation_gates") or [] if not gate.get("passed")]
-    counts = f"{int(summary.get('passed') or 0)}/{int(summary.get('total') or 0)} passed"
+    counts = f"{_count_or_zero(summary.get('passed'), 'passed')}/{_count_or_zero(summary.get('total'), 'total')} passed"
     return counts if not failed else f"{counts}; pending={','.join(failed)}"
 
 
