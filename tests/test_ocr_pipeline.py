@@ -479,6 +479,32 @@ def test_ocr_candidate_benchmark_rejects_candidate_sidecar_for_different_case(tm
     assert result["blocked_items"] == ["provenance:case1:model-a:case_id"]
 
 
+@pytest.mark.parametrize(
+    ("quality_status", "reason"),
+    [
+        ("blocked", "ocr_quality_blocked"),
+        ("review_required", "ocr_quality_review_required"),
+    ],
+)
+def test_ocr_candidate_benchmark_excludes_low_quality_sidecars(tmp_path: Path, quality_status: str, reason: str):
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"case_id": "case1", "model_key": "model-a", "quality_status": quality_status, "text": "same"}),
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps([{"case_id": "case1", "gold_text": "same", "candidates": {"model-a": str(candidate)}}]),
+        encoding="utf-8",
+    )
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "blocked"
+    assert result["selection"]["reason"] == "invalid_candidate_provenance"
+    assert result["blocked_items"] == [f"provenance:case1:model-a:{reason}"]
+
+
 def test_ocr_candidate_benchmark_rejects_candidate_sidecar_for_different_model(tmp_path: Path):
     candidate = tmp_path / "candidate.json"
     candidate.write_text(

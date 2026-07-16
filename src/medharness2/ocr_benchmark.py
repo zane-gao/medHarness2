@@ -422,6 +422,11 @@ def _validate_candidate_provenance(
     candidate_model = _first_value(observed, ("model_key", "model", "model_name"))
     if candidate_model not in (None, ""):
         declared_fields = True
+    quality_status = str(observed.get("quality_status") or "").strip().lower()
+    if quality_status in {"blocked", "review_required"}:
+        blockers.append(f"provenance:{item.get('case_id')}:{model}:ocr_quality_{quality_status}")
+    elif quality_status and quality_status != "passed":
+        blockers.append(f"provenance:{item.get('case_id')}:{model}:ocr_quality_status")
     if source_pdf and not expected_pdf_hash:
         pdf_path = Path(str(source_pdf))
         if not pdf_path.is_absolute():
