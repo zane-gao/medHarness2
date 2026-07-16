@@ -6,7 +6,7 @@ release_readiness: pilot_only
 baseline:
   branch: main
   git_sha: 154754b
-  dirty_worktree: true
+  dirty_worktree: false
   pytest_passed: 519
   pytest_warnings: 18
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710

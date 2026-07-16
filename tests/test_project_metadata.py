@@ -15,7 +15,7 @@ def test_project_status_has_current_release_evidence():
     assert payload["current_phase"]
     assert payload["release_readiness"] == "pilot_only"
     assert payload["baseline"]["branch"] == "main"
-    assert payload["baseline"]["dirty_worktree"] is True
+    assert payload["baseline"]["dirty_worktree"] is False
     assert payload["baseline"]["pytest_passed"] >= 348
     assert Path(payload["baseline"]["current_run"]).exists()
     assert set(payload["workstreams"]) >= {
