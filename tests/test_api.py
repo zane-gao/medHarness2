@@ -237,6 +237,21 @@ def test_api_workflow_failures_return_http_500_and_failed_registry(tmp_path: Pat
         assert registry["entries"][-1]["stage"].startswith("workflow.")
 
 
+def test_api_remaining_workflow_failures_return_http_500_and_failed_registry(tmp_path: Path, monkeypatch):
+    cases = [
+        ("/workflow/single-case", {"report_text": "report", "image_path": "image.dcm", "output_path": str(tmp_path / "single.json")}, "run_single_case", "single_case_failed", tmp_path),
+        ("/experiments/run", {"run_dir": str(tmp_path / "run"), "output_dir": str(tmp_path / "experiments")}, "run_experiments", "experiments_run_failed", tmp_path / "experiments"),
+        ("/workflow/sample-full", {"sample_root": str(tmp_path / "samples"), "output_dir": str(tmp_path / "sample-full")}, "run_sample_full", "sample_full_failed", tmp_path / "sample-full"),
+    ]
+    for route, payload, function_name, detail_prefix, registry_dir in cases:
+        monkeypatch.setattr(api_module, function_name, lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+        response = TestClient(app, raise_server_exceptions=False).post(route, json=payload)
+        assert response.status_code == 500
+        assert response.json()["detail"] == f"{detail_prefix}:RuntimeError"
+        registry = json.loads((registry_dir / "run_registry.json").read_text(encoding="utf-8"))
+        assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_api_merge_batches(tmp_path: Path):
     manifest = tmp_path / "manifest.jsonl"
     report_text = tmp_path / "ocr" / "case1.txt"

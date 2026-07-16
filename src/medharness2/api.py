@@ -225,22 +225,34 @@ def catalog_tools(config_path: str | None = None) -> dict[str, Any]:
 def single_case(request: SingleCaseRequest) -> dict[str, Any]:
     if bool(request.report_text) == bool(request.report_path):
         raise HTTPException(status_code=400, detail="Provide exactly one of report_text or report_path.")
-    cfg = load_config(request.config_path) if request.config_path else load_config()
-    with tempfile.TemporaryDirectory(prefix="medharness2_api_") as tmpdir:
-        report_path = Path(request.report_path) if request.report_path else Path(tmpdir) / "report.txt"
-        if request.report_text is not None:
-            report_path.write_text(request.report_text, encoding="utf-8")
-        result = run_single_case(
-            report_path=report_path,
-            image_path=Path(request.image_path),
-            output_path=Path(request.output_path),
-            case_id=request.case_id,
-            modality=request.modality,
-            top_n=request.top_n,
-            model_keys=request.model_keys,
-            model_sources=request.model_sources,
-            config=cfg,
+    try:
+        cfg = load_config(request.config_path) if request.config_path else load_config()
+        with tempfile.TemporaryDirectory(prefix="medharness2_api_") as tmpdir:
+            report_path = Path(request.report_path) if request.report_path else Path(tmpdir) / "report.txt"
+            if request.report_text is not None:
+                report_path.write_text(request.report_text, encoding="utf-8")
+            result = run_single_case(
+                report_path=report_path,
+                image_path=Path(request.image_path),
+                output_path=Path(request.output_path),
+                case_id=request.case_id,
+                modality=request.modality,
+                top_n=request.top_n,
+                model_keys=request.model_keys,
+                model_sources=request.model_sources,
+                config=cfg,
+            )
+    except Exception as exc:
+        _record_registry(
+            Path(request.output_path).parent,
+            stage="workflow.single-case",
+            status="failed",
+            inputs={"output_path": request.output_path, "case_id": request.case_id or ""},
+            outputs={"result": request.output_path},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
         )
+        raise HTTPException(status_code=500, detail=f"single_case_failed:{type(exc).__name__}") from exc
     result_errors = list(result.get("errors") or [])
     _record_registry(
         Path(request.output_path).parent,
@@ -266,7 +278,20 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
 
 @app.post("/experiments/run")
 def experiments_run(request: ExperimentRunRequest) -> dict[str, Any]:
-    result = run_experiments(request.run_dir, request.output_dir)
+    try:
+        result = run_experiments(request.run_dir, request.output_dir)
+    except Exception as exc:
+        for registry_dir in (request.output_dir, request.run_dir):
+            _record_registry(
+                registry_dir,
+                stage="experiments.run",
+                status="failed",
+                inputs={"run_dir": request.run_dir},
+                outputs={"experiment_dir": request.output_dir},
+                metrics={"error_count": 1},
+                warnings=[f"{type(exc).__name__}: {exc}"],
+            )
+        raise HTTPException(status_code=500, detail=f"experiments_run_failed:{type(exc).__name__}") from exc
     metrics = experiment_registry_metrics(result)
     outputs = {
         "results": str(Path(request.output_dir) / "results.json"),
@@ -418,17 +443,44 @@ def sample_data(request: SampleDataRequest) -> dict[str, Any]:
 
 @app.post("/workflow/sample-full")
 def sample_full(request: SampleFullRequest) -> dict[str, Any]:
-    cfg = load_config(request.config_path) if request.config_path else load_config()
-    model_keys = ["*"] if request.all_compatible_local_models else request.model_keys
-    if request.dry_run:
-        result = plan_sample_full_routes(
-            request.sample_root,
+    try:
+        cfg = load_config(request.config_path) if request.config_path else load_config()
+        model_keys = ["*"] if request.all_compatible_local_models else request.model_keys
+        if request.dry_run:
+            result = plan_sample_full_routes(
+                request.sample_root,
+                request.output_dir,
+                config=cfg,
+                limit=request.limit,
+                model_keys=model_keys,
+                model_sources=request.model_sources,
+            )
+        else:
+            result = run_sample_full(
+                request.sample_root,
+                request.output_dir,
+                config=cfg,
+                limit=request.limit,
+                model_keys=model_keys,
+                model_sources=request.model_sources,
+                run_ocr=request.run_ocr,
+                require_real_ocr=request.require_real_ocr,
+                force_ocr=request.force_ocr,
+                expected_cases=request.expected_cases,
+            )
+    except Exception as exc:
+        stage = "workflow.sample-full.dry-run" if request.dry_run else "workflow.sample-full"
+        _record_registry(
             request.output_dir,
-            config=cfg,
-            limit=request.limit,
-            model_keys=model_keys,
-            model_sources=request.model_sources,
+            stage=stage,
+            status="failed",
+            inputs={"sample_root": request.sample_root, "limit": request.limit},
+            outputs={"output_dir": request.output_dir},
+            metrics={"error_count": 1},
+            warnings=[f"{type(exc).__name__}: {exc}"],
         )
+        raise HTTPException(status_code=500, detail=f"sample_full_failed:{type(exc).__name__}") from exc
+    if request.dry_run:
         summary = {"dry_run": True, **result["summary"], "errors": list(result.get("errors") or [])}
         _record_registry(
             request.output_dir,
@@ -444,18 +496,6 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
             "summary": summary,
             "result": result,
         }
-    result = run_sample_full(
-        request.sample_root,
-        request.output_dir,
-        config=cfg,
-        limit=request.limit,
-        model_keys=model_keys,
-        model_sources=request.model_sources,
-        run_ocr=request.run_ocr,
-        require_real_ocr=request.require_real_ocr,
-        force_ocr=request.force_ocr,
-        expected_cases=request.expected_cases,
-    )
     validation = dict(result.get("validation") or {})
     _record_registry(
         request.output_dir,
