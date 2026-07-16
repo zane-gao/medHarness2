@@ -53,15 +53,19 @@ def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) 
             hard_blocked = True
             continue
         for model, value in candidates.items():
+            model_name = str(model).strip()
+            if not model_name:
+                blocked.append(f"manifest:{case_id}:empty_model_key")
+                hard_blocked = True
+                continue
             text = _resolve_text(value, base_dir=manifest_file.parent)
             if not text:
                 if _is_declared_text_path(value, base_dir=manifest_file.parent):
-                    blocked.append(f"missing_candidate:{case_id}:{model}")
+                    blocked.append(f"missing_candidate:{case_id}:{model_name}")
                     hard_blocked = True
                 else:
-                    blocked.append(f"{case_id}:{model}")
+                    blocked.append(f"{case_id}:{model_name}")
                 continue
-            model_name = str(model)
             provenance_blockers = _validate_candidate_provenance(
                 item,
                 model_name,

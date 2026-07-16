@@ -425,6 +425,28 @@ def test_ocr_candidate_benchmark_rejects_candidate_sidecar_for_different_model(t
     assert result["blocked_items"] == ["provenance:case1:model-a:model_key"]
 
 
+def test_ocr_candidate_benchmark_blocks_empty_model_key(tmp_path: Path):
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "case1",
+                    "gold_text": "same",
+                    "candidates": {"  ": "same"},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "blocked"
+    assert result["selection"]["reason"] == "invalid_manifest"
+    assert result["blocked_items"] == ["manifest:case1:empty_model_key"]
+
+
 def test_ocr_candidate_benchmark_blocks_unequal_model_coverage(tmp_path: Path):
     manifest = tmp_path / "ocr_manifest.json"
     manifest.write_text(
