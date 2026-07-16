@@ -55,12 +55,14 @@ def validate_sample_run(
     if require_real_ocr and int(warning_counts.get("real_ocr_required_but_provider_is_mock", 0)):
         errors.append("real_ocr_required_but_provider_is_mock")
     if require_real_ocr:
-        real_ocr_count, unknown_ocr_count, provider_mock_count = _count_real_ocr_provenance(root, manifest_rows)
+        real_ocr_count, unknown_ocr_count, provider_mock_count, missing_ocr_text_count = _count_real_ocr_provenance(root, manifest_rows)
         if provider_mock_count:
             mock_ocr_count = max(mock_ocr_count, provider_mock_count)
             errors.append("mock_ocr_used")
         if unknown_ocr_count:
             errors.append("ocr_provenance_unknown")
+        if missing_ocr_text_count:
+            errors.append("ocr_text_missing")
 
     failed_case_count = int(workflow2.get("failed_case_count", 0) or 0) if workflow2 else 0
     if failed_case_count:
@@ -90,6 +92,7 @@ def validate_sample_run(
         "mock_ocr_count": mock_ocr_count,
         "real_ocr_count": real_ocr_count,
         "unknown_ocr_count": unknown_ocr_count,
+        "missing_ocr_text_count": missing_ocr_text_count if require_real_ocr else 0,
         "failed_case_count": failed_case_count,
         "require_real_ocr": require_real_ocr,
         "require_workflows": require_workflows,
@@ -357,13 +360,16 @@ def _merge_counts(*counts: dict[str, Any]) -> dict[str, int]:
     return merged
 
 
-def _count_real_ocr_provenance(root: Path, rows: list[dict[str, Any]]) -> tuple[int, int, int]:
+def _count_real_ocr_provenance(root: Path, rows: list[dict[str, Any]]) -> tuple[int, int, int, int]:
     real_count = 0
     unknown_count = 0
     mock_count = 0
+    missing_text_count = 0
     for row in rows:
         report_text = str(row.get("report_text") or "")
         if not report_text:
+            if str(row.get("report_pdf") or "").strip():
+                missing_text_count += 1
             continue
         row_warnings = {str(warning) for warning in row.get("warnings") or []}
         if "mock_ocr_used" in row_warnings or "real_ocr_required_but_provider_is_mock" in row_warnings:
@@ -383,7 +389,7 @@ def _count_real_ocr_provenance(root: Path, rows: list[dict[str, Any]]) -> tuple[
             mock_count += 1
         else:
             unknown_count += 1
-    return real_count, unknown_count, mock_count
+    return real_count, unknown_count, mock_count, missing_text_count
 
 
 def _read_ocr_meta(root: Path, report_text: str) -> dict[str, Any]:

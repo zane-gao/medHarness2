@@ -47,6 +47,22 @@ def test_validate_sample_run_rejects_unknown_vlm_provider(tmp_path: Path):
     assert result["unknown_ocr_count"] == 2
 
 
+def test_validate_sample_run_rejects_missing_ocr_text_when_report_pdf_exists(tmp_path: Path):
+    _write_run(tmp_path, warning_counts={}, failed_case_count=0)
+    manifest = tmp_path / "manifest.jsonl"
+    rows = [
+        {"case_id": "case0", "reader": "r", "modality": "cxr", "body_part": "chest", "report_pdf": "reports/case0.pdf", "report_text": "", "warnings": []},
+        {"case_id": "case1", "reader": "r", "modality": "cxr", "body_part": "chest", "report_pdf": "reports/case1.pdf", "report_text": "", "warnings": []},
+    ]
+    manifest.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+    result = validate_sample_run(tmp_path, expected_cases=2, require_real_ocr=True)
+
+    assert result["passed"] is False
+    assert "ocr_text_missing" in result["errors"]
+    assert result["missing_ocr_text_count"] == 2
+
+
 def test_validate_sample_run_reports_missing_workflow_outputs(tmp_path: Path):
     _write_json(tmp_path / "summary.json", {"case_count": 1, "warning_counts": {}})
     _write_manifest(tmp_path / "manifest.jsonl", 1)

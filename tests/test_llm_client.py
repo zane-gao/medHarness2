@@ -153,6 +153,41 @@ def test_chat_completions_honors_retry_after_for_rate_limits(monkeypatch):
     assert sleeps == [7.0]
 
 
+def test_openai_responses_honors_retry_after_from_http_error(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "test-only-secret")
+    sleeps = []
+    calls = 0
+
+    def fake_urlopen(request, timeout):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise urllib.error.HTTPError(
+                request.full_url,
+                429,
+                "rate limited",
+                {"Retry-After": "11"},
+                None,
+            )
+        class Response:
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+            def read(self):
+                return b'{"output_text":"ok"}'
+        return Response()
+
+    import urllib.error
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("time.sleep", lambda value: sleeps.append(value))
+    client = LLMClient(AppConfig(llm=LLMConfig(provider="openai", max_retries=2)))
+
+    assert client.call("hello", payload_classification="synthetic_test") == "ok"
+    assert calls == 2
+    assert sleeps == [11.0]
+
+
 def test_chat_completions_transport_error_retries_without_unbound_response(monkeypatch):
     monkeypatch.setenv("DMX_API_KEY", "test-only-secret")
     calls = 0

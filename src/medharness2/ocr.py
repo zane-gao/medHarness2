@@ -58,9 +58,18 @@ def extract_report_text(
     out_dir.mkdir(parents=True, exist_ok=True)
     cache_path = out_dir / f"{case_id}.txt"
     meta_path = out_dir / f"{case_id}.ocr.json"
+    source_pdf_sha256 = _sha256(pdf)
     if cache_path.exists() and cache_path.read_text(encoding="utf-8").strip() and not force:
         cached_meta = _read_meta(meta_path)
-        if not require_real or _is_real_ocr_meta(cached_meta):
+        if _cache_is_compatible(
+            cached_meta,
+            source_pdf_sha256=source_pdf_sha256,
+            provider=primary_provider,
+            model=primary_model,
+            role=ocr_role if primary_options else "default",
+            verifier_options=effective_verifier_options,
+            require_real=require_real,
+        ):
             return ReportTextResult(
                 case_id=case_id,
                 text=cache_path.read_text(encoding="utf-8"),
@@ -200,7 +209,7 @@ def extract_report_text(
                 "warnings": warnings,
                 "page_count": page_count,
                 "pages": page_meta,
-                "source_pdf_sha256": _sha256(pdf),
+                "source_pdf_sha256": source_pdf_sha256,
                 "prompt_version": "ocr-page-v2",
                 "quality_audit": quality_audit,
             },
@@ -228,6 +237,51 @@ def _extract_pdf_text(pdf: Path) -> str:
 def _ocr_role_options(config: AppConfig, role: str) -> dict[str, Any]:
     route = config.model_roles.get(role) if role else None
     return route.as_call_options() if route is not None else {}
+
+
+def _cache_is_compatible(
+    meta: dict[str, Any],
+    *,
+    source_pdf_sha256: str,
+    provider: str,
+    model: str,
+    role: str,
+    verifier_options: dict[str, Any],
+    require_real: bool,
+) -> bool:
+    """Only reuse OCR text when its source and route provenance still match."""
+    if not meta or meta.get("source_pdf_sha256") != source_pdf_sha256:
+        return False
+    method = str(meta.get("method") or "").lower()
+    if method == "pdf_text_layer":
+        return meta.get("provider") == "local_pdf_text"
+    if method != "vlm_ocr":
+        return False
+    if require_real and not _is_real_ocr_meta(meta):
+        return False
+    if str(meta.get("provider") or "").lower() != provider:
+        return False
+    cached_model = str(meta.get("model") or "")
+    # Legacy/default OCR caches predate configurable role model routing.  Keep
+    # them reusable when the provider and source hash are still trustworthy;
+    # role-specific caches remain strict about the selected model.
+    if role != "default" and cached_model != model:
+        return False
+    if str(meta.get("role") or "") != role:
+        return False
+    if str(meta.get("prompt_version") or "") != "ocr-page-v2":
+        return False
+    expected_verifier = {
+        "provider": str(verifier_options.get("provider") or "").lower(),
+        "model": str(verifier_options.get("model") or ""),
+    }
+    cached_verifier = meta.get("verifier") or {}
+    if expected_verifier["provider"] and (
+        str(cached_verifier.get("provider") or "").lower() != expected_verifier["provider"]
+        or str(cached_verifier.get("model") or "") != expected_verifier["model"]
+    ):
+        return False
+    return True
 
 
 def _render_pdf_pages(pdf: Path, output_dir: Path) -> list[str]:

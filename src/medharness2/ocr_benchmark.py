@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -122,21 +123,69 @@ def _normalize(text: str) -> str:
 
 
 def _clinical_tokens(text: str) -> dict[str, list[str]]:
+    normalized = unicodedata.normalize("NFKC", text).lower()
+    digit_matches = re.finditer(
+        r"\d+(?:\.\d+)?\s*(?:mm|cm|ml|%|毫米|厘米)?",
+        normalized,
+    )
+    negation_matches = re.finditer(
+        r"\b(?:no|not|without)\b|否认|未见|未发现|无",
+        normalized,
+    )
     return {
-        "digits": re.findall(r"\d+(?:\.\d+)?\s*(?:mm|cm|ml|%|毫米|厘米)?", text.lower()),
-        "negations": [token for token in NEGATION_TOKENS if token in text.lower()],
+        # Keep source order and duplicate mentions: repeated measurements and
+        # changed values must affect the score rather than collapsing to a set.
+        "digits": [match.group(0).replace(" ", "") for match in digit_matches],
+        # English terms use word boundaries to avoid matching e.g. ``not`` in
+        # ``notation``; Chinese terms are intentionally matched as phrases.
+        "negations": [match.group(0) for match in negation_matches],
     }
 
 
-def _token_accuracy(gold: list[str], candidate: list[str]) -> float:
+def _token_accuracy(gold: Sequence[str], candidate: Sequence[str]) -> float:
+    """Return an order-sensitive token accuracy in ``[0, 1]``.
+
+    This is a normalized edit accuracy rather than a presence check. It
+    penalizes substitutions, missing mentions, extra mentions and reordering,
+    while preserving the historical perfect score for two empty sequences.
+    """
     if not gold:
         return 1.0 if not candidate else 0.0
-    return round(sum(token in candidate for token in gold) / len(gold), 6)
+    distance = _sequence_levenshtein(gold, candidate)
+    return round(1.0 - distance / max(len(gold), len(candidate), 1), 6)
 
 
 def _possible_truncation(text: str) -> bool:
     stripped = text.strip()
-    return not stripped or (stripped[-1].isalnum() and not stripped.endswith(("stable", "normal", "negative", "正常")))
+    if not stripped:
+        return True
+    # Terminal punctuation is strong evidence that the page response ended
+    # naturally.  Chinese reports often omit a final full stop, so only flag
+    # an unpunctuated ASCII word/number (the common cut-off pattern) and retain
+    # the existing short/empty-response safety behavior.
+    if stripped[-1] in "。！？.!?)]】}」』”\"'":
+        return False
+    if len(stripped) < 8:
+        return True
+    return stripped[-1].isascii() and stripped[-1].isalnum() and not stripped.lower().endswith(
+        ("stable", "normal", "negative", "正常")
+    )
+
+
+def _sequence_levenshtein(a: Sequence[str], b: Sequence[str]) -> int:
+    previous = list(range(len(b) + 1))
+    for i, left in enumerate(a, 1):
+        current = [i]
+        for j, right in enumerate(b, 1):
+            current.append(
+                min(
+                    current[-1] + 1,
+                    previous[j] + 1,
+                    previous[j - 1] + (left != right),
+                )
+            )
+        previous = current
+    return previous[-1]
 
 
 def _levenshtein(a: str, b: str) -> int:

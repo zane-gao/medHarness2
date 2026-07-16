@@ -104,7 +104,11 @@ class LLMClient:
                 last_error = exc
                 if attempt + 1 >= max_retries:
                     break
-                delay = _retry_after_seconds(response) if getattr(response, "status_code", 0) == 429 else None
+                retry_response = response
+                if isinstance(exc, urllib.error.HTTPError):
+                    retry_response = exc
+                status = getattr(retry_response, "status", getattr(retry_response, "status_code", 0))
+                delay = _retry_after_seconds(retry_response) if status == 429 else None
                 time.sleep(delay if delay is not None else llm.retry_initial_sec * (2**attempt))
         raise LLMClientError(f"OpenAI Responses API call failed: {last_error}")
 

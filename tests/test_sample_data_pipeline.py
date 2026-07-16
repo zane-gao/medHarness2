@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import subprocess
 from pathlib import Path
 
@@ -76,7 +77,19 @@ def test_extract_report_text_reuses_real_ocr_cache_when_real_ocr_required(tmp_pa
     ocr_dir.mkdir()
     (ocr_dir / "case1.txt").write_text("real cached text\n", encoding="utf-8")
     (ocr_dir / "case1.ocr.json").write_text(
-        json.dumps({"case_id": "case1", "method": "vlm_ocr", "provider": "openai"}) + "\n",
+        json.dumps(
+            {
+                "case_id": "case1",
+                "method": "vlm_ocr",
+                "provider": "openai",
+                "model": "gpt-5.6-sol",
+                "role": "default",
+                "prompt_version": "ocr-page-v2",
+                "source_pdf_sha256": hashlib.sha256(pdf.read_bytes()).hexdigest(),
+                "verifier": {"configured": False, "provider": "", "model": "", "role": ""},
+            }
+        )
+        + "\n",
         encoding="utf-8",
     )
 
