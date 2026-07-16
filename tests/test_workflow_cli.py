@@ -1118,6 +1118,29 @@ def test_cli_batch_readers_and_department_write_run_registry(tmp_path: Path):
     assert registry["entries"][-1]["outputs"]["workflow3"] == str(workflow3)
 
 
+def test_cli_batch_readers_rejects_empty_manifest(tmp_path: Path):
+    manifest = tmp_path / "empty.jsonl"
+    manifest.write_text("", encoding="utf-8")
+    output = tmp_path / "workflow2.json"
+
+    code = main(
+        [
+            "workflow",
+            "batch-readers",
+            "--manifest",
+            str(manifest),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert code == 1
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["case_count"] == 0
+    assert payload["failed_case_count"] == 0
+    assert payload["errors"] == ["no_cases_discovered"]
+
+
 def test_cli_validate_run_writes_failed_run_registry(tmp_path: Path):
     output_dir = tmp_path / "run"
     output_dir.mkdir()

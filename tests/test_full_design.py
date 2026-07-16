@@ -608,6 +608,21 @@ def test_batch_readers_continues_when_case_workflow_fails(tmp_path: Path):
     assert "FileNotFoundError" in result["failed_cases"][0]["error"]
 
 
+def test_batch_readers_marks_empty_manifest_as_blocked(tmp_path: Path):
+    manifest = tmp_path / "empty.jsonl"
+    manifest.write_text("", encoding="utf-8")
+
+    result = run_batch_readers(
+        manifest,
+        tmp_path / "workflow2.json",
+        config=AppConfig(llm=LLMConfig(provider="mock")),
+    )
+
+    assert result["case_count"] == 0
+    assert result["failed_case_count"] == 0
+    assert result["errors"] == ["no_cases_discovered"]
+
+
 def test_batch_readers_does_not_placeholder_when_real_ocr_role_is_configured(tmp_path: Path):
     manifest = tmp_path / "manifest.jsonl"
     manifest.write_text(

@@ -116,6 +116,7 @@ def run_batch_readers(
         bucket["human_statistics"] = calculate_statistics(bucket["human_metrics"])
         bucket["modelwise_statistics"] = calculate_statistics(bucket["modelwise_metrics"])
         bucket["overall_score"] = _mean_score(bucket["human_metrics"])
+    errors = ["no_cases_discovered"] if not rows else []
     result = {
         "manifest_path": str(manifest_path),
         "case_count": len(case_results),
@@ -130,6 +131,7 @@ def run_batch_readers(
         },
         "per_reader": per_reader,
         "statistics": calculate_statistics([case["human_metrics"] for case in case_results]),
+        "errors": errors,
     }
     write_json(out, result)
     return result

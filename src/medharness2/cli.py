@@ -536,11 +536,12 @@ def main(argv: list[str] | None = None) -> int:
             config=config,
         )
         failed_case_count = int(result.get("failed_case_count", 0) or 0)
+        workflow_errors = list(result.get("errors") or [])
         _record_registry(
             Path(args.output).parent,
             command=command,
             stage="workflow.batch-readers",
-            status="failed" if failed_case_count else "passed",
+            status="failed" if failed_case_count or workflow_errors else "passed",
             inputs={
                 "manifest": args.manifest,
                 "limit": args.limit,
@@ -560,7 +561,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"wrote medHarness2 batch-readers output to {args.output}")
         print(f"cases={result['case_count']} readers={len(result['per_reader'])}")
-        return 0
+        return 1 if failed_case_count or workflow_errors else 0
     if args.command == "workflow" and args.workflow == "department":
         result = run_department_comparison(args.batch_result, args.output)
         _record_registry(
