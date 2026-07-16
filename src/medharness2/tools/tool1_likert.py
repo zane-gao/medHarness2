@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from statistics import mean
 from typing import Any
@@ -132,8 +133,14 @@ def likert_mean(result: dict[str, Any]) -> float:
     scores = []
     for metric in LIKERT_METRICS:
         item = result.get(metric) or {}
-        if isinstance(item, dict) and isinstance(item.get("score"), (int, float)):
-            scores.append(float(item["score"]))
+        if not isinstance(item, dict):
+            continue
+        raw_score = item.get("score")
+        if isinstance(raw_score, bool) or not isinstance(raw_score, (int, float)):
+            continue
+        score = float(raw_score)
+        if math.isfinite(score) and 1.0 <= score <= 5.0:
+            scores.append(score)
     return round(mean(scores), 4) if scores else 0.0
 
 

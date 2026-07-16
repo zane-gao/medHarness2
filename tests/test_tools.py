@@ -53,6 +53,17 @@ def test_tool1_likert_normalizes_scores():
     assert result["_metadata"]["fallback_used"] is True
 
 
+def test_tool1_likert_mean_ignores_boolean_nonfinite_and_out_of_range_scores():
+    result = {
+        "Completeness and Accuracy": {"score": True},
+        "Conciseness and Clarity": {"score": float("nan")},
+        "Terminological Accuracy": {"score": 0},
+        "Structure and Style": {"score": 4},
+        "Overall Writing Quality": {"score": 6},
+    }
+    assert likert_mean(result) == 4.0
+
+
 def test_tool1_retries_runtime_provider_failures_and_records_fallback():
     client = _FailingClient(ConnectionError("upstream timeout"))
 
