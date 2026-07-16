@@ -309,3 +309,26 @@ def test_education_ignores_missing_and_invalid_likert_scores_without_zero_fillin
     assert result["report_summary"]["weakest_metric"] == "Overall Writing Quality"
     assert result["report_summary"]["weakest_score"] == 2
     assert result["report_summary"]["overall_score"] == 3.0
+
+
+def test_education_does_not_truncate_fractional_likert_scores(tmp_path: Path):
+    payload = _workflow1_payload()
+    payload["human_evaluation"]["likert"] = {
+        "Completeness and Accuracy": {"score": 3.5},
+        "Conciseness and Clarity": {"score": 4},
+        "Terminological Accuracy": {"score": 4},
+        "Structure and Style": {"score": 4},
+        "Overall Writing Quality": {"score": 4},
+    }
+    source = tmp_path / "workflow1.json"
+    source.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    result = run_education_suggestions(
+        eval_report=source,
+        output_path=tmp_path / "education.json",
+        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+    )
+
+    assert result["status"] == "suggestions_generated"
+    assert result["report_summary"]["overall_score"] == 4.0
+    assert result["report_summary"]["weakest_metric"] != "Completeness and Accuracy"

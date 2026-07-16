@@ -134,6 +134,9 @@ Workflow (端到端 + 文件 I/O)
 
 ### Tool 12 · 统计计算 — `tools/tool12_statistics.py`
 
+- 教育建议工作流沿用 Tool1 的 Likert 契约：只接受 1–5 严格整数，缺失、布尔、非有限和小数值不会被截断后纳入统计。
+
+
 - **入口**：`calculate_statistics(rows) -> dict`；`percentile_rank(value, population) -> float`
 - **实现**：对每个数值指标收集成列，算 `n / mean / std / min / max / ci_lower / ci_upper`；fallback/mock 行会被排除。小样本使用保守 t 临界值，`n=1` 时 CI 上下界为 `null`（表示无法估计，而非零不确定性）。`percentile_rank` = 群体中 ≤ value 的占比 ×100。
 - **用处**：Workflow 2 reader 聚合、Workflow 3 reader 百分位与模型组统计。

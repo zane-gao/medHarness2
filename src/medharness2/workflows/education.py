@@ -183,10 +183,7 @@ def _weakest_likert(likert: dict[str, Any]) -> tuple[str | None, int | None]:
     for metric in LIKERT_METRICS:
         item = likert.get(metric) or {}
         try:
-            raw_score = item.get("score")
-            if raw_score is None or raw_score == "":
-                continue
-            score = int(float(raw_score))
+            score = _strict_likert_score(item.get("score"))
         except (TypeError, ValueError):
             continue
         if 1 <= score <= 5:
@@ -198,15 +195,25 @@ def _overall_likert(likert: dict[str, Any]) -> float | None:
     scores = []
     for metric in LIKERT_METRICS:
         try:
-            raw_score = (likert.get(metric) or {}).get("score")
-            if raw_score is None or raw_score == "":
-                continue
-            score = float(raw_score)
-            if 1 <= score <= 5:
-                scores.append(score)
+            score = _strict_likert_score((likert.get(metric) or {}).get("score"))
+            scores.append(float(score))
         except (TypeError, ValueError):
             continue
     return round(sum(scores) / len(scores), 4) if scores else None
+
+
+def _strict_likert_score(value: Any) -> int:
+    if isinstance(value, bool):
+        raise ValueError("boolean Likert score")
+    if isinstance(value, int):
+        score = value
+    elif isinstance(value, str) and value.strip().lstrip("+-").isdigit():
+        score = int(value.strip())
+    else:
+        raise ValueError("Likert score must be an integer")
+    if not 1 <= score <= 5:
+        raise ValueError("Likert score out of range")
+    return score
 
 
 def _blocked_report_result(reason: str) -> dict[str, Any]:
