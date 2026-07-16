@@ -295,6 +295,20 @@ def _render_health_strip(validation: dict[str, Any], analysis: dict[str, Any]) -
         chips.append(chip(bool(validation.get("passed")), "validate-run " + ("passed" if validation.get("passed") else "failed")))
         mock = int(validation.get("mock_ocr_count") or 0)
         chips.append(chip(mock == 0, f"mock OCR {mock}"))
+        ocr = validation.get("ocr") or {}
+        if ocr:
+            ocr_status = str(ocr.get("status") or "unknown")
+            ocr_ready = bool(ocr.get("real_ocr_capable")) and ocr_status == "ready"
+            label = "OCR ready" if ocr_ready else f"OCR 未就绪: {ocr.get('blocker') or ocr_status}"
+            chips.append(chip(ocr_ready, label))
+        else:
+            required = bool(validation.get("require_real_ocr"))
+            real = int(validation.get("real_ocr_count") or 0)
+            unknown = int(validation.get("unknown_ocr_count") or 0)
+            if required and real > 0 and mock == 0 and unknown == 0:
+                chips.append(chip(True, "OCR ready（运行证据）"))
+            else:
+                chips.append(chip(False, "OCR 就绪状态未知"))
     failed_cases = int(analysis.get("failed_case_count") or 0)
     chips.append(chip(failed_cases == 0, f"失败病例 {failed_cases}"))
     qg_fail = int(analysis.get("quality_gate_failed_count") or 0)

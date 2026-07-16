@@ -6,7 +6,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parents[1] / "web"))
 import build_panel
 from medharness2.dashboard import summarize_dashboard_payload
-from medharness2.dashboard import _render_kpis
+from medharness2.dashboard import _render_kpis, _render_health_strip
 
 
 def test_extract_git_state_reports_branch_sha_and_dirty(tmp_path):
@@ -47,6 +47,33 @@ def test_dashboard_kpis_preserve_explicit_zero_counts():
     assert "病例 Cases" in html
     assert "读者 Readers" in html
     assert html.count(">0<") >= 4
+
+
+def test_health_strip_does_not_treat_validation_pass_as_ocr_ready():
+    html = _render_health_strip(
+        {"passed": True, "require_real_ocr": False, "mock_ocr_count": 0},
+        {},
+    )
+
+    assert "OCR 就绪状态未知" in html
+    assert "OCR ready（运行证据）" not in html
+
+
+def test_health_strip_surfaces_preflight_ocr_blocker():
+    html = _render_health_strip(
+        {
+            "passed": True,
+            "mock_ocr_count": 0,
+            "ocr": {
+                "status": "missing_api_key",
+                "blocker": "missing_llm_api_key",
+                "real_ocr_capable": False,
+            },
+        },
+        {},
+    )
+
+    assert "OCR 未就绪: missing_llm_api_key" in html
 
 
 def test_extract_project_status_uses_real_yaml():
