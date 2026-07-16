@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+import medharness2.api as api_module
 from medharness2.api import app
 
 
@@ -60,3 +61,10 @@ def test_catalog_api_returns_structured_failure_for_missing_config(tmp_path):
     tools = client.get("/catalog/tools", params={"config_path": config_path})
     assert tools.status_code == 500
     assert tools.json()["detail"] == "catalog_tools_failed:ValueError"
+
+
+def test_experiment_readiness_returns_structured_failure(monkeypatch):
+    monkeypatch.setattr(api_module, "build_experiment_results", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("boom")))
+    response = TestClient(app, raise_server_exceptions=False).get("/experiments", params={"run_dir": "missing"})
+    assert response.status_code == 500
+    assert response.json()["detail"] == "experiments_readiness_failed:RuntimeError"

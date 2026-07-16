@@ -205,7 +205,10 @@ def run_artifacts(run_id: str) -> dict[str, Any]:
 
 @app.get("/experiments")
 def experiment_readiness(run_dir: str) -> dict[str, Any]:
-    return build_experiment_results(run_dir)
+    try:
+        return build_experiment_results(run_dir)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"experiments_readiness_failed:{type(exc).__name__}") from exc
 
 
 @app.get("/catalog/model-roles")
