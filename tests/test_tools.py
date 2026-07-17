@@ -1979,6 +1979,20 @@ def test_tool9_does_not_fabricate_uncertainty_without_ci():
     assert [row["model"] for row in ranked] == ["a"]
 
 
+def test_tool9_rejects_non_strict_ranking_controls():
+    rows = [{"model": "a", "composite_inputs": {"likert_mean": 4, "structure_score": 0.8, "finding_coverage": 0.8}}]
+    with pytest.raises(ValueError, match="top_k"):
+        select_top_k(rows, top_k=True)
+    with pytest.raises(ValueError, match="near_cutoff_tolerance"):
+        select_top_k(rows, near_cutoff_tolerance="0.01")
+
+
+def test_tool9_ignores_invalid_metric_weights_instead_of_coercing_them():
+    rows = [{"model": "a", "composite_inputs": {"likert_mean": 4, "structure_score": 0.8, "finding_coverage": 0.8}}]
+    with pytest.raises(ValueError, match="weights"):
+        select_top_k(rows, weights={"likert_mean": "0.4", "structure_score": 0.3, "finding_coverage": 0.3})
+
+
 def test_tool9_normalizes_likert_metric_ci_before_weighting():
     rows = [
         {

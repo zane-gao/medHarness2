@@ -11,13 +11,16 @@ def select_top_k(
     *,
     near_cutoff_tolerance: float = 0.01,
 ) -> list[dict[str, Any]]:
-    metric_weights = weights or {"likert_mean": 0.4, "structure_score": 0.3, "finding_coverage": 0.3}
+    metric_weights = weights if weights is not None else {"likert_mean": 0.4, "structure_score": 0.3, "finding_coverage": 0.3}
+    top_k = _strict_positive_int(top_k, "top_k")
+    near_cutoff_tolerance = _strict_nonnegative_float(near_cutoff_tolerance, "near_cutoff_tolerance")
+    metric_weights = _strict_weights(metric_weights)
     rows: list[dict[str, Any]] = []
     for index, evaluation in enumerate(evaluations):
         if not _eligible_for_statistics(evaluation):
             continue
         metrics = _numeric_metrics(evaluation)
-        if any(key not in metrics for key, weight in metric_weights.items() if float(weight) > 0):
+        if any(key not in metrics for key, weight in metric_weights.items() if weight > 0):
             # A missing metric is not a zero score.  Exclude incomplete
             # candidates rather than silently changing the ranking semantics.
             continue
@@ -87,13 +90,13 @@ def _score_interval(
             return lower, upper
     bounds: list[tuple[float, float, float]] = []
     for metric, weight in metric_weights.items():
-        if float(weight) <= 0 or metric not in metrics:
+        if weight <= 0 or metric not in metrics:
             continue
         lower = _metric_interval_bound(metric, payload.get(f"{metric}_ci_lower"))
         upper = _metric_interval_bound(metric, payload.get(f"{metric}_ci_upper"))
         if lower is None or upper is None or lower > upper:
             return None
-        bounds.append((lower, upper, float(weight)))
+        bounds.append((lower, upper, weight))
     if not bounds:
         return None
     lower = sum(item[0] * item[2] for item in bounds) / total_weight
@@ -121,6 +124,39 @@ def _finite_or_none(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) else None
+
+
+def _strict_positive_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+        raise ValueError(f"{label} must be a positive integer")
+    return value
+
+
+def _strict_nonnegative_float(value: Any, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a finite non-negative number")
+    number = float(value)
+    if not math.isfinite(number) or number < 0:
+        raise ValueError(f"{label} must be a finite non-negative number")
+    return number
+
+
+def _strict_weights(value: Any) -> dict[str, float]:
+    if not isinstance(value, dict) or not value:
+        raise ValueError("weights must be a non-empty mapping")
+    result: dict[str, float] = {}
+    for key, weight in value.items():
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError("weights keys must be non-empty strings")
+        if isinstance(weight, bool) or not isinstance(weight, (int, float)):
+            raise ValueError("weights values must be finite numbers")
+        number = float(weight)
+        if not math.isfinite(number) or number < 0:
+            raise ValueError("weights values must be finite non-negative numbers")
+        result[key] = number
+    if not any(number > 0 for number in result.values()):
+        raise ValueError("weights must contain a positive value")
+    return result
 
 
 def _intervals_overlap(left: tuple[float, float], right: tuple[float, float]) -> bool:
