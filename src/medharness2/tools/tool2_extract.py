@@ -424,7 +424,7 @@ def _normalize_template_candidate(
     if modality.lower() not in {"cxr", "xray", "xr"}:
         return candidate
     payload = copy.deepcopy(candidate)
-    findings = payload.get("findings") or []
+    findings = _strict_object_list(payload.get("findings"), "findings")
     for finding in findings:
         normalized = canonicalize_cxr_finding(
             observation_code=str(finding.get("observation_code") or "reported_finding"),
@@ -437,11 +437,11 @@ def _normalize_template_candidate(
             anatomy_code=_strip_optional(finding.get("anatomy_code")),
             location_text=_strip_optional(finding.get("location_text")),
             certainty=str(finding.get("certainty") or "present"),
-            attributes=dict(finding.get("attributes") or {}),
+            attributes=_strict_object(finding.get("attributes"), "finding.attributes"),
         )
         finding.update(normalized)
     payload["nodes"] = [_finding_node(finding) for finding in findings]
-    metadata = dict(payload.get("metadata") or {})
+    metadata = _strict_object(payload.get("metadata"), "metadata")
     metadata["ontology"] = _cxr_ontology_metadata()
     payload["metadata"] = metadata
     return FindingGraph.model_validate(payload).model_dump(mode="json")
@@ -466,11 +466,11 @@ def _fallback_graph(
     errors: list[str],
 ) -> dict[str, Any]:
     payload = copy.deepcopy(candidate)
-    warnings = list(payload.get("warnings") or [])
+    warnings = _strict_string_list(payload.get("warnings"), "warnings")
     if "llm_extraction_fallback" not in warnings:
         warnings.append("llm_extraction_fallback")
     payload["warnings"] = warnings
-    metadata = dict(payload.get("metadata") or {})
+    metadata = _strict_object(payload.get("metadata"), "metadata")
     metadata["llm_correction"] = _llm_metadata(
         provider=provider,
         model=model,
@@ -483,6 +483,30 @@ def _fallback_graph(
     )
     payload["metadata"] = metadata
     return FindingGraph.model_validate(payload).model_dump(mode="json")
+
+
+def _strict_object(value: Any, label: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return dict(value)
+
+
+def _strict_object_list(value: Any, label: str) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"{label} must be a list of objects")
+    return list(value)
+
+
+def _strict_string_list(value: Any, label: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{label} must be a string list")
+    return list(value)
 
 
 def _llm_metadata(

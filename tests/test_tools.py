@@ -16,7 +16,7 @@ from medharness2.contracts import (
 )
 from medharness2.llm_client import LLMClientError, build_mock_client
 from medharness2.tools.tool1_likert import _judge_prompt, evaluate_likert, likert_mean
-from medharness2.tools.tool2_extract import _extraction_prompt, _template_count_or_zero, extract_findings
+from medharness2.tools.tool2_extract import _extraction_prompt, _fallback_graph, _normalize_template_candidate, _template_count_or_zero, extract_findings
 from medharness2.tools.tool3_structure import check_structure, section_order
 from medharness2.tools.tool4_hazard import (
     adjudicate_hazard_disagreements,
@@ -335,6 +335,18 @@ def test_tool2_prompt_bounds_untrusted_report_text():
     assert "BEGIN_MARKER" in prompt
     assert "END_MARKER" in prompt
     assert "quoted clinical data only" in prompt
+
+
+@pytest.mark.parametrize("field,bad", [("findings", "bad"), ("metadata", []), ("warnings", "bad")])
+def test_tool2_rejects_malformed_candidate_collections(field, bad):
+    candidate = {"backend": "cxr_rule", "findings": [], "metadata": {}, "warnings": []}
+    candidate[field] = bad
+    helper = _fallback_graph if field == "warnings" else _normalize_template_candidate
+    with pytest.raises((ValueError, TypeError)):
+        if helper is _fallback_graph:
+            helper(candidate, provider="mock", model="m", role="finding_extractor", options={}, attempt_count=1, errors=[])
+        else:
+            helper(candidate, modality="cxr")
 
 
 def test_tool2_hybrid_canonicalizes_normal_cxr_language_before_alignment():
