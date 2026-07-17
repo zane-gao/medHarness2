@@ -795,10 +795,10 @@ def _looks_truncated(text: str) -> bool:
         # Exempt only a final, well-formed metadata line. An earlier metadata
         # marker must not hide an unfinished report body.
         last_line = stripped.splitlines()[-1].strip()
-        if re.fullmatch(
+        if re.search(
             r"(?:审核时间|检查时间)\s*[:：]\s*"
             r"\d{4}[-/]\d{1,2}[-/]\d{1,2}"
-            r"(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?",
+            r"(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?\s*$",
             last_line,
         ):
             return False
@@ -832,6 +832,7 @@ def _strip_non_report_commentary(text: str) -> str:
         "unable to read",
         "i'm unable",
         "im unable",
+        "there is",
         "contains no visible text",
         "no radiology report visible",
         "if you intended to upload",

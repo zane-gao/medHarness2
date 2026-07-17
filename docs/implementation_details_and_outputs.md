@@ -90,9 +90,9 @@ Workflow (端到端 + 文件 I/O)
 ### Tool 7 · 模态识别 — `tools/tool7_modality.py`
 
 - **入口**：`recognize_modality(image_path, config=None, llm_client=None) -> str`
-- **实现**：优先级 **DICOM header → 文件后缀 → VLM**。
+- **实现**：优先级 **DICOM header → 可信文件名提示 → VLM → unknown**。
   - `_detect_dicom_modality` 用 `pydicom.dcmread(stop_before_pixels=True)` 读 `Modality` 标签；读到就经 `config.modality_map` 映射成标准 key。
-  - `.png/.jpg/.jpeg` → `xray`；都不行且给了 llm_client 才调 VLM 取首词；否则 `unknown`。
+  - `.png/.jpg/.jpeg` 本身不代表 CXR：仅文件名明确包含 `cxr`、`xray` 或 `radiograph` 时才返回 `cxr`。CT/MRI 预处理产生的 `contact_sheet.png` 会继续交给 VLM；没有 VLM client 时返回 `unknown`。
 - **注**：在 workflow 里 manifest 已带 modality 时**直接用、跳过本工具**（见 single_case `modality or recognize_modality(...)`）。
 
 ### Tool 8 · 2D/3D 报告生成 — `tools/tool8_generate.py`

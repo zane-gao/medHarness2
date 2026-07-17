@@ -684,6 +684,10 @@ def test_ocr_strips_unable_to_transcribe_technical_page_commentary():
     assert _strip_non_report_commentary(text) == ""
 
 
+def test_ocr_strips_short_english_non_report_page_commentary():
+    assert _strip_non_report_commentary("There is") == ""
+
+
 def test_ocr_preserves_same_line_report_text_before_commentary():
     text = "FINDINGS: clear lungs. The provided image appears to be blank."
 
@@ -692,6 +696,11 @@ def test_ocr_preserves_same_line_report_text_before_commentary():
 
 def test_ocr_treats_report_metadata_ending_in_time_as_complete():
     text = "报告医生：张三 审核医生：李四\n审核时间：2026-05-29 08:07"
+    assert _looks_truncated(text) is False
+
+
+def test_ocr_treats_note_and_review_time_on_one_line_as_complete():
+    text = "诊断印象：未见明显异常。\n注：此报告仅供临床医生参考 审核时间：2026-05-29 08:03"
     assert _looks_truncated(text) is False
 
 
