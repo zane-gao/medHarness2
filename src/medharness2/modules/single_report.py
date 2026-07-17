@@ -9,6 +9,7 @@ from medharness2.checkpoints import (
     llm_route_fingerprint,
 )
 from medharness2.config import AppConfig, load_config
+from medharness2.modality import normalize_modality
 from medharness2.contracts import FindingGraph
 from medharness2.llm_client import LLMClient
 from medharness2.schema import SingleReportResult
@@ -28,7 +29,7 @@ def evaluate_single_report(
 ) -> dict[str, Any]:
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
-    modality_key = modality or "unknown"
+    modality_key = normalize_modality(modality)
     judge_role = cfg.model_roles.get("general_judge")
     judge_options = judge_role.as_call_options() if judge_role else {}
     judge_retries = (

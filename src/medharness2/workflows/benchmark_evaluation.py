@@ -353,8 +353,10 @@ def verify_real_llm_case_evaluation(
     *,
     required_general_judge_consistency_runs: int = 1,
 ) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("case evaluation payload must be an object")
     evidence: list[dict[str, Any]] = []
-    human = dict(payload.get("human_evaluation") or {})
+    human = _strict_object(payload.get("human_evaluation"), "human_evaluation")
     generated = _object_list(payload.get("generated_evaluations"), "generated_evaluations")
     pairwise = _object_list(payload.get("pairwise_comparisons"), "pairwise_comparisons")
     if not human or len(generated) != 1 or len(pairwise) != 1:
@@ -363,19 +365,21 @@ def verify_real_llm_case_evaluation(
         )
 
     required_consistency_runs = max(1, _strict_nonnegative_int(required_general_judge_consistency_runs, "required_general_judge_consistency_runs"))
+    human_likert = _strict_object(human.get("likert"), "human_evaluation.likert")
+    candidate_likert = _strict_object(generated[0].get("likert"), "generated_evaluations[0].likert")
     _verify_likert_consistency(
-        (human.get("likert") or {}).get("_metadata"),
+        human_likert.get("_metadata"),
         label="T1.reference",
         required_runs=required_consistency_runs,
     )
     _verify_likert_consistency(
-        ((generated[0].get("likert") or {}).get("_metadata")),
+        candidate_likert.get("_metadata"),
         label="T1.candidate",
         required_runs=required_consistency_runs,
     )
     evidence.append(
         _verify_metadata(
-            (human.get("likert") or {}).get("_metadata"),
+            human_likert.get("_metadata"),
             label="T1.reference",
             role="general_judge",
             implementation_types={"llm_judge"},
@@ -383,7 +387,7 @@ def verify_real_llm_case_evaluation(
     )
     evidence.append(
         _verify_metadata(
-            ((generated[0].get("likert") or {}).get("_metadata")),
+            candidate_likert.get("_metadata"),
             label="T1.candidate",
             role="general_judge",
             implementation_types={"llm_judge"},
@@ -391,9 +395,10 @@ def verify_real_llm_case_evaluation(
     )
     evidence.append(
         _verify_metadata(
-            ((human.get("finding_graph") or {}).get("metadata") or {}).get(
-                "llm_correction"
-            ),
+            _strict_object(
+                _strict_object(human.get("finding_graph"), "human_evaluation.finding_graph").get("metadata"),
+                "human_evaluation.finding_graph.metadata",
+            ).get("llm_correction"),
             label="T2.reference",
             role="finding_extractor",
             implementation_types={"llm_extractor"},
@@ -401,26 +406,33 @@ def verify_real_llm_case_evaluation(
     )
     evidence.append(
         _verify_metadata(
-            (
-                ((generated[0].get("finding_graph") or {}).get("metadata") or {}).get(
-                    "llm_correction"
-                )
-            ),
+            _strict_object(
+                _strict_object(
+                    generated[0].get("finding_graph"),
+                    "generated_evaluations[0].finding_graph",
+                ).get("metadata"),
+                "generated_evaluations[0].finding_graph.metadata",
+            ).get("llm_correction"),
             label="T2.candidate",
             role="finding_extractor",
             implementation_types={"llm_extractor"},
         )
     )
 
-    comparison = dict((pairwise[0] or {}).get("comparison") or {})
-    alignment = dict(comparison.get("alignment") or {})
-    alignment_audit = dict(comparison.get("alignment_audit") or {})
+    comparison = _strict_object(pairwise[0].get("comparison"), "pairwise_comparisons[0].comparison")
+    alignment = _strict_object(comparison.get("alignment"), "comparison.alignment")
+    alignment_audit = _strict_object(comparison.get("alignment_audit"), "comparison.alignment_audit")
     if alignment_audit.get("alignment_sha256") != _stable_sha256(alignment):
         raise ValueError("T5 alignment audit hash mismatch")
-    adjudication_summary = dict(
-        alignment_audit.get("adjudication_summary") or {}
+    adjudication_summary = _strict_object(
+        alignment_audit.get("adjudication_summary"),
+        "comparison.alignment_audit.adjudication_summary",
     )
-    deterministic_error_count = len(alignment.get("error_candidates") or [])
+    deterministic_errors = _object_list(
+        alignment.get("error_candidates"),
+        "comparison.alignment.error_candidates",
+    )
+    deterministic_error_count = len(deterministic_errors)
     adjudicated_candidates = _object_list(
         alignment_audit.get("adjudicated_error_candidates"),
         "adjudicated_error_candidates",
@@ -433,7 +445,11 @@ def verify_real_llm_case_evaluation(
         adjudicated_candidates
     ):
         raise ValueError("T5 retained error count mismatch")
-    if len(alignment_audit.get("error_judgements") or []) != deterministic_error_count:
+    error_judgements = _object_list(
+        alignment_audit.get("error_judgements"),
+        "comparison.alignment_audit.error_judgements",
+    )
+    if len(error_judgements) != deterministic_error_count:
         raise ValueError("T5 error judgement coverage mismatch")
     evidence.append(
         _verify_provenance(
@@ -444,9 +460,10 @@ def verify_real_llm_case_evaluation(
         )
     )
 
-    hazards = dict(comparison.get("hazards") or {})
-    hazard_review = dict(comparison.get("hazard_review") or {})
-    if len(hazards.get("errors") or []) != len(adjudicated_candidates):
+    hazards = _strict_object(comparison.get("hazards"), "comparison.hazards")
+    hazard_review = _strict_object(comparison.get("hazard_review"), "comparison.hazard_review")
+    hazard_errors = _object_list(hazards.get("errors"), "comparison.hazards.errors")
+    if len(hazard_errors) != len(adjudicated_candidates):
         raise ValueError("T4 hazard count does not match T5 adjudicated candidates")
     if hazard_review.get("primary_result_sha256") != _stable_sha256(hazards):
         raise ValueError("T4 hazard review hash mismatch")
@@ -456,8 +473,12 @@ def verify_real_llm_case_evaluation(
         role="hazard_primary",
         implementation_types={"llm_judge"},
     )
+    reviewer_result = _strict_object(
+        hazard_review.get("reviewer_result"),
+        "comparison.hazard_review.reviewer_result",
+    )
     reviewer = _verify_provenance(
-        ((hazard_review.get("reviewer_result") or {}).get("provenance")),
+        reviewer_result.get("provenance"),
         label="T4.reviewer",
         role="hazard_reviewer",
         implementation_types={"llm_judge"},
@@ -475,6 +496,9 @@ def verify_real_llm_case_evaluation(
         hazard_adjudication = comparison.get("hazard_adjudication")
         if not isinstance(hazard_adjudication, dict):
             raise ValueError("T4 hazard adjudication is missing for reviewer disagreements")
+        hazard_adjudication = _strict_object(
+            hazard_adjudication, "comparison.hazard_adjudication"
+        )
         if hazard_adjudication.get("primary_result_sha256") != _stable_sha256(
             hazards
         ):
@@ -513,8 +537,8 @@ def verify_real_llm_case_evaluation(
             raise ValueError("T4 adjudicator is not independent from prior judges")
         evidence.append(adjudicator)
 
-    structure_diff = dict(comparison.get("structure_diff") or {})
-    structure_audit = dict(comparison.get("structure_audit") or {})
+    structure_diff = _strict_object(comparison.get("structure_diff"), "comparison.structure_diff")
+    structure_audit = _strict_object(comparison.get("structure_audit"), "comparison.structure_audit")
     if structure_audit.get("structure_diff_sha256") != _stable_sha256(
         structure_diff
     ):
@@ -715,9 +739,9 @@ def _verify_metadata(
         metadata,
         label=label,
         role=role,
-        implementation_type=str(metadata.get("backend") or ""),
+        implementation_type=_strict_external_string(metadata, "backend", label),
         implementation_types=implementation_types,
-        endpoint_host=str(metadata.get("endpoint_host") or ""),
+        endpoint_host=_strict_external_string(metadata, "endpoint_host", label),
         attempt_count=metadata.get("attempt_count"),
     )
 
@@ -731,14 +755,16 @@ def _verify_provenance(
 ) -> dict[str, Any]:
     if not isinstance(provenance, dict):
         raise ValueError(f"{label} is missing real LLM provenance")
-    metadata = dict(provenance.get("metadata") or {})
+    if "metadata" in provenance and not isinstance(provenance["metadata"], dict):
+        raise ValueError(f"{label}.metadata must be an object")
+    metadata = provenance.get("metadata", {})
     return _normalize_verified_evidence(
         provenance,
         label=label,
         role=role,
-        implementation_type=str(provenance.get("implementation_type") or ""),
+        implementation_type=_strict_external_string(provenance, "implementation_type", label),
         implementation_types=implementation_types,
-        endpoint_host=str(metadata.get("endpoint_host") or ""),
+        endpoint_host=_strict_external_string(metadata, "endpoint_host", f"{label}.metadata"),
         attempt_count=metadata.get("attempt_count"),
     )
 
@@ -753,9 +779,9 @@ def _normalize_verified_evidence(
     endpoint_host: str,
     attempt_count: Any,
 ) -> dict[str, Any]:
-    provider = str(source.get("provider") or "")
-    model = str(source.get("model") or "")
-    actual_role = str(source.get("role") or "")
+    provider = _strict_external_string(source, "provider", label)
+    model = _strict_external_string(source, "model", label)
+    actual_role = _strict_external_string(source, "role", label)
     if implementation_type not in implementation_types:
         raise ValueError(
             f"{label} did not use the required real LLM implementation: {implementation_type}"
@@ -782,6 +808,16 @@ def _normalize_verified_evidence(
         "fallback_used": False,
         "attempt_count": attempts,
     }
+
+
+def _strict_external_string(source: dict[str, Any], field: str, label: str) -> str:
+    """Read an external provenance field without stringifying malformed JSON."""
+    if field not in source:
+        return ""
+    value = source[field]
+    if not isinstance(value, str):
+        raise ValueError(f"{label}.{field} must be a string")
+    return value
 
 
 def _verify_likert_consistency(
@@ -1204,6 +1240,15 @@ def _object_list(value: Any, label: str) -> list[dict[str, Any]]:
         return []
     if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
         raise ValueError(f"{label} must be a list of objects")
+    return value
+
+
+def _strict_object(value: Any, label: str) -> dict[str, Any]:
+    """Read an external nested object without coercing lists or scalars."""
+    if value in (None, ""):
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
     return value
 
 

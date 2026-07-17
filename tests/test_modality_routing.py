@@ -5,6 +5,7 @@ import yaml
 
 from medharness2.config import AppConfig, GeneratorConfig
 from medharness2.generators.registry import GeneratorEntry, ReportGeneratorRegistry
+from medharness2.modality import normalize_modality
 from medharness2.tools.tool7_modality import _normalize_modality_token, recognize_modality
 from medharness2.tools.tool2_extract import _canonical_observation_code
 
@@ -126,6 +127,61 @@ def test_registry_normalizes_modality_aliases_before_selection():
     assert [entry.key for entry in registry.select("MRI")] == ["alias_model"]
 
 
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("cxr", "cxr"),
+        ("x ray", "cxr"),
+        ("chest radiograph", "cxr"),
+        ("DX", "cxr"),
+        ("computed tomography", "ct"),
+        ("CTA abdomen", "ct"),
+        ("MR examination", "mri"),
+        ("brain magnetic resonance", "mri"),
+        ("", "unknown"),
+    ],
+)
+def test_normalize_modality_uses_three_family_route_vocabulary(value, expected):
+    assert normalize_modality(value) == expected
+
+
+def test_registry_matches_free_text_modality_aliases_without_body_part_filtering():
+    registry = ReportGeneratorRegistry(
+        AppConfig(
+            generator=GeneratorConfig(
+                default_models=["*"],
+                include_legacy_ready_models=False,
+                local_models=[
+                    {
+                        "key": "ct_model",
+                        "source": "artifact_reuse",
+                        "supported_modalities": ["CT"],
+                        "supported_body_parts": ["abdomen"],
+                        "ready": True,
+                    },
+                    {
+                        "key": "mri_model",
+                        "source": "artifact_reuse",
+                        "supported_modalities": ["MRI"],
+                        "supported_body_parts": ["brain"],
+                        "ready": True,
+                    },
+                    {
+                        "key": "cxr_model",
+                        "source": "artifact_reuse",
+                        "supported_modalities": ["chest x-ray"],
+                        "supported_body_parts": ["chest"],
+                        "ready": True,
+                    },
+                ],
+            )
+        )
+    )
+    assert [entry.key for entry in registry.select("computed tomography", body_part="wrist")] == ["ct_model"]
+    assert [entry.key for entry in registry.select("brain MR", body_part="ankle")] == ["mri_model"]
+    assert [entry.key for entry in registry.select("chest x-ray", body_part="head")] == ["cxr_model"]
+
+
 def test_modality_token_normalization_handles_common_vlm_phrasing():
     assert _normalize_modality_token("The study is an MRI examination") == "MR"
     assert _normalize_modality_token("CT abdomen") == "CT"
@@ -149,7 +205,7 @@ def test_recognize_modality_uses_image_suffix_without_llm(tmp_path):
     path = tmp_path / "portable.jpg"
     path.write_bytes(b"not a dicom")
 
-    assert recognize_modality(str(path), config=AppConfig()) == "xray"
+    assert recognize_modality(str(path), config=AppConfig()) == "cxr"
 
 
 def test_recognize_modality_normalizes_vlm_result_and_empty_reply(monkeypatch, tmp_path):

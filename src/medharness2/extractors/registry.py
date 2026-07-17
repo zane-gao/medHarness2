@@ -5,6 +5,7 @@ from medharness2.extractors.ct import CT_EXTRACTOR
 from medharness2.extractors.cxr import CXR_EXTRACTOR
 from medharness2.extractors.mri import MRI_EXTRACTOR
 from medharness2.extractors.placeholder import PLACEHOLDER_EXTRACTOR
+from medharness2.modality import normalize_modality
 
 
 class ExtractorRegistry:
@@ -16,7 +17,7 @@ class ExtractorRegistry:
 
     def resolve(self, modality: str, backend: str = "auto") -> FindingExtractor:
         key = backend.strip().lower()
-        modality_key = modality.strip().lower()
+        modality_key = normalize_modality(modality)
         if key in {"auto", "modality_rule"}:
             for extractor in (CXR_EXTRACTOR, CT_EXTRACTOR, MRI_EXTRACTOR):
                 if modality_key in extractor.modalities:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from medharness2.modality import normalize_modality
 from medharness2.schema import GeneratedReport
 
 
@@ -59,7 +60,7 @@ def check_generation_quality(text: str, *, modality: str | None, body_part: str 
         warnings.append("body_part_mismatch")
         conflicts["body_part"] = body_matches
 
-    modality_key = (modality or "").lower()
+    modality_key = normalize_modality(modality)
     modality_terms = _MODALITY_CONFLICTS.get(modality_key, [])
     modality_matches = _matched_terms(_mask_followup_modality_mentions(normalized), modality_terms)
     if modality_matches:

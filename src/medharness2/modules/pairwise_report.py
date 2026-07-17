@@ -8,6 +8,7 @@ from medharness2.checkpoints import (
     stable_sha256,
 )
 from medharness2.config import AppConfig, load_config
+from medharness2.modality import normalize_modality
 from medharness2.contracts import (
     AlignmentAuditArtifact,
     HazardAdjudicationArtifact,
@@ -40,7 +41,7 @@ def evaluate_pairwise(
 ) -> dict[str, Any]:
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
-    modality_key = modality or "unknown"
+    modality_key = normalize_modality(modality)
     extractor_role = cfg.model_roles.get("finding_extractor")
     extractor_options = extractor_role.as_call_options() if extractor_role else {}
     extractor_retries = (

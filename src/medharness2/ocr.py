@@ -313,6 +313,12 @@ def _cache_is_compatible(
     cached_case_id = str(meta.get("case_id") or "")
     if not cached_case_id or cached_case_id != str(case_id):
         return False
+    # Explicit quality states are authoritative.  Only a passed result is
+    # eligible for reuse; review/blocked sidecars must be regenerated rather
+    # than silently returned as usable text.
+    cached_quality_status = meta.get("quality_status")
+    if cached_quality_status is not None and cached_quality_status != "passed":
+        return False
     method = str(meta.get("method") or "").lower()
     if method == "pdf_text_layer":
         return meta.get("provider") == "local_pdf_text"
@@ -430,6 +436,14 @@ def _cache_metadata_valid(meta: dict[str, Any]) -> bool:
         if meta["page_count"] != meta["retained_page_count"]:
             return False
     pages = meta.get("pages")
+    if (
+        method == "vlm_ocr"
+        and isinstance(pages, list)
+        and not pages
+        and isinstance(meta.get("source_page_count"), int)
+        and meta["source_page_count"] > 0
+    ):
+        return False
     if isinstance(pages, list) and pages and isinstance(meta.get("source_page_count"), int):
         page_indices = [page.get("page_index") for page in pages]
         if page_indices != list(range(1, meta["source_page_count"] + 1)):

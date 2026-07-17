@@ -12,6 +12,7 @@ import yaml
 
 from medharness2.config import AppConfig, resolve_existing_path
 from medharness2.contracts import infer_evidence_tier
+from medharness2.modality import normalize_modality
 from medharness2.schema import FORMAL_FRESH_SOURCES, GeneratedReport
 
 
@@ -896,15 +897,18 @@ def _legacy_input_row(
     reference_report: str | None,
     prompt: str | None = None,
 ) -> dict[str, Any]:
+    modality_key = normalize_modality(modality)
     asset_path = str(Path(image_path).expanduser().resolve())
     return {
         "case_id": case_id,
-        "modality": "xray" if modality == "cxr" else modality,
-        "body_part": body_part or _default_body_part(modality),
+        # Keep the legacy CLI's xray spelling while normalizing all inputs at
+        # this boundary to the same three-family route vocabulary.
+        "modality": "xray" if modality_key == "cxr" else modality_key,
+        "body_part": body_part or _default_body_part(modality_key),
         "image_paths": [] if _looks_like_volume(asset_path) else [asset_path],
         "volume_path": asset_path if _looks_like_volume(asset_path) else None,
         "reference_report": reference_report or "",
-        "prompt": prompt or _legacy_prompt(modality, body_part),
+        "prompt": prompt or _legacy_prompt(modality_key, body_part),
     }
 
 
@@ -915,8 +919,9 @@ def _legacy_prompt(
     selected_series_type: str | None = None,
     selected_series_description: str | None = None,
 ) -> str:
-    body = (body_part or _default_body_part(modality)).lower()
-    if modality == "mri" and body == "brain":
+    modality_key = normalize_modality(modality)
+    body = (body_part or _default_body_part(modality_key)).lower()
+    if modality_key == "mri" and body == "brain":
         selected = (selected_series_type or "").lower()
         description = (selected_series_description or "").lower()
         if selected == "t2" or ("t2" in description and "flair" not in description):
@@ -926,9 +931,9 @@ def _legacy_prompt(
         if selected or description:
             return "Generate a radiology report for this brain MRI study."
         return "Generate a radiology report for this brain MRI FLAIR scan."
-    if modality == "ct" and body in {"abdomen", "pelvis", "multi-organ"}:
+    if modality_key == "ct" and body in {"abdomen", "pelvis", "multi-organ"}:
         return "Generate a radiology report for this abdominal CT study."
-    if modality in {"cxr", "xray", "x-ray"} and body in {"chest", "lung"}:
+    if modality_key == "cxr" and body in {"chest", "lung"}:
         return "Analyze the chest X-ray images and write a radiology report."
     return "Generate a radiology report for this study."
 
@@ -938,9 +943,10 @@ def _looks_like_volume(path: str) -> bool:
 
 
 def _default_body_part(modality: str) -> str:
-    if modality == "mri":
+    modality_key = normalize_modality(modality)
+    if modality_key == "mri":
         return "brain"
-    if modality == "ct":
+    if modality_key == "ct":
         return "abdomen"
     return "chest"
 
@@ -976,14 +982,7 @@ def _normalize_modalities(values: list[Any]) -> list[str]:
 
 
 def _normalize_route_modality(value: Any) -> str:
-    key = str(value or "").strip().lower().replace("-", "")
-    if key in {"xray", "xr", "cr", "dx"}:
-        return "cxr"
-    if key in {"mr", "mri"}:
-        return "mri"
-    if key == "ct":
-        return "ct"
-    return key
+    return normalize_modality(value)
 
 
 def _body_part_ok(body_part: str | None, supported: set[str]) -> bool:

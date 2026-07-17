@@ -7,6 +7,7 @@ from typing import Any
 
 from medharness2.config import AppConfig, load_config
 from medharness2.llm_client import LLMClient
+from medharness2.modality import normalize_modality
 from medharness2.ocr import extract_report_text
 from medharness2.preprocessing.dicom import prepare_case_assets
 from medharness2.schema import CaseManifest, PreparedCase
@@ -226,14 +227,7 @@ def _first_dicom_header(image_paths: list[str]) -> dict[str, Any]:
 
 
 def _normalize_modality(value: str) -> str:
-    key = str(value or "").upper()
-    if key in {"CR", "DX", "XR", "X-RAY", "XRAY"}:
-        return "cxr"
-    if key == "CT":
-        return "ct"
-    if key in {"MR", "MRI"}:
-        return "mri"
-    return key.lower() or "unknown"
+    return normalize_modality(value)
 
 
 def _normalize_body_part(value: str | None, *, modality_key: str) -> str:

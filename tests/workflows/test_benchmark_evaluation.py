@@ -622,6 +622,35 @@ def test_verify_real_llm_case_evaluation_rejects_any_fallback():
         verify_real_llm_case_evaluation(payload)
 
 
+@pytest.mark.parametrize("field", ["backend", "endpoint_host", "provider", "model", "role"])
+@pytest.mark.parametrize("bad", [True, 1, [], {}, None])
+def test_verify_real_llm_case_evaluation_rejects_non_string_metadata_identity(field, bad):
+    payload = _strict_case_evaluation()
+    payload["human_evaluation"]["likert"]["_metadata"][field] = bad
+
+    with pytest.raises(ValueError, match=field):
+        verify_real_llm_case_evaluation(payload)
+
+
+@pytest.mark.parametrize("field", ["implementation_type", "provider", "model", "role"])
+@pytest.mark.parametrize("bad", [True, 1, [], {}, None])
+def test_verify_real_llm_case_evaluation_rejects_non_string_provenance_identity(field, bad):
+    payload = _strict_case_evaluation()
+    payload["pairwise_comparisons"][0]["comparison"]["alignment_audit"]["auditor_provenance"][field] = bad
+
+    with pytest.raises(ValueError, match=field):
+        verify_real_llm_case_evaluation(payload)
+
+
+@pytest.mark.parametrize("bad", [True, 1, [], "invalid"])
+def test_verify_real_llm_case_evaluation_rejects_non_object_provenance_metadata(bad):
+    payload = _strict_case_evaluation()
+    payload["pairwise_comparisons"][0]["comparison"]["alignment_audit"]["auditor_provenance"]["metadata"] = bad
+
+    with pytest.raises(ValueError, match="metadata"):
+        verify_real_llm_case_evaluation(payload)
+
+
 @pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
 def test_verify_real_llm_case_evaluation_rejects_invalid_attempt_count(bad):
     payload = _strict_case_evaluation()
@@ -1243,5 +1272,34 @@ def test_real_llm_case_verification_rejects_malformed_object_lists(field, bad):
 
     payload = {"human_evaluation": {}, "generated_evaluations": [], "pairwise_comparisons": []}
     payload[field] = bad
+    with pytest.raises(ValueError, match=field):
+        verify_real_llm_case_evaluation(payload)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ("human_evaluation", "likert"),
+        ("human_evaluation", "finding_graph"),
+    ],
+)
+@pytest.mark.parametrize("bad", [True, 1, [], "bad"])
+def test_real_llm_case_verification_rejects_malformed_nested_objects(path, bad):
+    payload = _strict_case_evaluation()
+    if path == ("human_evaluation", "likert"):
+        payload[path[0]][path[1]] = bad
+    else:
+        payload[path[0]][path[1]] = bad
+
+    with pytest.raises(ValueError, match=path[-1]):
+        verify_real_llm_case_evaluation(payload)
+
+
+@pytest.mark.parametrize("field", ["alignment", "alignment_audit", "hazards", "hazard_review", "structure_diff", "structure_audit"])
+@pytest.mark.parametrize("bad", [True, 1, [], "bad"])
+def test_real_llm_case_verification_rejects_malformed_comparison_objects(field, bad):
+    payload = _strict_case_evaluation()
+    payload["pairwise_comparisons"][0]["comparison"][field] = bad
+
     with pytest.raises(ValueError, match=field):
         verify_real_llm_case_evaluation(payload)

@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt
 from medharness2.contracts import FindingGraph, Measurement
 from medharness2.extractors import ExtractorRegistry
 from medharness2.llm_client import LLMClient, LLMClientError
+from medharness2.modality import normalize_modality
 from medharness2.ontology.cxr import (
     CXR_ONTOLOGY_VERSION,
     canonicalize_cxr_finding,
@@ -177,7 +178,7 @@ def _extraction_prompt(
     }
     ontology_instruction = (
         f"\nCXR controlled concept catalog: {json.dumps(cxr_prompt_catalog(), ensure_ascii=False)}"
-        if modality.lower() in {"cxr", "xray", "xr"}
+        if normalize_modality(modality) == "cxr"
         else ""
     )
     bounded_report = _bound_report_text(report_text)
@@ -345,7 +346,7 @@ def _build_graph(
         warnings.append("template_candidate_had_fallback_or_placeholder")
     warnings.append("template_llm_correction")
     metadata = dict(candidate.get("metadata") or {})
-    if modality.lower() in {"cxr", "xray", "xr"}:
+    if normalize_modality(modality) == "cxr":
         metadata["ontology"] = _cxr_ontology_metadata()
     metadata["llm_correction"] = _llm_metadata(
         provider=provider,
@@ -421,7 +422,7 @@ def _normalize_template_candidate(
     *,
     modality: str,
 ) -> dict[str, Any]:
-    if modality.lower() not in {"cxr", "xray", "xr"}:
+    if normalize_modality(modality) != "cxr":
         return candidate
     payload = copy.deepcopy(candidate)
     findings = _strict_object_list(payload.get("findings"), "findings")
@@ -556,7 +557,7 @@ def _normalize_extracted_finding(
     evidence: str,
     modality: str,
 ) -> dict[str, Any]:
-    if modality.lower() in {"cxr", "xray", "xr"}:
+    if normalize_modality(modality) == "cxr":
         return canonicalize_cxr_finding(
             observation_code=finding.observation_code,
             observation_text=finding.observation_text,

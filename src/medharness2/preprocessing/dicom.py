@@ -7,22 +7,24 @@ from typing import Any
 import numpy as np
 from PIL import Image, ImageDraw
 
+from medharness2.modality import normalize_modality
 from medharness2.schema import CaseManifest, PreparedCase
 
 
 def prepare_case_assets(case_manifest: CaseManifest | dict[str, Any], output_dir: str | Path) -> PreparedCase:
     case = case_manifest if isinstance(case_manifest, CaseManifest) else CaseManifest.from_json(case_manifest)
+    modality = normalize_modality(case.modality)
     out_dir = Path(output_dir) / case.case_id
     out_dir.mkdir(parents=True, exist_ok=True)
     warnings: list[str] = []
-    if case.modality == "cxr":
+    if modality == "cxr":
         pngs = _convert_single_images(case.image_paths, out_dir / "images", warnings)
         derived = {"png_images": pngs}
         if pngs:
             derived["primary_image"] = pngs[0]
         return PreparedCase(
             case_id=case.case_id,
-            modality=case.modality,
+            modality=modality,
             body_part=case.body_part,
             image_paths=pngs or case.image_paths,
             volume_path=None,
@@ -31,7 +33,7 @@ def prepare_case_assets(case_manifest: CaseManifest | dict[str, Any], output_dir
         )
 
     groups = _group_series(case.image_paths)
-    selected, selection = _select_series(groups, case.modality, case.body_part)
+    selected, selection = _select_series(groups, modality, case.body_part)
     if not selected:
         selected = case.image_paths
     volume_path = _write_series_volume(selected, out_dir / "volume.nii.gz", warnings)
@@ -44,7 +46,7 @@ def prepare_case_assets(case_manifest: CaseManifest | dict[str, Any], output_dir
         derived["volume_path"] = volume_path
     return PreparedCase(
         case_id=case.case_id,
-        modality=case.modality,
+        modality=modality,
         body_part=case.body_part,
         image_paths=[contact_sheet] if contact_sheet else case.image_paths,
         volume_path=volume_path,
@@ -87,6 +89,7 @@ def _group_series(image_paths: list[str]) -> dict[str, list[str]]:
 
 
 def _select_series(groups: dict[str, list[str]], modality: str, body_part: str | None) -> tuple[list[str], dict[str, Any]]:
+    modality = normalize_modality(modality)
     if not groups:
         return [], {}
     ranked = [
