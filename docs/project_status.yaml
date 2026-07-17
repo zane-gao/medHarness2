@@ -119,7 +119,7 @@ workstreams:
     next_gate: 在北川冻结集上重跑候选模型和双次重复调用，验证 fallback_count、recall、seed/cache、评委一致性和临床错误率，再决定 formal benchmark promotion。
   benchmark_gates:
     status: in_progress
-    summary: 已提供 `ocr-benchmark` 冻结集评测 CLI（CER、数字/否定词、截断率、provisional winner）和 `live-smoke` 真实评委连通性/JSON 门禁。研究准备命令现在额外生成两个 evaluator-ready 的 repeat manifest，预注册北川 gold、候选路由和输出 sidecar 路径；候选缺失时直接 blocked。长篇中文 inline gold 的路径探测已做 OSError 安全处理。北川参考报告作为当前 gold 输入；缺少 candidate、声明路径或凭据时返回 blocked；缺失/空 manifest 分别记录 `manifest:missing_file` / `manifest:empty`；空白凭据也按缺失处理，正式 benchmark role gate 与 LLMClient 传输层保持同一语义；mock/deterministic/fallback provider 即使配置了 key 也会被 live-smoke 拒绝；`benchmark run` 的 CLI 退出码现在跟随结果状态，不会把 failed/completed_with_failures 当作成功；损坏 UTF-8 manifest、空模型键、病例身份或模型身份不匹配的 OCR sidecar 也会明确 blocked，不会用 0 分或 mock 结果冒充完成。
+    summary: 已提供 `ocr-benchmark` 冻结集评测 CLI（CER、数字/否定词、截断率、provisional winner）和 `live-smoke` 真实评委连通性/JSON 门禁。研究准备命令现在额外生成两个 evaluator-ready 的 repeat manifest，预注册北川 gold、候选路由和输出 sidecar 路径；候选缺失时直接 blocked。preflight 现在同时暴露 `ocr_primary` 与 `ocr_verifier` readiness，缺少 verifier 凭据时不会误报质量抽查已就绪。长篇中文 inline gold 的路径探测已做 OSError 安全处理。北川参考报告作为当前 gold 输入；缺少 candidate、声明路径或凭据时返回 blocked；缺失/空 manifest 分别记录 `manifest:missing_file` / `manifest:empty`；空白凭据也按缺失处理，正式 benchmark role gate 与 LLMClient 传输层保持同一语义；mock/deterministic/fallback provider 即使配置了 key 也会被 live-smoke 拒绝；`benchmark run` 的 CLI 退出码现在跟随结果状态，不会把 failed/completed_with_failures 当作成功；损坏 UTF-8 manifest、空模型键、病例身份或模型身份不匹配的 OCR sidecar 也会明确 blocked，不会用 0 分或 mock 结果冒充完成。
     evidence_paths:
       - src/medharness2/ocr_benchmark.py
       - src/medharness2/validation/live_smoke.py

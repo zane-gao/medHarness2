@@ -7,7 +7,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from medharness2.config import AppConfig, load_config, resolve_existing_path
+from medharness2.config import AppConfig, LLMConfig, load_config, resolve_existing_path
 from medharness2.utils.io import write_json
 
 
@@ -63,14 +63,23 @@ def run_sample_preflight(
             blockers.append("fallback_cases_but_cloud_fallback_disabled")
 
     ocr = _check_ocr_provider(cfg)
+    verifier = _check_ocr_role(cfg, "ocr_verifier")
+    if verifier is not None:
+        ocr["verifier"] = verifier
     if require_real_ocr:
         if str(ocr.get("provider") or "").lower() == "mock":
             blockers.append("real_ocr_required_but_provider_is_mock")
         elif ocr.get("status") != "ready":
             blockers.append(str(ocr.get("blocker") or "real_ocr_provider_unavailable"))
+        if verifier is not None and verifier.get("status") != "ready":
+            blockers.append("real_ocr_verifier_unavailable")
     elif ocr.get("status") != "ready":
         warnings.append(
             f"ocr_not_ready:{ocr.get('blocker') or ocr.get('status') or 'unknown'}"
+        )
+    if verifier is not None and verifier.get("status") != "ready":
+        warnings.append(
+            f"ocr_verifier_not_ready:{verifier.get('blocker') or verifier.get('status') or 'unknown'}"
         )
 
     result = {
@@ -156,6 +165,25 @@ def _check_ocr_provider(config: AppConfig) -> dict[str, Any]:
         "blocker": "unsupported_llm_provider_for_ocr",
         "real_ocr_capable": False,
     }
+
+
+def _check_ocr_role(config: AppConfig, role_name: str) -> dict[str, Any] | None:
+    """Check an optional OCR role using the same provider semantics as primary OCR."""
+    route = config.model_roles.get(role_name)
+    if route is None:
+        return None
+    shadow = AppConfig(
+        llm=LLMConfig(
+            provider=route.provider or config.llm.provider,
+            model=route.model or config.llm.model,
+            api_key_env=route.api_key_env or config.llm.api_key_env,
+            base_url=route.base_url or config.llm.base_url,
+        ),
+        model_roles={},
+    )
+    result = _check_ocr_provider(shadow)
+    result["role"] = role_name
+    return result
 
 
 def _strict_object(value: Any, label: str) -> dict[str, Any]:

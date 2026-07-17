@@ -127,6 +127,78 @@ def test_preflight_warns_when_optional_real_ocr_is_not_ready(monkeypatch, tmp_pa
     assert "ocr_not_ready:missing_llm_api_key" in result["warnings"]
 
 
+def test_preflight_surfaces_configured_verifier_readiness(monkeypatch, tmp_path: Path):
+    sample_root = _write_minimal_sample(tmp_path)
+    monkeypatch.setenv("OCR_PRIMARY_KEY", "primary-key")
+    monkeypatch.delenv("OCR_VERIFIER_KEY", raising=False)
+    result = run_sample_preflight(
+        sample_root,
+        tmp_path / "preflight.json",
+        config=AppConfig(
+            llm=LLMConfig(
+                provider="chat_completions",
+                model="doubao-seed",
+                api_key_env="OCR_PRIMARY_KEY",
+            ),
+            model_roles={
+                "ocr_primary": ModelRoleConfig(
+                    provider="chat_completions",
+                    model="doubao-seed",
+                    api_key_env="OCR_PRIMARY_KEY",
+                ),
+                "ocr_verifier": ModelRoleConfig(
+                    provider="chat_completions",
+                    model="qwen-ocr",
+                    api_key_env="OCR_VERIFIER_KEY",
+                ),
+            },
+        ),
+        require_real_ocr=False,
+        limit=1,
+        model_keys=["*"],
+    )
+
+    assert result["passed"] is True
+    assert result["ocr"]["status"] == "ready"
+    assert result["ocr"]["verifier"]["status"] == "missing_api_key"
+    assert "ocr_verifier_not_ready:missing_llm_api_key" in result["warnings"]
+
+
+def test_preflight_blocks_missing_configured_verifier_when_real_ocr_required(monkeypatch, tmp_path: Path):
+    sample_root = _write_minimal_sample(tmp_path)
+    monkeypatch.setenv("OCR_PRIMARY_KEY", "primary-key")
+    monkeypatch.delenv("OCR_VERIFIER_KEY", raising=False)
+    result = run_sample_preflight(
+        sample_root,
+        tmp_path / "preflight.json",
+        config=AppConfig(
+            llm=LLMConfig(
+                provider="chat_completions",
+                model="doubao-seed",
+                api_key_env="OCR_PRIMARY_KEY",
+            ),
+            model_roles={
+                "ocr_primary": ModelRoleConfig(
+                    provider="chat_completions",
+                    model="doubao-seed",
+                    api_key_env="OCR_PRIMARY_KEY",
+                ),
+                "ocr_verifier": ModelRoleConfig(
+                    provider="chat_completions",
+                    model="qwen-ocr",
+                    api_key_env="OCR_VERIFIER_KEY",
+                ),
+            },
+        ),
+        require_real_ocr=True,
+        limit=1,
+        model_keys=["*"],
+    )
+
+    assert result["passed"] is False
+    assert "real_ocr_verifier_unavailable" in result["blockers"]
+
+
 def test_preflight_treats_whitespace_api_key_as_missing(monkeypatch, tmp_path: Path):
     sample_root = _write_minimal_sample(tmp_path)
     monkeypatch.setenv("DMX_API_KEY", "   \n")
