@@ -188,6 +188,7 @@ def run_ocr_research(
                 run_payloads[(case_id, candidate_id, repeat)] = payload
                 sidecar_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     benchmark_results: dict[str, dict[str, Any]] = {}
+    _synchronize_benchmark_routes(research, cfg)
     for repeat, name in ((1, "ocr_benchmark_repeat_1.json"), (2, "ocr_benchmark_repeat_2.json")):
         manifest_path = research / name
         result_path = research / f"{manifest_path.stem}_result.json"
