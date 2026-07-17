@@ -7,6 +7,7 @@ from medharness2.catalog import build_capability_catalog
 from medharness2.cli import main
 from medharness2.config import AppConfig, GeneratorConfig, LLMConfig, ModelRoleConfig
 from medharness2.run_registry import record_run
+import pytest
 
 
 def test_capability_catalog_lists_tools_models_and_providers(tmp_path: Path):
@@ -169,6 +170,66 @@ def test_record_run_appends_multiple_stage_entries(tmp_path: Path):
     assert [entry["stage"] for entry in payload["entries"]] == ["tools.catalog", "dashboard.build"]
     assert payload["entries"][0]["metrics"]["tool_count"] == 12
     assert payload["entries"][1]["outputs"]["dashboard"] == "web/control_panel.html"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("command", "not-a-list"),
+        ("config", []),
+        ("inputs", []),
+        ("outputs", []),
+        ("metrics", []),
+        ("warnings", "not-a-list"),
+    ],
+)
+def test_record_run_rejects_malformed_structured_fields(
+    tmp_path: Path, field: str, value: object
+):
+    kwargs = {
+        "run_id": "run_bad",
+        "stage": "sample-full",
+        "status": "failed",
+        field: value,
+    }
+    with pytest.raises(ValueError, match=field):
+        record_run(tmp_path, **kwargs)
+
+
+def test_record_run_ignores_malformed_legacy_entries(tmp_path: Path):
+    registry = tmp_path / "run_bad" / "run_registry.json"
+    registry.parent.mkdir(parents=True)
+    registry.write_text(
+        json.dumps(
+            {
+                "schema_version": "1.0",
+                "entries": [
+                    {"stage": "broken", "outputs": [], "warnings": "bad"},
+                    {
+                        "run_id": "run_bad",
+                        "stage": "valid",
+                        "status": "passed",
+                        "created_at_utc": "",
+                        "command": [],
+                        "config": {},
+                        "inputs": {},
+                        "outputs": {},
+                        "metrics": {},
+                        "warnings": [],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = record_run(
+        tmp_path,
+        run_id="run_bad",
+        stage="new",
+        status="passed",
+    )
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert [entry["stage"] for entry in payload["entries"]] == ["valid", "new"]
 
 
 def test_cli_tools_catalog_writes_run_registry_entry(tmp_path: Path):
