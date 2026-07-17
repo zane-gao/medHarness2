@@ -380,14 +380,49 @@ def _audit_prompt(
         ]
     )
     selected = set(selected_indices)
+    selected_errors = [
+        error
+        for error in bundle.get("error_candidates") or []
+        if int(error["error_index"]) in selected
+    ]
+    selected_candidate_ids = {
+        str(error["candidate_id"])
+        for error in selected_errors
+        if error.get("candidate_id")
+    }
+    selected_reference_ids = {
+        str(error["reference_id"])
+        for error in selected_errors
+        if error.get("reference_id")
+    }
+    # Keep the per-chunk prompt bounded for multimodal providers. IDs and the
+    # exact error row remain intact; unrelated findings/pairs are unnecessary
+    # for judging the requested error and often cause JSON truncation.
     prompt_bundle = {
-        **bundle,
-        "target_error_indices": selected_indices,
-        "error_candidates": [
-            error
-            for error in bundle.get("error_candidates") or []
-            if int(error["error_index"]) in selected
+        "candidate_findings": [
+            row for row in bundle.get("candidate_findings") or []
+            if row.get("id") in selected_candidate_ids
         ],
+        "reference_findings": [
+            row for row in bundle.get("reference_findings") or []
+            if row.get("id") in selected_reference_ids
+        ],
+        "deterministic_pairs": [
+            row for row in bundle.get("deterministic_pairs") or []
+            if row.get("candidate_id") in selected_candidate_ids
+            or row.get("reference_id") in selected_reference_ids
+        ],
+        "candidate_only_ids": [
+            item for item in bundle.get("candidate_only_ids") or []
+            if item in selected_candidate_ids
+        ],
+        "reference_only_ids": [
+            item for item in bundle.get("reference_only_ids") or []
+            if item in selected_reference_ids
+        ],
+        "error_candidates": selected_errors,
+        "metrics": bundle.get("metrics") or {},
+        "target_error_indices": selected_indices,
     }
     retry_note = (
         f"\nPrevious validation errors: {json.dumps(previous_errors[-3:], ensure_ascii=False)}"

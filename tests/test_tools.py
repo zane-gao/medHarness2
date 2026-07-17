@@ -470,6 +470,27 @@ def test_tool5_prompt_allows_empty_issues_when_pair_ids_are_unavailable():
     assert "Set suggested_error_type to null" in prompt
 
 
+def test_tool5_prompt_keeps_only_current_error_context():
+    prompt = _audit_prompt(
+        {
+            "candidate_findings": [{"id": "candidate:f1"}, {"id": "candidate:f2"}],
+            "reference_findings": [{"id": "reference:f1"}, {"id": "reference:f2"}],
+            "deterministic_pairs": [],
+            "candidate_only_ids": ["candidate:f2"],
+            "reference_only_ids": ["reference:f2"],
+            "error_candidates": [
+                {"error_index": 0, "candidate_id": "candidate:f1", "reference_id": "reference:f1", "error_type": "other"}
+            ],
+            "metrics": {},
+        },
+        [],
+        target_error_indices=[0],
+    )
+
+    assert '"id": "candidate:f1"' in prompt
+    assert '"id": "candidate:f2"' not in prompt
+
+
 def test_tool4_retry_prompt_requires_error_type_alignment():
     from medharness2.tools.tool4_hazard import _judge_prompt
 
