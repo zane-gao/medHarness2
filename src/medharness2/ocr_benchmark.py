@@ -421,6 +421,13 @@ def _validate_candidate_provenance(
             expected_route = dict(routes[model])
             break
     blockers: list[str] = []
+    for field in ("case_id", "modality"):
+        if field in candidate and candidate[field] is not None and not isinstance(candidate[field], str):
+            blockers.append(f"provenance:{item.get('case_id')}:{model}:{field}")
+    model_fields = ("model_key", "model", "model_name")
+    for field in model_fields:
+        if field in candidate and candidate[field] is not None and not isinstance(candidate[field], str):
+            blockers.append(f"provenance:{item.get('case_id')}:{model}:model_key")
     expected_modality = item.get("modality")
     expected_pdf_hash = _first_value(item, ("source_pdf_sha256", "pdf_sha256", "source_hash"))
     source_pdf = _first_value(item, ("source_pdf", "pdf_path", "source_pdf_path"))
@@ -434,10 +441,10 @@ def _validate_candidate_provenance(
     # A structured candidate sidecar carrying an identity is itself a
     # provenance declaration, even when the manifest uses the legacy text-only
     # form.  Never score a sidecar under a different case ID.
-    candidate_case_id = str(observed.get("case_id") or "")
+    candidate_case_id = observed.get("case_id") if isinstance(observed.get("case_id"), str) else ""
     if candidate_case_id:
         declared_fields = True
-    candidate_model = _first_value(observed, ("model_key", "model", "model_name"))
+    candidate_model = _first_value(observed, model_fields)
     if candidate_model not in (None, ""):
         declared_fields = True
     quality_status = str(observed.get("quality_status") or "").strip().lower()

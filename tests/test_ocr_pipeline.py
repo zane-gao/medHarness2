@@ -547,6 +547,38 @@ def test_ocr_candidate_benchmark_rejects_candidate_sidecar_for_different_case(tm
     assert result["blocked_items"] == ["provenance:case1:model-a:case_id"]
 
 
+@pytest.mark.parametrize("field", ["case_id", "model_key", "modality"])
+@pytest.mark.parametrize("bad", [7, True, [], {"value": "x"}])
+def test_ocr_candidate_benchmark_blocks_non_string_sidecar_identity(
+    tmp_path: Path, field: str, bad: object
+):
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"case_id": "case1", "model_key": "model-a", "modality": "cxr", "text": "same", field: bad}),
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "case1",
+                    "gold_text": "same",
+                    "modality": "cxr",
+                    "candidates": {"model-a": str(candidate)},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "blocked"
+    assert result["selection"]["reason"] == "invalid_candidate_provenance"
+    assert any(item.endswith(f":{field}") for item in result["blocked_items"])
+
+
 @pytest.mark.parametrize(
     ("quality_status", "reason"),
     [
