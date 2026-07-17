@@ -279,8 +279,9 @@ def _resolve_text(value: Any, *, base_dir: Path | None = None) -> str:
     if declared_path:
         return ""
     if isinstance(value, dict):
-        return str(value.get("text") or value.get("ocr_text") or "").strip()
-    return str(value or "").strip()
+        text = value.get("text") or value.get("ocr_text")
+        return text.strip() if isinstance(text, str) else ""
+    return value.strip() if isinstance(value, str) else ""
 
 
 def _declared_text_path(value: Any, *, base_dir: Path | None = None) -> tuple[Path | None, bool]:

@@ -759,3 +759,22 @@ def test_ocr_benchmark_ignores_clinical_history_when_scoring_clinical_sections(t
     assert result["status"] == "succeeded"
     assert result["metrics"][0]["clinical_cer"] == 0.0
     assert result["metrics"][0]["clinical_text_source"] == "sections"
+
+@pytest.mark.parametrize("bad", [True, 1, 1.5, ["text"], {"unexpected": "value"}])
+def test_ocr_candidate_benchmark_blocks_non_text_inline_values(tmp_path: Path, bad):
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": "case1",
+                    "gold_text": "gold text",
+                    "candidates": {"model-a": bad},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+    assert result["status"] == "blocked"
+    assert "case1:model-a" in result["blocked_items"]
