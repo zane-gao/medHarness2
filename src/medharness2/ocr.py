@@ -435,6 +435,7 @@ def _cache_metadata_valid(meta: dict[str, Any]) -> bool:
     if "page_count" in meta and "retained_page_count" in meta:
         if meta["page_count"] != meta["retained_page_count"]:
             return False
+    method = str(meta.get("method") or "").lower()
     pages = meta.get("pages")
     if (
         method == "vlm_ocr"
