@@ -45,6 +45,30 @@ def test_education_rejects_invalid_reader_case_count(tmp_path: Path):
         )
 
 
+@pytest.mark.parametrize("bad", ["bad", [], ["reader"], 7, True])
+def test_education_rejects_malformed_per_reader_map(tmp_path: Path, bad: object):
+    workflow2 = tmp_path / "workflow2.json"
+    workflow2.write_text(json.dumps({"per_reader": bad}), encoding="utf-8")
+    with pytest.raises(ValueError, match="per_reader"):
+        run_education_suggestions(
+            eval_radiologist=workflow2,
+            output_path=tmp_path / "education.json",
+            config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        )
+
+
+@pytest.mark.parametrize("bad", ["bad", [], ["x"], 7, True])
+def test_education_rejects_malformed_reader_payload(tmp_path: Path, bad: object):
+    workflow2 = tmp_path / "workflow2.json"
+    workflow2.write_text(json.dumps({"per_reader": {"reader_a": bad}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="reader_a"):
+        run_education_suggestions(
+            eval_radiologist=workflow2,
+            output_path=tmp_path / "education.json",
+            config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        )
+
+
 def test_education_rejects_non_object_finding_and_hazard_lists():
     payload = _workflow1_payload()
     payload["human_evaluation"]["finding_graph"]["findings"] = "not-a-list"

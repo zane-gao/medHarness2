@@ -82,9 +82,16 @@ def _report_suggestions(payload: dict[str, Any], client: LLMClient) -> dict[str,
 
 
 def _radiologist_suggestions(payload: dict[str, Any], client: LLMClient) -> dict[str, Any]:
-    readers = payload.get("per_reader") or {}
+    readers = payload.get("per_reader")
+    if readers is None:
+        readers = {}
+    if not isinstance(readers, dict):
+        raise ValueError("per_reader must be an object")
     if not readers:
         raise ValueError("Workflow 2 result must contain per_reader.")
+    for reader_id, reader in readers.items():
+        if not isinstance(reader_id, str) or not isinstance(reader, dict):
+            raise ValueError(f"per_reader.{reader_id} must be an object")
     reader_id, reader = sorted(readers.items(), key=lambda item: str(item[0]))[0]
     effective_stats = {
         str(identifier): _effective_reader_statistics(payload, str(identifier), item)
@@ -331,14 +338,23 @@ def _metric_guidance(metric: str) -> str:
 
 
 def _effective_reader_statistics(payload: dict[str, Any], reader_id: str, reader: dict[str, Any]) -> dict[str, Any]:
-    existing = reader.get("human_statistics") or {}
+    existing = reader.get("human_statistics")
+    if existing is None:
+        existing = {}
+    if not isinstance(existing, dict):
+        raise ValueError(f"per_reader.{reader_id}.human_statistics must be an object")
     if existing:
         return dict(existing)
-    rows = [
-        dict(case.get("human_metrics") or {})
-        for case in payload.get("cases") or []
-        if str(case.get("reader") or "") == reader_id and case.get("human_metrics")
-    ]
+    raw_cases = payload.get("cases") or []
+    if not isinstance(raw_cases, list) or any(not isinstance(case, dict) for case in raw_cases):
+        raise ValueError("cases must be a list of objects")
+    rows = []
+    for case in raw_cases:
+        metrics = case.get("human_metrics")
+        if str(case.get("reader") or "") == reader_id and metrics:
+            if not isinstance(metrics, dict):
+                raise ValueError("human_metrics must be an object")
+            rows.append(dict(metrics))
     return calculate_statistics(rows) if rows else {}
 
 
