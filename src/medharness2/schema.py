@@ -134,11 +134,25 @@ class CaseManifest:
 
         image_paths = _string_list(payload.get("image_paths"), "image_paths")
         warnings = _string_list(payload.get("warnings"), "warnings")
+
+        def _string_alias(default: str, label: str, *keys: str) -> str:
+            values = []
+            for key in keys:
+                if key in payload:
+                    value = payload[key]
+                    if not isinstance(value, str):
+                        raise ValueError(f"{key} ({label}) must be a string")
+                    values.append(value)
+            for value in values:
+                if value:
+                    return value
+            return default
+
         return cls(
-            case_id=str(payload.get("case_id") or payload.get("id") or ""),
-            reader=str(payload.get("reader") or payload.get("radiologist_id") or "unknown"),
-            modality=str(payload.get("modality") or "unknown"),
-            body_part=str(payload.get("body_part") or "unknown"),
+            case_id=_string_alias("", "case identity", "case_id", "id"),
+            reader=_string_alias("unknown", "reader identity", "reader", "radiologist_id"),
+            modality=_string_alias("unknown", "modality", "modality"),
+            body_part=_string_alias("unknown", "body part", "body_part"),
             report_pdf=str(payload.get("report_pdf") or ""),
             report_text=str(payload.get("report_text") or payload.get("report_text_path") or ""),
             image_paths=image_paths,

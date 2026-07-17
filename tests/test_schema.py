@@ -20,3 +20,10 @@ def test_case_manifest_preserves_string_lists():
     )
     assert manifest.image_paths == ["a.dcm"]
     assert manifest.warnings == ["warning"]
+
+
+@pytest.mark.parametrize("field", ["case_id", "id", "reader", "radiologist_id", "modality", "body_part"])
+@pytest.mark.parametrize("bad", [{"x": 1}, 7, True, ["cxr"]])
+def test_case_manifest_rejects_non_string_identity_fields(field, bad):
+    with pytest.raises(ValueError, match=field):
+        CaseManifest.from_json({field: bad})
