@@ -1257,14 +1257,42 @@ def _valid_hazard_level(value: Any) -> bool:
 
 
 def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("case evaluation payload must be an object")
     generated = _object_list(payload.get("generated_evaluations"), "generated_evaluations")
     pairwise = _object_list(payload.get("pairwise_comparisons"), "pairwise_comparisons")
-    candidate = dict(generated[0]) if generated else {}
-    comparison = dict((pairwise[0] or {}).get("comparison") or {}) if pairwise else {}
-    hazards = dict(comparison.get("hazards") or {})
-    hazard_review = dict(comparison.get("hazard_review") or {})
-    agreement_summary = dict(hazard_review.get("agreement_summary") or {})
-    hazard_adjudication = dict(comparison.get("hazard_adjudication") or {})
+    candidate = generated[0] if generated else {}
+    candidate_inputs = _strict_object(
+        candidate.get("composite_inputs"),
+        "generated_evaluations[0].composite_inputs",
+    )
+    comparison = _strict_object(
+        pairwise[0].get("comparison") if pairwise else None,
+        "pairwise_comparisons[0].comparison",
+    )
+    alignment = _strict_object(comparison.get("alignment"), "comparison.alignment")
+    alignment_metrics = _strict_object(
+        alignment.get("metrics"), "comparison.alignment.metrics"
+    )
+    alignment_errors = _object_list(
+        alignment.get("error_candidates"),
+        "comparison.alignment.error_candidates",
+    )
+    hazards = _strict_object(comparison.get("hazards"), "comparison.hazards")
+    hazard_review = _strict_object(
+        comparison.get("hazard_review"), "comparison.hazard_review"
+    )
+    agreement_summary = _strict_object(
+        hazard_review.get("agreement_summary"),
+        "comparison.hazard_review.agreement_summary",
+    )
+    disagreements = _object_list(
+        hazard_review.get("disagreements"),
+        "comparison.hazard_review.disagreements",
+    )
+    hazard_adjudication = _strict_object(
+        comparison.get("hazard_adjudication"), "comparison.hazard_adjudication"
+    )
     adjudication_decisions = _object_list(hazard_adjudication.get("decisions"), "decisions")
     for index, decision in enumerate(adjudication_decisions):
         if "abstain" in decision:
@@ -1274,9 +1302,12 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
             hazard_adjudication.get("clinical_validation_required"),
             "clinical_validation_required",
         )
-    alignment_audit = dict(comparison.get("alignment_audit") or {})
-    adjudication_summary = dict(
-        alignment_audit.get("adjudication_summary") or {}
+    alignment_audit = _strict_object(
+        comparison.get("alignment_audit"), "comparison.alignment_audit"
+    )
+    adjudication_summary = _strict_object(
+        alignment_audit.get("adjudication_summary"),
+        "comparison.alignment_audit.adjudication_summary",
     )
     hazard_errors = _object_list(hazards.get("errors"), "errors")
     hazard_levels = [
@@ -1286,27 +1317,22 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
         and _valid_int(error.get("hazard_level"))
     ]
     consensus_hazard_levels, consensus_unresolved_count = _consensus_hazard_levels(
-        hazard_errors,
-        hazard_review,
-        hazard_adjudication,
+        hazard_errors, hazard_review, hazard_adjudication
+    )
+    structure_audit = _strict_object(
+        comparison.get("structure_audit"), "comparison.structure_audit"
     )
     return {
-        "candidate_likert_mean": (candidate.get("composite_inputs") or {}).get(
-            "likert_mean"
-        ),
-        "alignment_f1": (
-            (comparison.get("alignment") or {}).get("metrics") or {}
-        ).get("f1"),
-        "deterministic_alignment_error_count": len(
-            (comparison.get("alignment") or {}).get("error_candidates") or []
-        ),
+        "candidate_likert_mean": candidate_inputs.get("likert_mean"),
+        "alignment_f1": alignment_metrics.get("f1"),
+        "deterministic_alignment_error_count": len(alignment_errors),
         "t5_rejected_error_count": _count_or_zero(adjudication_summary.get("rejected_error_count"), "T5 rejected_error_count"),
         "t5_retained_error_count": _count_or_zero(adjudication_summary.get("retained_error_count"), "T5 retained error count"),
         "t5_modified_error_count": _count_or_zero(adjudication_summary.get("modified_error_count"), "T5 modified_error_count"),
         "t5_abstained_error_count": _count_or_zero(adjudication_summary.get("abstained_error_count"), "T5 abstained_error_count"),
         "hazard_error_count": len(hazard_errors),
         "max_hazard_level": max(hazard_levels) if hazard_levels else 0,
-        "hazard_disagreement_count": len(hazard_review.get("disagreements") or []),
+        "hazard_disagreement_count": len(disagreements),
         "hazard_compared_count": _count_or_zero(
             agreement_summary.get("compared_count", len(hazard_errors)),
             "hazard compared_count",
@@ -1344,15 +1370,9 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
             default=False,
         ),
         "clinical_validation_required": True,
-        "alignment_audit_verdict": (
-            comparison.get("alignment_audit") or {}
-        ).get("verdict"),
-        "structure_audit_verdict": (
-            comparison.get("structure_audit") or {}
-        ).get("verdict"),
-        "structure_clinical_impact": (
-            comparison.get("structure_audit") or {}
-        ).get("clinical_impact"),
+        "alignment_audit_verdict": alignment_audit.get("verdict"),
+        "structure_audit_verdict": structure_audit.get("verdict"),
+        "structure_clinical_impact": structure_audit.get("clinical_impact"),
     }
 
 

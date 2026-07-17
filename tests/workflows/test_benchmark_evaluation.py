@@ -847,6 +847,22 @@ def test_case_evaluation_metrics_preserve_explicit_zero_agreement_counts():
     assert metrics["hazard_exact_agreement_count"] == 0
 
 
+@pytest.mark.parametrize(
+    "field",
+    ["comparison", "alignment", "hazards", "hazard_review", "alignment_audit", "structure_audit"],
+)
+@pytest.mark.parametrize("bad", [True, 1, [], "bad"])
+def test_case_evaluation_metrics_rejects_malformed_nested_objects(field, bad):
+    payload = _strict_case_evaluation()
+    if field == "comparison":
+        payload["pairwise_comparisons"][0][field] = bad
+    else:
+        payload["pairwise_comparisons"][0]["comparison"][field] = bad
+
+    with pytest.raises(ValueError, match=field):
+        _case_evaluation_metrics(payload)
+
+
 def _benchmark_fixture(
     root: Path,
     *,
