@@ -141,17 +141,17 @@ workstreams:
     summary: 已从 52 例确定性筛出覆盖 cxr/ct/mri 的 10 例，生成盲化双读者标注包；当前 reader A、reader B 和 adjudication 全部 not_started（0/10 complete）。模型身份映射隔离在 internal 文件，不进入医生包；尚无真实医生标注，不得升级为 clinical gold。
     evidence_paths:
       - src/medharness2/annotation/pilot.py
-      - outputs/annotation/pilot10_20260717/manifest.jsonl
-      - outputs/annotation/pilot10_20260717/annotation.schema.json
+      - docs/research_pipeline_status_20260717.md
+      - annotation/pilot10/annotation.schema.json
     next_gate: 由真实 reader_a/reader_b 独立完成 10 例标注，再 adjudication；完成后重新运行 annotation validate 并计算 inter-rater reliability。
   experiments:
     status: in_progress
     summary: 六条 executable YAML protocol 和严格门禁仍在；新增 10 例临床标注准备、OCR 候选双次比较和论文实验 manifest。当前 OCR winner blocked，论文 formal claim false，尚无 validated gate。
     evidence_paths:
       - experiments/protocols/e1_radiologist_evaluation.yaml
-      - outputs/experiments/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710/results.json
-      - outputs/research/20260717/ocr_manifest.json
-      - outputs/research/20260717/paper_experiment_manifest.json
+      - docs/research_pipeline_status_20260717.md
+      - docs/superpowers/specs/2026-07-17-clinical-ocr-paper-pipeline-design.md
+      - src/medharness2/research_prep.py
     next_gate: 获取真实医生标注和真实 OCR provider 双次运行后，完成冻结 split、primary endpoints 和论文统计分析。
   figures:
     status: in_progress
