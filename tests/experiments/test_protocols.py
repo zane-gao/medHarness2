@@ -166,6 +166,20 @@ def test_readiness_rejects_non_mapping_gate_payload(tmp_path: Path):
         )
 
 
+@pytest.mark.parametrize("field", ["evidence_artifacts", "evidence_paths"])
+@pytest.mark.parametrize("bad", ["bad", 7, True, {"path": "x"}, ["bad"]])
+def test_readiness_rejects_malformed_evidence_path_fields(tmp_path: Path, field: str, bad: object):
+    protocol = load_experiment_protocols()["radiologist_evaluation"]
+    gates = {gate.id: {field: bad} for gate in protocol.validation_gates}
+    result = evaluate_readiness(
+        protocol,
+        evidence_status="available",
+        validation_evidence={protocol.id: {"gates": gates}},
+        run_dir=tmp_path,
+    )
+    assert all(gate["reason"] == "invalid_gate_evidence_contract" for gate in result["validation_gates"])
+
+
 def _minimal_radiologist_run(root: Path) -> Path:
     root.mkdir(parents=True)
     (root / "workflow2.json").write_text(

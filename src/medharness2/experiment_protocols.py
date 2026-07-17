@@ -140,11 +140,15 @@ def evaluate_readiness(
 
 
 def _verify_gate_evidence(root: Path, gate_id: str, row: dict[str, Any]) -> dict[str, Any]:
-    displayed_paths = [
-        str(item.get("path") or "")
-        for item in row.get("evidence_artifacts") or []
-        if isinstance(item, dict)
-    ] or [str(path) for path in row.get("evidence_paths") or []]
+    raw_artifacts = row.get("evidence_artifacts")
+    raw_paths = row.get("evidence_paths")
+    malformed_paths = (
+        (raw_artifacts is not None and (not isinstance(raw_artifacts, list) or any(not isinstance(item, dict) for item in raw_artifacts)))
+        or (raw_paths is not None and (not isinstance(raw_paths, list) or any(not isinstance(path, str) for path in raw_paths)))
+    )
+    if malformed_paths:
+        return _gate_result(False, "invalid_gate_evidence_contract", [])
+    displayed_paths = [str(item.get("path") or "") for item in raw_artifacts or []] or list(raw_paths or [])
     try:
         evidence = GateValidationEvidence.model_validate(row)
     except Exception:
