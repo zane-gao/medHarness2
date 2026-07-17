@@ -664,6 +664,11 @@ def test_ocr_strips_appended_blank_image_commentary():
     assert _strip_non_report_commentary(text) == "检查所见：双肺未见异常。\n诊断印象：心肺未见明显异常。"
 
 
+def test_ocr_strips_hospital_technical_footer_but_keeps_report_note():
+    text = "注：此报告仅供临床医生参考\n万里云 提供技术支持\nWanlicloud 了解详情4008326222"
+    assert _strip_non_report_commentary(text) == "注：此报告仅供临床医生参考"
+
+
 def test_ocr_preserves_same_line_report_text_before_commentary():
     text = "FINDINGS: clear lungs. The provided image appears to be blank."
 

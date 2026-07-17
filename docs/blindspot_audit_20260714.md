@@ -2,13 +2,13 @@
 
 > 本文档是 2026-07-14 的历史审计快照，后续增量记录当前修复状态；原始发现保留用于追溯，不应直接当作当前代码事实。
 
-> **最新复核（2026-07-17）**：当前主分支回归为 `1847 passed, 20 warnings`。真实 `research run-ocr` 已核验 pilot10 的 10/10 源 PDF 映射；Yunwu Qwen VL 已完成真实视觉探索，但 OCR winner 仍因缺少可确认的 Doubao OCR 候选、DMX 401 和 PaddleOCR-VL runtime 未就绪而保持 blocked；这不是 OCR winner 或临床标注完成证据。下文更早的 `1718/1785/1801/1836` 等数字均为历史快照。
+> **最新复核（2026-07-17）**：当前主分支回归为 `1849 passed, 20 warnings`。真实 `research run-ocr` 已核验 pilot10 的 10/10 源 PDF 映射；Yunwu Qwen VL 已完成真实视觉探索，但 OCR winner 仍因缺少可确认的 Doubao OCR 候选、DMX 401 和 PaddleOCR-VL runtime 未就绪而保持 blocked；这不是 OCR winner 或临床标注完成证据。下文更早的 `1718/1785/1801/1836/1847` 等数字均为历史快照。
 
-> **2026-07-17 OCR 技术页误识别修复**：真实 CXR/CT/MRI PDF 均包含一张只有医院技术支持 logo 的稀疏末页。Yunwu Qwen VL 偶尔会在已完成的报告后追加“页面为空/请重新上传”元话术，旧逻辑把它当作截断并阻断整份 OCR。现在会保留页级 hash 和 `non_report_page` 审计记录，将该页从有效 OCR 文本中排除；真正未完成的报告文本仍保持 `ocr_possible_truncation`/`blocked`。真实复测 `CR2605290003`、`CT2605300030`、`MR2605270001` 三例均为 `quality_status=passed`，但仅属于探索性证据，不进入 winner 或 formal benchmark。
+> **2026-07-17 OCR 技术页误识别修复**：真实 CXR/CT/MRI PDF 均包含一张只有医院技术支持 logo 的稀疏末页。Yunwu Qwen VL 偶尔会在已完成的报告后追加“页面为空/请重新上传”元话术，旧逻辑把它当作截断并阻断整份 OCR。现在会保留页级 hash 和 `non_report_page` 审计记录，将该页从有效 OCR 文本中排除并标为 `review_required`；真正未完成的报告文本仍保持 `ocr_possible_truncation`/`blocked`。同一行中已有报告文本的元话术会被截断但保留有效前缀；只有完整末尾日期/医生 metadata 才会豁免 truncation。上述真实复测仍仅属于探索性证据，不进入 winner 或 formal benchmark。
 
 > **2026-07-17 PaddleOCR 边界收口**：PaddleOCR readiness 现在同时检查 `PaddleOCRVL` 与 Paddle runtime；OCR sidecar 对文本、warnings、metadata、quality audit 结构执行 fail-closed 校验；源 PDF hash 不可读、对象式 `parsing_res_list`、空文本和空页均有明确阻断/复核语义。新增研究专项回归后全量为 `1783 passed, 20 warnings`。
 
-> **2026-07-17 审计页列表边界收口**：verifier audit 的 `pages` 为空或混入非对象时统一判为 `blocked`，不会因过滤非法项后恰好剩余 `agree` 而误通过；全量回归曾为 `1785/1801/1835/1836 passed, 20 warnings`，当前基线为 `1847 passed, 20 warnings`。
+> **2026-07-17 审计页列表边界收口**：verifier audit 的 `pages` 为空或混入非对象时统一判为 `blocked`，不会因过滤非法项后恰好剩余 `agree` 而误通过；全量回归曾为 `1785/1801/1835/1836/1847 passed, 20 warnings`，当前基线为 `1849 passed, 20 warnings`。
 
 > **2026-07-17 多模态 exploratory 收口**：Tool 2 已改为 source span ID + 完整报告原文回填；Tool 5 对 Qwen/VL 使用单错误块并裁剪无关上下文。MRI `MR2605270001`、CXR `CR2605290003`、CT `CT2605300030` 三例真实 Yunwu exploratory 链路均已完整通过，但仍不具备 formal 或 winner 资格。
 

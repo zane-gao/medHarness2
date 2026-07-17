@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import hashlib
 import math
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -791,10 +792,21 @@ def _looks_truncated(text: str) -> bool:
     if len(stripped) < 8:
         return True
     if stripped[-1].isascii() and stripped[-1].isalnum():
-        # Hospital report metadata commonly ends in a date, time, or doctor
-        # identifier.  These are complete pages, not unfinished OCR, when the
-        # report contains its normal structural markers.
-        if any(marker in stripped for marker in ("报告医生", "审核医生", "审核时间", "检查时间")):
+        # Exempt only a final, well-formed metadata line. An earlier metadata
+        # marker must not hide an unfinished report body.
+        last_line = stripped.splitlines()[-1].strip()
+        if re.fullmatch(
+            r"(?:审核时间|检查时间)\s*[:：]\s*"
+            r"\d{4}[-/]\d{1,2}[-/]\d{1,2}"
+            r"(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?",
+            last_line,
+        ):
+            return False
+        if re.fullmatch(
+            r"(?:报告医生|审核医生|检查医生)\s*[:：]\s*"
+            r"[\u4e00-\u9fffA-Za-z][\u4e00-\u9fffA-Za-z· ]{0,39}",
+            last_line,
+        ):
             return False
         return not stripped.lower().endswith(("stable", "normal", "negative", "正常"))
     return False
@@ -821,12 +833,20 @@ def _strip_non_report_commentary(text: str) -> str:
         "please re-upload the image",
         "图像为空",
         "未见可识别的报告文字",
+        "万里云",
+        "wanlicloud",
+        "提供技术支持",
+        "了解详情",
     )
     lines = text.splitlines()
     for index, line in enumerate(lines):
-        lowered = line.strip().lower()
-        if any(marker in lowered for marker in markers):
-            return "\n".join(lines[:index]).strip()
+        lowered = line.lower()
+        positions = [lowered.find(marker) for marker in markers if lowered.find(marker) >= 0]
+        if positions:
+            marker_start = min(positions)
+            prefix = line[:marker_start].rstrip()
+            kept = [*lines[:index], prefix] if prefix else lines[:index]
+            return "\n".join(kept).strip()
     return text.strip()
 
 
@@ -843,6 +863,12 @@ def _ocr_quality_status(
         item.startswith("ocr_possible_truncation") for item in warning_set
     ):
         return "blocked"
+    if "ocr_non_report_page" in warning_set or any(
+        item.startswith("ocr_non_report_page:") for item in warning_set
+    ):
+        # A skipped page may be a provider miss rather than a true footer.
+        # Keep the text available for review, but do not promote it to passed.
+        return "review_required"
     if verifier_missing or "ocr_verifier_client_missing" in warning_set:
         return "review_required"
     audit_statuses: list[str] = []

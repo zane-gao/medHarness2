@@ -17,7 +17,7 @@
 - 研究 manifest 会在执行后回写每次 sidecar 的状态、实际 model/provider/role、benchmark route provenance 和 repeat 结果；Qwen audit-only 不进入 OCR 候选排名，Paddle 运行时缺失不会被误报成仅缺 API key。
 - Doubao 是当前 primary OCR 候选；Qwen 仅作为 audit-only 多模态抽查，不进入 winner 比较；PaddleOCR-VL-1.6 已接入可选 baseline adapter，按官方 `PaddleOCRVL` 完整文档解析接口读取 Markdown 结果。provider 与 `paddle` runtime 分开检查，分别记录 `paddleocr_provider_unavailable` / `paddle_runtime_unavailable`；仅配置就绪不等于质量通过，必须有真实逐页 Qwen audit 且全部 `agree`。
 - 2026-07-17 Yunwu 实测模型目录确认可调用 `qwen3-vl-plus` 与 `qwen-vl-max`；当前未确认暴露可用于 OCR 的 Doubao/Volcengine 视觉模型，`doubao-seedream-*` 不作为 OCR 候选。DMX 凭据实测返回 401，不能作为当前实验 provider。
-- 2026-07-17 真实逐页 OCR 复测：`CR2605290003`（CXR）、`CT2605300030`（CT）、`MR2605270001`（MRI）均使用 Yunwu `qwen3-vl-plus` 完成；医院技术支持稀疏末页被记录为 `skip_reason=non_report_page`，不再误触发截断门禁，三例最终均为 `quality_status=passed`。这只是 exploratory Qwen OCR 证据，不改变 Doubao winner blocked 状态。
+- 2026-07-17 真实逐页 OCR 复测：`CR2605290003`（CXR）、`CT2605300030`（CT）、`MR2605270001`（MRI）均使用 Yunwu `qwen3-vl-plus` 完成；医院技术支持稀疏末页被记录为 `skip_reason=non_report_page`，并按保守策略标记 `review_required`，不再误触发截断门禁。该结果只是 exploratory Qwen OCR 证据，不改变 Doubao winner blocked 状态。
 
 ## 当前证据状态
 
