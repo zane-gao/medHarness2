@@ -2,7 +2,7 @@
 
 > 本文档是 2026-07-14 的历史审计快照，后续增量记录当前修复状态；原始发现保留用于追溯，不应直接当作当前代码事实。
 
-> **最新复核（2026-07-17）**：当前主分支回归为 `1864 passed, 20 warnings`。正式 `research run-ocr` 仍因真实候选/凭据缺失保持 blocked；未注册的 Qwen exploratory 第三轮 10 例为 `3/10 passed`、`7/10 review_required`、`0/10 blocked`，不计入正式双重复 benchmark、winner 或论文统计。下文更早的 `1718/1785/1801/1836/1847/1850/1851/1857/1859` 等数字均为历史快照。
+> **最新复核（2026-07-17）**：当前主分支回归为 `1865 passed, 22 warnings`。正式 `research run-ocr` 仍因真实候选/凭据缺失保持 blocked；未注册的 Qwen exploratory 第三轮 10 例为 `3/10 passed`、`7/10 review_required`、`0/10 blocked`，不计入正式双重复 benchmark、winner 或论文统计。新增 2 个 warning 来自 Paddle 依赖导入提示。下文更早的 `1718/1785/1801/1836/1847/1850/1851/1857/1859/1864` 等数字均为历史快照。
 
 > **2026-07-17 OCR 技术页误识别修复**：真实 CXR/CT/MRI PDF 均包含一张只有医院技术支持 logo 的稀疏末页。Yunwu Qwen VL 偶尔会在已完成的报告后追加“页面为空/请重新上传”元话术，旧逻辑把它当作截断并阻断整份 OCR。现在会保留页级 hash 和 `non_report_page` 审计记录，将该页从有效 OCR 文本中排除；在当前实现中，非报告页会保守标为 `review_required`，不会自动升级为 `passed`。真正未完成的报告文本仍保持 `ocr_possible_truncation`/`blocked`；同一行中已有报告文本的元话术会被截断但保留有效前缀；只有完整末尾日期/医生 metadata 才会豁免 truncation。旧探索 sidecar 的 `passed` 标记不覆盖当前门禁语义。
 
