@@ -81,12 +81,12 @@ workstreams:
     next_gate: Freeze repeated-run reliability targets, complete dual-reader gold labels, and benchmark every model role before a formal case run.
   ocr:
     status: in_progress
-    summary: OCR 现已升级为逐页 300 DPI 图像管线，记录页级 hash、provider/model/role、页序、墨量、空白页跳过和疑似截断；缓存 sidecar 绑定 case/source/provider/model/role，模型变更不会误复用旧 OCR。OCR 结果现在显式分为 passed、review_required、blocked：空结果或疑似截断不再作为可用 report_text 进入样本清单，verifier disagreement/失败只进入人工复核，不静默改写主 OCR。缺失或空的冻结 manifest 会严格返回 blocked；声明但不存在或不可读的 gold/candidate 文本路径也会明确阻断，不会被当成普通空文本。dmx_strong 已提供 Doubao Seed 候选主 OCR 与独立 Qwen OCR verifier 的 audit-only 路由，但二者仍是候选，尚未凭宣传或单例样本指定生产 winner；必须在冻结集上按 clinical CER、数字/否定词、截断率和重测一致性实测。独立多模态模型只允许产出差异审计，不静默改写主 OCR。
+    summary: OCR 现已升级为逐页 300 DPI 图像管线，记录页级 hash、provider/model/role、页序、墨量、空白页跳过和疑似截断；缓存 sidecar 绑定 case/source/provider/model/role，模型变更不会误复用旧 OCR。OCR 结果现在显式分为 passed、review_required、blocked：空结果或疑似截断不再作为可用 report_text 进入样本清单，verifier disagreement/失败只进入人工复核，不静默改写主 OCR。北川参考报告作为当前文本 benchmark gold 已就绪；dmx_strong 已提供 Doubao Seed 候选主 OCR 与独立 Qwen OCR verifier 的 audit-only 路由，但二者仍是候选，尚未凭宣传或单例样本指定生产 winner；必须在北川冻结集上按 clinical CER、数字/否定词、截断率和重测一致性实测。独立多模态模型只允许产出差异审计，不静默改写主 OCR。
     evidence_paths:
       - docs/superpowers/specs/2026-07-11-dmx-doubao-ocr-benchmark-design.md
       - outputs/ocr_quality_audit_qwen3vl4b_20260711/summary.json
       - outputs/ocr_quality_audit_qwen3vl4b_20260711/ocr_completeness_audit.png
-    next_gate: 冻结 10 例（CR4/CT4/MRI2）视觉核验文本，接入豆包/PaddleOCR/Qwen 候选并做双次重复调用；按 clinical CER 和 material-error rate 选择 primary，verifier 仅输出 disagreement artifact。
+    next_gate: 在北川冻结 10 例（CR4/CT4/MRI2）上接入豆包/PaddleOCR/Qwen 候选并做双次重复调用；按 clinical CER 和 material-error rate 选择 primary，verifier 仅输出 disagreement artifact。
   routing:
     status: validated
     summary: "路由器已改为三种主要模态（cxr/ct/mri）硬约束；body_part 不再阻塞兼容模型，只作为候选排序信号。配置中的 default_models wildcard 现在会按模态展开全部兼容候选，不再把 wildcard 当作普通模型名；完整 52 例 dmx_strong preflight 已验证 52/52 有本地候选、0 fallback。preflight 对存在但空病例目录现在 fail-closed 返回 no_cases_discovered，不会把 cases=0 误报为通过。VLM 模态识别补充 MRI/CT/X-ray 常见句式归一化，并覆盖 DICOM、图片扩展名和 unknown 路径测试。"
@@ -119,7 +119,7 @@ workstreams:
     next_gate: 在北川冻结集上重跑候选模型和双次重复调用，验证 fallback_count、recall、seed/cache、评委一致性和临床错误率，再决定 formal benchmark promotion。
   benchmark_gates:
     status: in_progress
-    summary: 已提供 `ocr-benchmark` 冻结集评测 CLI（CER、数字/否定词、截断率、provisional winner）和 `live-smoke` 真实评委连通性/JSON 门禁。缺少 gold、candidate、声明路径或凭据时返回 blocked；缺失/空 manifest 分别记录 `manifest:missing_file` / `manifest:empty`；空白凭据也按缺失处理，正式 benchmark role gate 与 LLMClient 传输层保持同一语义；mock/deterministic/fallback provider 即使配置了 key 也会被 live-smoke 拒绝；`benchmark run` 的 CLI 退出码现在跟随结果状态，不会把 failed/completed_with_failures 当作成功；损坏 UTF-8 manifest、空模型键、病例身份或模型身份不匹配的 OCR sidecar 也会明确 blocked，不会用 0 分或 mock 结果冒充完成。
+    summary: 已提供 `ocr-benchmark` 冻结集评测 CLI（CER、数字/否定词、截断率、provisional winner）和 `live-smoke` 真实评委连通性/JSON 门禁。北川参考报告作为当前 gold 输入；缺少 candidate、声明路径或凭据时返回 blocked；缺失/空 manifest 分别记录 `manifest:missing_file` / `manifest:empty`；空白凭据也按缺失处理，正式 benchmark role gate 与 LLMClient 传输层保持同一语义；mock/deterministic/fallback provider 即使配置了 key 也会被 live-smoke 拒绝；`benchmark run` 的 CLI 退出码现在跟随结果状态，不会把 failed/completed_with_failures 当作成功；损坏 UTF-8 manifest、空模型键、病例身份或模型身份不匹配的 OCR sidecar 也会明确 blocked，不会用 0 分或 mock 结果冒充完成。
     evidence_paths:
       - src/medharness2/ocr_benchmark.py
       - src/medharness2/validation/live_smoke.py
@@ -138,7 +138,7 @@ workstreams:
     next_gate: Expand the frozen CXR chest exploratory matrix, add clinician labels and formal validation IDs, then promote only models that pass the locked benchmark.
   clinical_validation:
     status: not_started
-    summary: 已从 52 例确定性筛出覆盖 cxr/ct/mri 的 10 例，生成盲化双读者标注包；当前 reader A、reader B 和 adjudication 全部 not_started（0/10 complete）。模型身份映射隔离在 internal 文件，不进入医生包；尚无真实医生标注，不得升级为 clinical gold。
+    summary: 已从 52 例确定性筛出覆盖 cxr/ct/mri 的 10 例，生成盲化双读者标注包；当前 reader A、reader B 和 adjudication 全部 not_started（0/10 complete）。模型身份映射隔离在 internal 文件，不进入医生包；reader 标注用于临床校准，不改变当前北川文本 gold。
     evidence_paths:
       - src/medharness2/annotation/pilot.py
       - docs/research_pipeline_status_20260717.md
@@ -147,7 +147,7 @@ workstreams:
     next_gate: 由真实 reader_a/reader_b 独立完成 10 例标注，再 adjudication；完成后重新运行 annotation validate 并计算 inter-rater reliability。
   experiments:
     status: in_progress
-    summary: 六条 executable YAML protocol 和严格门禁仍在；新增 10 例临床标注准备、OCR 候选双次比较和论文实验 manifest。研究 manifest 现在会逐条校验 annotation case 文件存在性、路径必须位于 cases/、Pydantic contract、病例身份和模态一致性；当前 OCR winner blocked，论文 formal claim false，尚无 validated gate。
+    summary: 六条 executable YAML protocol 和严格门禁仍在；新增 10 例临床标注准备、OCR 候选双次比较和论文实验 manifest。研究 manifest 现在会逐条校验 annotation case 文件存在性、路径必须位于 cases/、Pydantic contract、病例身份和模态一致性；北川文本 gold 已登记，当前 OCR winner 仍 blocked（候选 provider 双次运行未完成），论文 formal claim false，尚无 validated gate。
     evidence_paths:
       - experiments/protocols/e1_radiologist_evaluation.yaml
       - docs/research_pipeline_status_20260717.md
@@ -179,7 +179,7 @@ workstreams:
       - tests/web_panel.spec.mjs
       - playwright.config.mjs
       - tests/test_project_metadata.py
-    next_gate: Install or expose a Playwright-compatible Chromium binary, run tests/web_panel.spec.mjs at 1440x900 and 390x844, review generated screenshots, and verify the published HTML against the latest local evidence sources.
+    next_gate: 在已声明的 `@playwright/test` 依赖基础上补齐宿主 `libnspr4.so`，运行 tests/web_panel.spec.mjs 的 1440x900 和 390x844 回归，审阅截图并核对发布 HTML 与最新本地证据源一致。
 
 api_verification:
   preferred_profile: config/dmx_strong.yaml

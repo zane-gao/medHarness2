@@ -13,7 +13,7 @@
 ## 不可突破的证据边界
 
 - 未由真实医生完成的内容只能标为 `synthetic_draft`，不得写入 formal gold 或临床结果；
-- 没有真实 gold、真实 provider provenance 或完整病例覆盖时，OCR 结果只能是 `blocked/in_progress`，不得生成 winner；
+- 当前 benchmark 使用北川参考报告作为文本 gold；缺少真实 provider provenance、完整病例覆盖或质量门禁时，OCR 结果只能是 `blocked/in_progress`，不得生成 winner；
 - 论文结果只读取验证通过的产物；缺失产物显示 `pending/blocked`，不补零、不伪造置信区间。
 
 ## 10 例标注包

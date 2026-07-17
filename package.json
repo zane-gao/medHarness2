@@ -1,0 +1,11 @@
+{
+  "name": "medharness2-web-checks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:web": "playwright test tests/web_panel.spec.mjs --reporter=line"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
+  }
+}

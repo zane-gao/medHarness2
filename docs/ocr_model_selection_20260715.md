@@ -36,7 +36,7 @@
 - 两次运行的一致性。
 
 模型选择规则只能在 benchmark `succeeded` 且覆盖一致时运行：先按 clinical CER，
-再按截断数量、否定词准确率排序；如果缺少 gold、候选、模型键、病例覆盖或 provenance，
+再按截断数量、否定词准确率排序；如果缺少冻结文本 gold、候选、模型键、病例覆盖或 provenance，
 结果必须为 `blocked`，不能生成 winner。
 
 ## 实施边界
@@ -57,4 +57,3 @@
 - PP-OCRv5 官方文档：`https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/algorithm/PP-OCRv5/PP-OCRv5.md`
 - PaddleOCR-VL 官方管线文档：`https://github.com/PaddlePaddle/PaddleOCR/blob/main/docs/version3.x/pipeline_usage/PaddleOCR-VL.md`
 - Gemini 文档理解官方文档：`https://ai.google.dev/gemini-api/docs/document-processing`
-

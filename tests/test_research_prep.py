@@ -57,9 +57,15 @@ def test_prepare_research_manifests_creates_blocked_ocr_and_paper_plans(tmp_path
     assert result["modality_coverage"] == ["ct", "cxr", "mri"]
     ocr = json.loads((tmp_path / "research" / "ocr_manifest.json").read_text())
     assert ocr["winner_status"] == "blocked"
+    assert ocr["gold_source"] == "beichuan_reference_report"
+    assert ocr["gold_status"] == "available_for_current_benchmark"
     assert len(ocr["runs"]) == 18
+    assert ocr["runs"][0]["blocked_reasons"] == ["real_provider_run_not_available"]
+    assert ocr["runs"][0]["gold_source"] == "beichuan_reference_report"
     paper = json.loads((tmp_path / "research" / "paper_experiment_manifest.json").read_text())
     assert paper["formal_claim_allowed"] is False
+    assert paper["data"]["gold_source"] == "beichuan_reference_report"
+    assert paper["data"]["clinical_reader_status"] == "not_started"
     assert {item["id"] for item in paper["experiments"]} == {
         "ocr_comparison", "finding_extraction", "report_generation", "reader_and_model_evaluation"
     }

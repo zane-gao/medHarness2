@@ -73,6 +73,17 @@ PYTHONPATH=src python3 -m medharness2.cli dashboard build \
 cd web && python3 -m http.server 8080   # 浏览器访问 http://<host>:8080/
 ```
 
+## 浏览器回归
+
+仓库根目录已声明 `@playwright/test` 作为开发依赖。安装依赖后运行：
+
+```bash
+npm install
+npm run test:web
+```
+
+当前 A40 宿主的 Chromium 启动仍被缺失的 `libnspr4.so` 阻断；该环境问题不会被记录为页面测试通过。
+
 ## 文件
 
 ```text

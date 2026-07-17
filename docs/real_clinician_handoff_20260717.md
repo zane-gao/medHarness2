@@ -15,6 +15,8 @@ annotation/pilot10/
 - `reader_a`、`reader_b`、`adjudication` 三个空标注槽位；
 - `source_case_sha256`，用于源数据漂移核对。
 
+当前 OCR/文本 benchmark 的 gold 输入为北川参考报告（`gold_source=beichuan_reference_report`）。本包中的 reader 槽位用于后续临床校准，不会替换或回写该文本 gold。
+
 模型身份映射位于 `internal/model_blinding_map.json`，只供项目管理员在两位 reader 完成后进行分析，不得发给 reader。
 
 ## 标注流程
@@ -37,7 +39,7 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
 
 - 自动生成的候选、规则抽取和模型建议不是医生标注；
 - 不要把任何合成草稿复制到 `reader_a`、`reader_b` 或 `adjudication` 槽位；
-- 这 10 例是临床标注准备/校准集，尚未升级为正式临床 gold 或 formal benchmark；
+- 这 10 例是临床标注准备/校准集；完成双读和 adjudication 后，才可用于临床一致性分析与 formal benchmark 门禁；
 - 标注完成后仍需进行双读一致性、adjudication 和独立统计审查。
 
 ## OCR 与论文实验交接
@@ -57,4 +59,4 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
   --output-dir outputs/research/20260717
 ```
 
-当前 OCR `winner_status=blocked`，原因是缺少真实 clinical gold 和真实 provider 双次运行；在这两项证据就位前不得发布 winner 或论文正式结果。
+当前 OCR `winner_status=blocked`：北川 gold 已可用，但真实 provider 双次运行尚未完成；在候选覆盖、质量和重复一致性门禁通过前不得发布 winner 或论文正式结果。

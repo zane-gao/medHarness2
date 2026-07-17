@@ -15,6 +15,11 @@ OCR_CANDIDATES = (
     {"candidate_id": "ocr_baseline_paddle", "provider": "paddleocr", "model": "PaddleOCR-VL", "role": "ocr_baseline"},
 )
 
+# The Beichuan reference reports are the current engineering benchmark gold.
+# Clinical reader labels remain a separate calibration layer.
+CURRENT_GOLD_SOURCE = "beichuan_reference_report"
+CURRENT_GOLD_STATUS = "available_for_current_benchmark"
+
 
 def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) -> dict[str, Any]:
     pilot = Path(pilot_dir)
@@ -49,7 +54,9 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
                     "candidate": candidate,
                     "repeat": repeat,
                     "status": "blocked",
-                    "blocked_reasons": ["clinical_gold_not_available", "real_provider_run_not_available"],
+                    "gold_source": CURRENT_GOLD_SOURCE,
+                    "gold_status": CURRENT_GOLD_STATUS,
+                    "blocked_reasons": ["real_provider_run_not_available"],
                 })
     output.mkdir(parents=True, exist_ok=True)
     ocr_manifest = {
@@ -59,6 +66,8 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
         "case_count": len(rows),
         "modality_coverage": sorted(modalities),
         "coverage_ok": coverage_ok,
+        "gold_source": CURRENT_GOLD_SOURCE,
+        "gold_status": CURRENT_GOLD_STATUS,
         "winner_status": "blocked",
         "candidates": list(OCR_CANDIDATES),
         "runs": ocr_rows,
@@ -68,9 +77,16 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
         "schema_version": "1.0",
         "artifact_type": "paper_experiment_manifest",
         "status": "pending",
-        "data": {"pilot_annotation_dir": str(pilot), "case_count": len(rows), "modalities": sorted(modalities)},
+        "data": {
+            "pilot_annotation_dir": str(pilot),
+            "case_count": len(rows),
+            "modalities": sorted(modalities),
+            "gold_source": CURRENT_GOLD_SOURCE,
+            "gold_status": CURRENT_GOLD_STATUS,
+            "clinical_reader_status": "not_started",
+        },
         "experiments": [
-            {"id": "ocr_comparison", "status": "blocked", "required_evidence": ["clinical_gold", "real_provider_runs"]},
+            {"id": "ocr_comparison", "status": "blocked", "required_evidence": [CURRENT_GOLD_SOURCE, "real_provider_runs"]},
             {"id": "finding_extraction", "status": "pending", "metric": "finding_graph_precision_recall_f1"},
             {"id": "report_generation", "status": "pending", "metric": "likert_structure_alignment_hazard"},
             {"id": "reader_and_model_evaluation", "status": "not_started", "metric": "reader_agreement_and_modelwise_statistics"},
