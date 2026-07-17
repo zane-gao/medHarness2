@@ -264,6 +264,10 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
         value = payload.get(field)
         if value is not None and not isinstance(value, dict):
             raise TypeError(f"finding_graph.{field} must be an object")
+    for field in ("missing", "warnings"):
+        value = payload.get(field)
+        if value not in (None, ""):
+            _string_list(value, f"finding_graph.{field}")
     validation_error = ""
     try:
         return FindingGraph.model_validate(payload).model_dump(mode="json")
@@ -359,11 +363,11 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
         "backend": payload.get("backend") or "legacy_unknown",
         "findings": findings,
         "relations": [deepcopy(item) for item in payload.get("relations") or [] if isinstance(item, dict)],
-        "missing": [str(item) for item in payload.get("missing") or []],
+        "missing": _string_list(payload.get("missing"), "finding_graph.missing"),
         "coverage": _bounded_float(payload.get("coverage"), default=0.0),
         "nodes": [deepcopy(item) for item in payload.get("nodes") or [] if isinstance(item, dict)],
         "template_coverage": deepcopy(payload.get("template_coverage") or {}),
-        "warnings": [str(item) for item in payload.get("warnings") or []],
+        "warnings": _string_list(payload.get("warnings"), "finding_graph.warnings"),
         "metadata": metadata,
     }
     return FindingGraph.model_validate(graph).model_dump(mode="json")
@@ -380,7 +384,15 @@ def _migrate_hazard_result(payload: dict[str, Any]) -> dict[str, Any]:
     for index, raw in enumerate(payload.get("errors") or []):
         if not isinstance(raw, dict):
             raise TypeError(f"hazard_result.errors[{index}] must be an object")
-        evidence_ids = _string_values(raw.get("evidence_ids"))
+        raw_evidence_ids = raw.get("evidence_ids")
+        if raw_evidence_ids not in (None, ""):
+            if isinstance(raw_evidence_ids, str):
+                pass
+            elif not isinstance(raw_evidence_ids, (list, tuple, set)) or any(
+                not isinstance(item, str) for item in raw_evidence_ids
+            ):
+                raise TypeError(f"hazard_result.errors[{index}].evidence_ids must be strings")
+        evidence_ids = _string_values(raw_evidence_ids)
         if not evidence_ids:
             evidence_ids = _legacy_evidence_ids(raw)
         error = {
