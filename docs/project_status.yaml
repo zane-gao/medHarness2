@@ -56,7 +56,7 @@ baseline:
 workstreams:
   contracts:
     status: validated
-    summary: Versioned v2 case, finding, generated-report, hazard, run, optional audit, and workflow2/workflow3 aggregate contracts are enforced; aggregate boundaries retain additive compatibility while rejecting malformed reader, denominator, percentile, and count fields. Audit hashes remain bound to deterministic primary artifacts, and the 52-case v1 migration path is directly validatable.
+    summary: Versioned v2 case, finding, generated-report, hazard, run, optional audit, and workflow2/workflow3 aggregate contracts are enforced; aggregate boundaries retain additive compatibility while rejecting malformed reader, denominator, percentile, and count fields. Audit hashes remain bound to deterministic primary artifacts, and the 52-case v1 migration path is directly validatable. Sample JSONL manifests now have fail-closed identity, path, warning-list, image-list, and object-field boundaries.
     evidence_paths:
       - docs/schemas/index.json
       - outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710/run_summary.json
@@ -138,7 +138,7 @@ workstreams:
     next_gate: Expand the frozen CXR chest exploratory matrix, add clinician labels and formal validation IDs, then promote only models that pass the locked benchmark.
   clinical_validation:
     status: not_started
-    summary: 已从 52 例确定性筛出覆盖 cxr/ct/mri 的 10 例，生成盲化双读者标注包；已提供 annotation export-reader 隔离交付和 annotation import-reader 安全回收命令；当前 reader A、reader B 和 adjudication 全部 not_started（0/10 complete）。模型身份映射隔离在 internal 文件，不进入医生包；reader 标注用于临床校准，不改变当前北川文本 gold。
+    summary: 已从 52 例确定性筛出覆盖 cxr/ct/mri 的 10 例，生成盲化双读者标注包；已提供 annotation export-reader 隔离交付和 annotation import-reader 安全回收命令，回收绑定参考报告/指令版本并采用原子回滚写回；当前 reader A、reader B 和 adjudication 全部 not_started（0/10 complete）。模型身份映射隔离在 internal 文件，不进入医生包；reader 标注用于临床校准，不改变当前北川文本 gold。
     evidence_paths:
       - src/medharness2/annotation/pilot.py
       - docs/research_pipeline_status_20260717.md

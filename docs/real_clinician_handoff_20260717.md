@@ -62,6 +62,9 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
 回收过程只写入指定 reader 槽位，并拒绝源 hash、病例身份、模态、部位或候选文本发生漂移的副本；
 主包已有的 complete 槽位也会拒绝覆盖。回收后必须再次运行主包 validate。
 
+回收采用同目录暂存、备份与失败回滚；如果某个病例写回失败，之前已写入的病例文件和主 manifest 会恢复，
+不会留下“部分 reader 已合并”的主包。参考报告和 `instructions_version` 也必须与主包一致。
+
 ## 证据边界
 
 - 自动生成的候选、规则抽取和模型建议不是医生标注；

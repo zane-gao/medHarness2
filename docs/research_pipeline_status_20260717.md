@@ -10,6 +10,8 @@
 - 生成 OCR/论文实验 manifest：`outputs/research/20260717/`（本地 outputs/ 产物，被忽略规则排除；可用命令重建）。
 - 已增加 reader 隔离导出命令，真实标注可以从 `annotation/pilot10/` 生成不泄漏另一 reader 槽位的交付副本。
 - 已增加 `annotation import-reader` 安全回收命令，只能更新指定 reader 槽位并拒绝身份/候选漂移。
+- `import-reader` 现在还绑定参考报告与指令版本，校验 slot 身份，并以原子暂存/备份/回滚方式写回，避免多病例交付包在异常时部分合并。
+- `validate_sample_run` 对 JSONL manifest 的身份、路径、warnings、图像列表和对象字段执行 fail-closed 类型门禁；损坏 manifest 只进入错误分母，不会污染 OCR/路由统计。
 
 ## 当前证据状态
 
