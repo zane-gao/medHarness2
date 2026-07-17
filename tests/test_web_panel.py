@@ -66,6 +66,35 @@ def test_dashboard_summary_rejects_invalid_external_counts(field_path, label, ba
         summarize_dashboard_payload(payload)
 
 
+@pytest.mark.parametrize(
+    ("field_path", "bad", "label"),
+    [
+        (("run_summary",), "bad", "run_summary"),
+        (("run_summary", "summary"), [], "run_summary.summary"),
+        (("analysis",), [], "analysis"),
+        (("catalog", "tools"), {}, "catalog.tools"),
+        (("figures", "figures"), "bad", "figures.figures"),
+        (("run_registry", "entries"), {}, "run_registry.entries"),
+        (("experiments",), [], "experiments"),
+    ],
+)
+def test_dashboard_summary_rejects_malformed_external_shapes(field_path, bad, label):
+    payload = {
+        "run_summary": {"summary": {"case_count": 0}},
+        "analysis": {},
+        "catalog": {"tools": [], "models": []},
+        "figures": {"figure_count": 0, "figures": []},
+        "run_registry": {"entries": []},
+        "experiments": {"experiment_count": 0},
+    }
+    target = payload
+    for key in field_path[:-1]:
+        target = target[key]
+    target[field_path[-1]] = bad
+    with pytest.raises(ValueError, match=label):
+        summarize_dashboard_payload(payload)
+
+
 @pytest.mark.parametrize("field", ["passed", "total"])
 @pytest.mark.parametrize("bad", [True, 1.5, "2", -1])
 def test_dashboard_gate_status_rejects_invalid_counts(field, bad):

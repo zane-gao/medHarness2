@@ -93,13 +93,15 @@ def _read_analysis_tables(root: Path) -> dict[str, list[dict[str, str]]]:
 
 
 def summarize_dashboard_payload(payload: dict[str, Any]) -> dict[str, int]:
-    run_summary = payload.get("run_summary") or {}
-    analysis = payload.get("analysis") or {}
-    registry = payload.get("run_registry") or {}
-    figures = payload.get("figures") or {}
-    catalog = payload.get("catalog") or {}
-    experiments = payload.get("experiments") or {}
-    run_summary_values = run_summary.get("summary") or {}
+    if not isinstance(payload, dict):
+        raise ValueError("dashboard payload must be an object")
+    run_summary = _optional_mapping(payload, "run_summary")
+    analysis = _optional_mapping(payload, "analysis")
+    registry = _optional_mapping(payload, "run_registry")
+    figures = _optional_mapping(payload, "figures")
+    catalog = _optional_mapping(payload, "catalog")
+    experiments = _optional_mapping(payload, "experiments")
+    run_summary_values = _optional_mapping(run_summary, "summary", prefix="run_summary")
     case_count = _first_present(
         run_summary_values.get("case_count") if "case_count" in run_summary_values else None,
         analysis.get("case_count") if "case_count" in analysis else None,
@@ -107,16 +109,36 @@ def summarize_dashboard_payload(payload: dict[str, Any]) -> dict[str, int]:
     )
     figure_count = _first_present(
         figures.get("figure_count") if "figure_count" in figures else None,
-        len(figures.get("figures") or []),
+        len(_optional_list(figures, "figures", prefix="figures")),
     )
     return {
         "case_count": _count_or_zero(case_count, "case_count"),
-        "tool_count": len(catalog.get("tools") or []),
-        "model_count": len(catalog.get("models") or []),
+        "tool_count": len(_optional_list(catalog, "tools", prefix="catalog")),
+        "model_count": len(_optional_list(catalog, "models", prefix="catalog")),
         "experiment_count": _count_or_zero(experiments.get("experiment_count", 0), "experiment_count"),
         "figure_count": _count_or_zero(figure_count, "figure_count"),
-        "registry_entry_count": len(registry.get("entries") or []),
+        "registry_entry_count": len(_optional_list(registry, "entries", prefix="run_registry")),
     }
+
+
+def _optional_mapping(value: dict[str, Any], key: str, *, prefix: str = "") -> dict[str, Any]:
+    item = value.get(key)
+    if item is None:
+        return {}
+    if not isinstance(item, dict):
+        label = f"{prefix}.{key}" if prefix else key
+        raise ValueError(f"{label} must be an object")
+    return item
+
+
+def _optional_list(value: dict[str, Any], key: str, *, prefix: str = "") -> list[Any]:
+    item = value.get(key)
+    if item is None:
+        return []
+    if not isinstance(item, list):
+        label = f"{prefix}.{key}" if prefix else key
+        raise ValueError(f"{label} must be a list")
+    return item
 
 
 def _first_present(*values: Any) -> Any:
