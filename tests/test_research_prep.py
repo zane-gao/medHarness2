@@ -219,6 +219,31 @@ def test_run_ocr_research_records_missing_source_pdf_per_case(tmp_path: Path):
     assert result["blocked_count"] > 0
 
 
+def test_run_ocr_research_blocks_unreadable_source_pdf_hash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    research = tmp_path / "research"
+    prepare_research_manifests(pilot, research)
+    source_pdf = tmp_path / "report.pdf"
+    source_pdf.write_bytes(b"placeholder")
+    monkeypatch.setattr(research_prep, "_build_source_pdf_index", lambda _root: {"a" * 64: source_pdf})
+
+    def fail_hash(_path: Path) -> str:
+        raise OSError("permission denied")
+
+    monkeypatch.setattr(research_prep, "_hash_file", fail_hash)
+
+    result = run_ocr_research(pilot, research)
+
+    assert result["status"] == "blocked"
+    assert "source_pdf_unreadable" in result["blocked_reasons"]
+    sidecars = list((research / "ocr_runs").rglob("*.json"))
+    assert sidecars
+    assert all(json.loads(path.read_text())["blocked_reasons"] == ["source_pdf_unreadable"] for path in sidecars)
+
+
 def test_run_ocr_research_persists_sidecar_statuses_and_route_provenance(tmp_path: Path):
     pilot = _pilot(
         tmp_path,
@@ -312,9 +337,13 @@ def test_run_ocr_research_uses_injected_paddle_adapter(tmp_path: Path, monkeypat
     payload = json.loads(
         (research / "ocr_runs" / "repeat_1" / "pilot-001" / "ocr_baseline_paddle.json").read_text()
     )
-    assert payload["status"] == "succeeded"
+    # A route being ready does not prove that this transcription was audited
+    # by Qwen.  The adapter must fail closed to review_required until it
+    # returns real page-level audit evidence.
+    assert payload["status"] == "review_required"
     assert payload["model_key"] == "ocr_baseline_paddle"
-    assert result["success_count"] == 2
+    assert result["success_count"] == 0
+    assert result["review_required_count"] == 2
 
 
 def test_paddleocr_without_verifier_is_review_required(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -373,6 +402,23 @@ def test_paddleocr_readiness_requires_vl_pipeline(monkeypatch: pytest.MonkeyPatc
     }
 
 
+def test_paddleocr_readiness_reports_runtime_missing(monkeypatch: pytest.MonkeyPatch):
+    import sys
+
+    class FakePaddleOCRVL:
+        pass
+
+    fake_module = type("FakeModule", (), {"PaddleOCRVL": FakePaddleOCRVL})
+    monkeypatch.setitem(sys.modules, "paddleocr", fake_module)
+    # An importable provider without PaddlePaddle cannot execute the pipeline.
+    monkeypatch.setitem(sys.modules, "paddle", None)
+    readiness = research_prep._ocr_candidate_readiness(research_prep.load_config())
+    assert readiness["ocr_baseline_paddle"] == {
+        "ready": False,
+        "reason": "paddle_runtime_unavailable",
+    }
+
+
 def test_paddleocr_vl_dict_subclass_reads_markdown_property():
     class FakeResult(dict):
         @property
@@ -392,6 +438,111 @@ def test_paddleocr_text_reads_official_result_markdown_export(tmp_path: Path):
     assert research_prep._paddleocr_text(
         OfficialResult(), markdown_dir=tmp_path, page_index=1
     ) == "FINDINGS: exported markdown"
+
+
+def test_paddleocr_text_replaces_stale_markdown_export(tmp_path: Path):
+    stale = tmp_path / "page.md"
+    stale.write_text("STALE OCR", encoding="utf-8")
+
+    class OfficialResult:
+        def save_to_markdown(self, *, save_path: Path):
+            output = Path(save_path) / "page.md"
+            output.write_text("FRESH OCR", encoding="utf-8")
+            return output
+
+    assert research_prep._paddleocr_text(OfficialResult(), markdown_dir=tmp_path) == "FRESH OCR"
+
+
+def test_paddleocr_text_reads_object_parsing_block_content():
+    class Block:
+        content = "OBJECT BLOCK"
+
+    assert research_prep._paddleocr_text({"parsing_res_list": [Block()]}) == "OBJECT BLOCK"
+
+
+def test_paddleocr_result_empty_text_is_not_accepted():
+    with pytest.raises(RuntimeError, match="paddleocr_empty_result"):
+        research_prep._validate_paddleocr_result(
+            {"text": "", "warnings": [], "metadata": {"quality_status": "passed"}}
+        )
+
+
+def test_paddleocr_empty_page_prevents_quality_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    source_pdf = tmp_path / "report.pdf"
+    source_pdf.write_bytes(b"placeholder")
+    pages = [tmp_path / "page-1.png", tmp_path / "page-2.png"]
+    for page in pages:
+        page.write_bytes(b"page")
+
+    class FakeEngine:
+        def __init__(self):
+            self.calls = 0
+
+        def predict(self, _page):
+            self.calls += 1
+            return {} if self.calls == 1 else {"text": "FINDINGS: normal"}
+
+        def close(self):
+            return None
+
+    class Verifier:
+        def call(self, *_args, **_kwargs):
+            return {"status": "agree"}
+
+    fake_module = type("FakePaddleOCR", (), {"PaddleOCRVL": lambda **_kwargs: FakeEngine()})
+    monkeypatch.setitem(__import__("sys").modules, "paddleocr", fake_module)
+    monkeypatch.setitem(__import__("sys").modules, "paddle", type("FakePaddle", (), {}))
+    monkeypatch.setattr(research_prep, "_render_pdf_pages", lambda *_args: [str(page) for page in pages])
+
+    result = research_prep._run_paddleocr_candidate(
+        source_pdf,
+        case_id="pilot-001",
+        output_dir=tmp_path / "cache",
+        verifier_ready=True,
+        verifier_client=Verifier(),
+        verifier_options={},
+    )
+
+    assert result["metadata"]["quality_status"] == "review_required"
+
+
+@pytest.mark.parametrize(
+    "bad_result,reason",
+    [
+        ({"text": "text", "warnings": "not-a-list", "metadata": {"quality_status": "review_required"}}, "paddleocr_invalid_warnings"),
+        ({"text": "text", "warnings": [], "metadata": "not-a-dict"}, "paddleocr_invalid_metadata"),
+    ],
+)
+def test_run_ocr_research_blocks_malformed_paddle_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    bad_result: object,
+    reason: str,
+):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    research = tmp_path / "research"
+    prepare_research_manifests(pilot, research)
+    source_pdf = tmp_path / "report.pdf"
+    source_pdf.write_bytes(b"placeholder")
+    monkeypatch.setattr(research_prep, "_build_source_pdf_index", lambda _root: {"a" * 64: source_pdf})
+    monkeypatch.setattr(
+        research_prep,
+        "_ocr_candidate_readiness",
+        lambda _config: {
+            "ocr_primary_doubao": {"ready": False, "reason": "missing_api_key"},
+            "ocr_verifier_qwen": {"ready": False, "reason": "missing_api_key"},
+            "ocr_baseline_paddle": {"ready": True, "reason": ""},
+        },
+    )
+    monkeypatch.setattr(research_prep, "_run_paddleocr_candidate", lambda *args, **kwargs: bad_result)
+
+    run_ocr_research(pilot, research)
+    payload = json.loads((research / "ocr_runs/repeat_1/pilot-001/ocr_baseline_paddle.json").read_text())
+    assert payload["status"] == "blocked"
+    assert payload["blocked_reasons"] == [reason]
 
 
 def test_paddleocr_text_consumes_result_iterable(tmp_path: Path):

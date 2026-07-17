@@ -15,14 +15,19 @@ from medharness2.annotation.models import AnnotationCase
 from medharness2.utils.io import read_json
 from medharness2.config import AppConfig, PROJECT_ROOT, load_config
 from medharness2.llm_client import LLMClient
+from medharness2 import ocr as ocr_module
 from medharness2.ocr import extract_report_text
 from medharness2.ocr_benchmark import evaluate_ocr_candidates
+
+# Keep the renderer patchable for provider integration tests while resolving
+# it from the OCR module at runtime in production.
+_render_pdf_pages = ocr_module._render_pdf_pages
 
 
 OCR_CANDIDATES = (
     {"candidate_id": "ocr_primary_doubao", "provider": "chat_completions", "model": "doubao-seed-2-1-pro-260628", "role": "ocr_primary"},
     {"candidate_id": "ocr_verifier_qwen", "provider": "chat_completions", "model": "qwen-vl-ocr-latest", "role": "ocr_verifier"},
-    {"candidate_id": "ocr_baseline_paddle", "provider": "paddleocr", "model": "PaddleOCR-VL", "role": "ocr_baseline"},
+    {"candidate_id": "ocr_baseline_paddle", "provider": "paddleocr", "model": "PaddleOCR-VL-1.6", "role": "ocr_baseline"},
 )
 # Only OCR-producing routes are scored.  The Qwen route is an external
 # audit-only quality check and must not create a missing-candidate blocker in
@@ -78,6 +83,13 @@ def run_ocr_research(
             raise ValueError(f"pilot_case_id_unsafe_path:{case_id}")
         case = AnnotationCase.model_validate_json((pilot / row["annotation_path"]).read_text(encoding="utf-8"))
         source_pdf = source_index.get(case.source_case_sha256)
+        source_pdf_hash: str | None = None
+        source_pdf_hash_error = False
+        if source_pdf is not None:
+            try:
+                source_pdf_hash = _hash_file(source_pdf)
+            except (OSError, UnicodeError):
+                source_pdf_hash_error = True
         for repeat in (1, 2):
             primary_payload: dict[str, Any] | None = None
             for candidate in OCR_CANDIDATES:
@@ -92,7 +104,8 @@ def run_ocr_research(
                 )
                 if source_pdf is not None:
                     payload["source_pdf"] = str(source_pdf)
-                    payload["source_pdf_sha256"] = _hash_file(source_pdf)
+                    if source_pdf_hash is not None:
+                        payload["source_pdf_sha256"] = source_pdf_hash
                 readiness = route_status[candidate_id]
                 if candidate["role"] == "ocr_verifier":
                     # Qwen is an audit-only external multimodal check.  It is
@@ -101,6 +114,8 @@ def run_ocr_research(
                     reasons: list[str] = []
                     if source_pdf is None:
                         reasons.append("source_pdf_missing")
+                    elif source_pdf_hash_error:
+                        reasons.append("source_pdf_unreadable")
                     elif not readiness["ready"]:
                         reasons.append(readiness["reason"])
                     if primary_payload is not None:
@@ -131,9 +146,11 @@ def run_ocr_research(
                         payload["status"] = "blocked"
                         payload["quality_status"] = "blocked"
                         audit_blocked_count += 1
-                elif source_pdf is None:
+                elif source_pdf is None or source_pdf_hash_error:
                     payload["status"] = "blocked"
-                    payload["blocked_reasons"] = ["source_pdf_missing"]
+                    payload["blocked_reasons"] = [
+                        "source_pdf_unreadable" if source_pdf_hash_error else "source_pdf_missing"
+                    ]
                     blocked_count += 1
                 elif candidate["provider"] == "paddleocr":
                     try:
@@ -142,17 +159,32 @@ def run_ocr_research(
                             case_id=case_id,
                             output_dir=research / "ocr_cache" / candidate_id / f"repeat_{repeat}",
                             verifier_ready=route_status["ocr_verifier_qwen"]["ready"],
+                            verifier_client=client if route_status["ocr_verifier_qwen"]["ready"] else None,
+                            verifier_options=_verifier_candidate_options(cfg),
                         )
-                        quality = str((result.get("metadata") or {}).get("quality_status") or "blocked")
+                        result = _validate_paddleocr_result(result)
+                        metadata = result["metadata"]
+                        quality = metadata["quality_status"]
+                        audit = metadata.get("quality_audit")
+                        # A ready route is only configuration evidence.  A
+                        # Paddle transcription cannot pass without actual
+                        # page-level Qwen audit evidence in this result.
+                        if quality == "passed" and not _paddle_audit_passed(audit):
+                            quality = "review_required"
+                            metadata["quality_status"] = quality
+                            metadata["quality_gate"] = "verifier_audit_missing"
+                            result["warnings"].append("ocr_verifier_audit_missing")
                         if quality == "passed" and not route_status["ocr_verifier_qwen"]["ready"]:
                             quality = "review_required"
-                            result.setdefault("warnings", []).append("ocr_verifier_not_ready")
+                            metadata["quality_status"] = quality
+                            metadata["quality_gate"] = "verifier_not_ready"
+                            result["warnings"].append("ocr_verifier_not_ready")
                         payload.update({
                             "status": "succeeded" if quality == "passed" else quality,
-                            "text": result.get("text", "") if quality in {"passed", "review_required"} else "",
-                            "warnings": list(result.get("warnings") or []),
+                            "text": result["text"] if quality in {"passed", "review_required"} else "",
+                            "warnings": result["warnings"],
                             "quality_status": quality,
-                            "metadata": dict(result.get("metadata") or {}),
+                            "metadata": metadata,
                         })
                         if quality == "passed":
                             success_count += 1
@@ -164,8 +196,15 @@ def run_ocr_research(
                         payload["status"] = "blocked"
                         reason = str(exc) if str(exc) in {
                             "paddleocr_provider_unavailable",
+                            "paddle_runtime_unavailable",
                             "paddleocr_no_rendered_pages",
                             "paddleocr_empty_result",
+                            "paddleocr_invalid_result",
+                            "paddleocr_invalid_text",
+                            "paddleocr_invalid_warnings",
+                            "paddleocr_invalid_metadata",
+                            "paddleocr_invalid_quality_status",
+                            "paddleocr_invalid_quality_audit",
                         } else f"provider_error:{type(exc).__name__}"
                         payload["blocked_reasons"] = [reason]
                         payload["error"] = str(exc)[:500]
@@ -336,12 +375,22 @@ def _ocr_candidate_readiness(config: AppConfig) -> dict[str, dict[str, Any]]:
             try:
                 from paddleocr import PaddleOCRVL  # type: ignore[import-not-found,unused-ignore]
                 del PaddleOCRVL
-                result[candidate["candidate_id"]] = {"ready": True, "reason": ""}
             except Exception:
                 result[candidate["candidate_id"]] = {
                     "ready": False,
                     "reason": "paddleocr_provider_unavailable",
                 }
+                continue
+            try:
+                import paddle  # type: ignore[import-not-found,unused-ignore]
+                del paddle
+            except Exception:
+                result[candidate["candidate_id"]] = {
+                    "ready": False,
+                    "reason": "paddle_runtime_unavailable",
+                }
+            else:
+                result[candidate["candidate_id"]] = {"ready": True, "reason": ""}
             continue
         route = config.model_roles.get(candidate["role"])
         provider = str(route.provider if route and route.provider else "").lower()
@@ -371,6 +420,11 @@ def _candidate_model_name(config: AppConfig, candidate: dict[str, Any]) -> str:
     if route is not None and str(route.model or "").strip():
         return str(route.model)
     return str(candidate.get("model") or "")
+
+
+def _verifier_candidate_options(config: AppConfig) -> dict[str, Any]:
+    route = config.model_roles.get("ocr_verifier")
+    return route.as_call_options() if route is not None else {}
 
 
 def _blocked_ocr_sidecar(case: AnnotationCase, candidate: dict[str, Any], repeat: int, reason: str | None) -> dict[str, Any]:
@@ -433,6 +487,8 @@ def _run_paddleocr_candidate(
     case_id: str,
     output_dir: Path,
     verifier_ready: bool,
+    verifier_client: Any | None = None,
+    verifier_options: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Run the optional official PaddleOCR pipeline on rendered PDF pages.
 
@@ -443,8 +499,11 @@ def _run_paddleocr_candidate(
         from paddleocr import PaddleOCRVL  # type: ignore[import-not-found]
     except Exception as exc:
         raise RuntimeError("paddleocr_provider_unavailable") from exc
-    from medharness2.ocr import _render_pdf_pages
-
+    try:
+        import paddle  # type: ignore[import-not-found]
+        del paddle
+    except Exception as exc:
+        raise RuntimeError("paddle_runtime_unavailable") from exc
     if not report_pdf.is_file():
         raise RuntimeError("paddleocr_source_pdf_missing")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -455,6 +514,8 @@ def _run_paddleocr_candidate(
         raise RuntimeError("paddleocr_no_rendered_pages")
     engine = PaddleOCRVL(pipeline_version="v1.6")
     texts: list[str] = []
+    page_audits: list[dict[str, Any]] = []
+    empty_page_seen = False
     try:
         markdown_root = output_dir / f"{case_id}_markdown"
         markdown_root.mkdir(parents=True, exist_ok=True)
@@ -478,6 +539,47 @@ def _run_paddleocr_candidate(
             )
             if page_text:
                 texts.append(page_text)
+                if verifier_client is not None and verifier_ready:
+                    audit_prompt = (
+                        "Audit this OCR transcription against the supplied report page. "
+                        "Return JSON only with status (agree/disagreement), evidence spans, and short reason. "
+                        "Do not rewrite or provide a replacement transcription.\n\nOCR:\n" + page_text
+                    )
+                    try:
+                        raw_audit = verifier_client.call(
+                            audit_prompt,
+                            image_path=page,
+                            response_format="json",
+                            payload_classification="raw_medical_document",
+                            **(verifier_options or {}),
+                        )
+                        if isinstance(raw_audit, dict):
+                            audit = dict(raw_audit)
+                        elif isinstance(raw_audit, str):
+                            parsed = json.loads(raw_audit)
+                            if not isinstance(parsed, dict):
+                                raise TypeError("verifier response must be a JSON object")
+                            audit = parsed
+                        else:
+                            raise TypeError("verifier response must be a JSON object")
+                        status = str(audit.get("status") or "").strip().lower()
+                        if status not in {"agree", "disagreement"}:
+                            raise ValueError("verifier status must be agree or disagreement")
+                        audit["status"] = status
+                    except json.JSONDecodeError:
+                        audit = {"status": "invalid_verifier_response"}
+                    except Exception as exc:
+                        audit = {
+                            "status": "verifier_failed",
+                            "error_type": type(exc).__name__,
+                            "error": str(exc)[:500],
+                        }
+                    page_audits.append({"page_index": page_index, **audit})
+            else:
+                # An omitted page is not covered by agreement on the other
+                # pages.  Keep the final gate review_required even if Qwen
+                # agrees with every non-empty page.
+                empty_page_seen = True
     finally:
         close = getattr(engine, "close", None)
         if callable(close):
@@ -498,8 +600,14 @@ def _run_paddleocr_candidate(
             "provider": "paddleocr",
             "model": "PaddleOCR-VL-1.6",
             "role": "ocr_baseline",
-            "quality_status": "passed" if verifier_ready else "review_required",
-            "quality_gate": "verifier_audit" if verifier_ready else "verifier_not_run",
+            "quality_status": (
+                "passed"
+                if not empty_page_seen and _paddle_audit_passed({"pages": page_audits})
+                else "review_required"
+            ),
+            "quality_gate": "verifier_audit" if page_audits else "verifier_not_run",
+            "quality_audit": ({"pages": page_audits} if page_audits else None),
+            "empty_page_count": int(empty_page_seen),
             "page_count": len(pages),
             "pipeline_version": "v1.6",
             "paddleocr_version": package_version,
@@ -547,11 +655,15 @@ def _paddleocr_text(
                     return text
         blocks = result.get("parsing_res_list")
         if isinstance(blocks, list):
-            text = "\n".join(
-                str(block.get("block_content")).strip()
-                for block in blocks
-                if isinstance(block, dict) and isinstance(block.get("block_content"), str)
-            )
+            block_texts: list[str] = []
+            for block in blocks:
+                if isinstance(block, dict):
+                    value = block.get("block_content", block.get("content"))
+                else:
+                    value = getattr(block, "block_content", getattr(block, "content", None))
+                if isinstance(value, str) and value.strip():
+                    block_texts.append(value.strip())
+            text = "\n".join(block_texts)
             if text:
                 return text
         markdown_attr = getattr(result, "markdown", None)
@@ -581,7 +693,15 @@ def _paddleocr_text(
             return text
     save_to_markdown = getattr(result, "save_to_markdown", None)
     if markdown_dir is not None and callable(save_to_markdown):
-        before = set(markdown_dir.glob("*.md"))
+        markdown_dir.mkdir(parents=True, exist_ok=True)
+        # The official exporter may overwrite a prior `page.md`.  Remove
+        # generated leftovers first so a failed/empty export cannot return
+        # stale text from the previous invocation.
+        for stale in markdown_dir.rglob("*.md"):
+            try:
+                stale.unlink()
+            except OSError:
+                continue
         try:
             returned = save_to_markdown(save_path=markdown_dir)
         except Exception:
@@ -589,11 +709,17 @@ def _paddleocr_text(
         candidates: list[Path] = []
         if isinstance(returned, (str, Path)):
             candidates.append(Path(returned))
-        candidates.extend(sorted(markdown_dir.glob("*.md")))
+        candidates.extend(sorted(markdown_dir.rglob("*.md")))
+        root = markdown_dir.resolve()
         for candidate in candidates:
             if not candidate.is_absolute():
                 candidate = markdown_dir / candidate
-            if candidate in before or not candidate.is_file():
+            try:
+                candidate = candidate.resolve()
+                candidate.relative_to(root)
+            except (OSError, ValueError):
+                continue
+            if not candidate.is_file():
                 continue
             try:
                 text = candidate.read_text(encoding="utf-8").strip()
@@ -602,6 +728,48 @@ def _paddleocr_text(
             if text:
                 return text
     return ""
+
+
+def _paddle_audit_passed(audit: Any) -> bool:
+    """Require explicit page-level Qwen agreement before Paddle can pass."""
+    if not isinstance(audit, dict):
+        return False
+    pages = audit.get("pages")
+    if isinstance(pages, list):
+        statuses = [
+            str(item.get("status") or "").strip().lower()
+            for item in pages
+            if isinstance(item, dict)
+        ]
+        return bool(statuses) and all(status == "agree" for status in statuses)
+    return str(audit.get("status") or "").strip().lower() == "agree"
+
+
+def _validate_paddleocr_result(result: Any) -> dict[str, Any]:
+    """Validate the adapter contract before writing a candidate sidecar."""
+    if not isinstance(result, dict):
+        raise RuntimeError("paddleocr_invalid_result")
+    text = result.get("text")
+    if not isinstance(text, str):
+        raise RuntimeError("paddleocr_invalid_text")
+    if not text.strip():
+        raise RuntimeError("paddleocr_empty_result")
+    warnings = result.get("warnings", [])
+    if not isinstance(warnings, list) or any(not isinstance(item, str) for item in warnings):
+        raise RuntimeError("paddleocr_invalid_warnings")
+    metadata = result.get("metadata")
+    if not isinstance(metadata, dict):
+        raise RuntimeError("paddleocr_invalid_metadata")
+    quality_status = metadata.get("quality_status")
+    if quality_status not in {"passed", "review_required", "blocked"}:
+        raise RuntimeError("paddleocr_invalid_quality_status")
+    audit = metadata.get("quality_audit")
+    if audit is not None and not isinstance(audit, dict):
+        raise RuntimeError("paddleocr_invalid_quality_audit")
+    for key in ("provider", "model", "role", "quality_gate"):
+        if key in metadata and not isinstance(metadata[key], str):
+            raise RuntimeError("paddleocr_invalid_metadata")
+    return {"text": text, "warnings": list(warnings), "metadata": dict(metadata)}
 
 
 def _safe_case_component(value: str) -> bool:
