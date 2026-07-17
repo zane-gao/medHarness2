@@ -9,6 +9,7 @@ import pytest
 
 from medharness2.config import AppConfig, LLMConfig, ModelRoleConfig
 from medharness2.ocr import extract_report_text
+from medharness2.ocr import _cache_metadata_valid
 from medharness2.ocr_benchmark import _aggregate, evaluate_ocr_candidates
 
 
@@ -50,6 +51,13 @@ def test_ocr_aggregate_excludes_non_finite_metric_rows():
         "negation_token_accuracy_mean": 1.0,
         "truncation_count": 0,
     }
+
+
+@pytest.mark.parametrize("field,bad", [("warnings", "bad"), ("verifier", []), ("quality_audit", "bad"), ("quality_status", "unknown")])
+def test_ocr_cache_sidecar_rejects_malformed_metadata(field, bad):
+    payload = {"warnings": [], "verifier": {"configured": False}, "quality_audit": None, "quality_status": "passed"}
+    payload[field] = bad
+    assert _cache_metadata_valid(payload) is False
 
 
 def test_scanned_pdf_ocr_is_page_ordered_and_records_provenance(tmp_path: Path):

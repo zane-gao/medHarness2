@@ -62,7 +62,7 @@ def extract_report_text(
     source_page_count = _pdf_page_count(pdf)
     if cache_path.exists() and cache_path.read_text(encoding="utf-8").strip() and not force:
         cached_meta = _read_meta(meta_path)
-        if _cache_is_compatible(
+        if _cache_metadata_valid(cached_meta) and _cache_is_compatible(
             cached_meta,
             case_id=case_id,
             source_pdf_sha256=source_pdf_sha256,
@@ -344,6 +344,28 @@ def _cache_is_compatible(
         str(cached_verifier.get("provider") or "").lower() != expected_verifier["provider"]
         or str(cached_verifier.get("model") or "") != expected_verifier["model"]
     ):
+        return False
+    return True
+
+
+def _cache_metadata_valid(meta: dict[str, Any]) -> bool:
+    warnings = meta.get("warnings", [])
+    if not isinstance(warnings, list) or any(not isinstance(item, str) for item in warnings):
+        return False
+    verifier = meta.get("verifier", {})
+    if not isinstance(verifier, dict):
+        return False
+    if "configured" in verifier and not isinstance(verifier["configured"], bool):
+        return False
+    audit = meta.get("quality_audit")
+    if audit is not None and not isinstance(audit, dict):
+        return False
+    if isinstance(audit, dict) and "pages" in audit:
+        pages = audit["pages"]
+        if not isinstance(pages, list) or any(not isinstance(page, dict) for page in pages):
+            return False
+    status = meta.get("quality_status")
+    if status is not None and status not in {"passed", "review_required", "blocked"}:
         return False
     return True
 
