@@ -398,6 +398,8 @@ def experiments_run(request: ExperimentRunRequest) -> dict[str, Any]:
 def figures_build(request: FiguresBuildRequest) -> dict[str, Any]:
     try:
         result = build_figures(request.experiment_dir, request.output_dir)
+        result = _result_mapping(result, "figures.result")
+        figure_count = _count_or_zero(result.get("figure_count"), "figure_count")
     except Exception as exc:
         _record_registry(
             request.output_dir,
@@ -409,7 +411,7 @@ def figures_build(request: FiguresBuildRequest) -> dict[str, Any]:
             warnings=[f"{type(exc).__name__}: {exc}"],
         )
         raise HTTPException(status_code=500, detail=f"figures_build_failed:{type(exc).__name__}") from exc
-    metrics = {"figure_count": result["figure_count"]}
+    metrics = {"figure_count": figure_count}
     outputs = {
         "figure_dir": request.output_dir,
         "figure_manifest": str(Path(request.output_dir) / "figure_manifest.json"),
@@ -433,7 +435,7 @@ def figures_build(request: FiguresBuildRequest) -> dict[str, Any]:
         )
     return {
         "output_dir": request.output_dir,
-        "summary": {"figures": result["figure_count"]},
+        "summary": {"figures": figure_count},
         "result": result,
     }
 
@@ -443,6 +445,9 @@ def dashboard_build(request: DashboardBuildRequest) -> dict[str, Any]:
     try:
         result = build_dashboard(request.run_dir, request.output_path)
         summary = build_dashboard_summary(request.run_dir, registry_entry_count_delta=1)
+        result = _result_mapping(result, "dashboard.result")
+        result_summary = _result_mapping(result.get("summary"), "dashboard.summary")
+        summary = _result_mapping(summary, "dashboard.registry_summary")
     except Exception as exc:
         _record_registry(
             request.run_dir,
@@ -464,7 +469,7 @@ def dashboard_build(request: DashboardBuildRequest) -> dict[str, Any]:
     )
     return {
         "output_path": request.output_path,
-        "summary": result["summary"],
+        "summary": result_summary,
         "result": result,
     }
 
@@ -701,6 +706,13 @@ def merge_batches(request: MergeBatchesRequest) -> dict[str, Any]:
             expected_cases=request.expected_cases,
             require_real_ocr=request.require_real_ocr,
         )
+        result = _result_mapping(result, "merge_batches.result")
+        merge_case_count = _count_or_zero(result.get("case_count"), "case_count")
+        merge_failed_case_count = _count_or_zero(result.get("failed_case_count"), "failed_case_count")
+        merge_per_reader = _result_mapping(result.get("per_reader"), "merge_batches.per_reader")
+        validation = _result_mapping(validation, "merge_batches.validation")
+        validation_passed = _result_bool(validation.get("passed"), "merge_batches.validation.passed")
+        validation_errors = _result_string_list(validation.get("errors"), "merge_batches.validation.errors")
     except Exception as exc:
         _record_registry(
             request.output_dir,
@@ -712,25 +724,24 @@ def merge_batches(request: MergeBatchesRequest) -> dict[str, Any]:
             warnings=[f"{type(exc).__name__}: {exc}"],
         )
         raise HTTPException(status_code=500, detail=f"merge_batches_failed:{type(exc).__name__}") from exc
-    errors = list(validation.get("errors") or [])
     _record_registry(
         request.output_dir,
         stage="workflow.merge-batches",
-        status="passed" if validation.get("passed") else "failed",
+        status="passed" if validation_passed else "failed",
         inputs={"batch_results": request.batch_result_paths},
         outputs={"workflow2": str(Path(request.output_dir) / "workflow2.json"), "workflow3": str(Path(request.output_dir) / "workflow3.json")},
-        metrics={"case_count": result["case_count"], "failed_case_count": result["failed_case_count"], "validation_passed": bool(validation.get("passed"))},
-        warnings=errors,
+        metrics={"case_count": merge_case_count, "failed_case_count": merge_failed_case_count, "validation_passed": validation_passed},
+        warnings=validation_errors,
     )
     return {
         "output_dir": request.output_dir,
         "summary": {
-            "cases": result["case_count"],
-            "failed_cases": result["failed_case_count"],
-            "readers": len(result["per_reader"]),
-            "validation_passed": validation["passed"],
-            "validation_errors": validation["errors"],
-            "errors": list(validation.get("errors") or []),
+            "cases": merge_case_count,
+            "failed_cases": merge_failed_case_count,
+            "readers": len(merge_per_reader),
+            "validation_passed": validation_passed,
+            "validation_errors": validation_errors,
+            "errors": validation_errors,
         },
         "result": result,
         "validation": validation,

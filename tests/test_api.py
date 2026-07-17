@@ -168,6 +168,54 @@ def test_api_rejects_malformed_remaining_workflow_results(
     assert registry["entries"][-1]["status"] == "failed"
 
 
+@pytest.mark.parametrize(
+    ("route", "payload", "patches", "malformed", "detail_prefix", "registry_dir"),
+    [
+        (
+            "/workflow/merge-batches",
+            {"batch_result_paths": ["batch.json"], "output_dir": "merged"},
+            {"merge_batch_results": {"case_count": "1", "failed_case_count": 0, "per_reader": {}}},
+            {"passed": True, "errors": []},
+            "merge_batches_failed",
+            "output_dir",
+        ),
+        (
+            "/figures/build",
+            {"experiment_dir": "experiments", "output_dir": "figures"},
+            {"build_figures": {"figure_count": "1"}},
+            None,
+            "figures_build_failed",
+            "output_dir",
+        ),
+        (
+            "/dashboard/build",
+            {"run_dir": "run", "output_path": "dashboard.html"},
+            {"build_dashboard": {"summary": "bad"}, "build_dashboard_summary": {}},
+            None,
+            "dashboard_build_failed",
+            "run_dir",
+        ),
+    ],
+)
+def test_api_rejects_malformed_render_and_merge_results(
+    tmp_path: Path, monkeypatch, route, payload, patches, malformed, detail_prefix, registry_dir
+):
+    payload = {
+        key: str(tmp_path / value) if key in {"output_dir", "output_path", "run_dir", "experiment_dir"} else [str(tmp_path / item) for item in value]
+        if key == "batch_result_paths" else value
+        for key, value in payload.items()
+    }
+    for name, value in patches.items():
+        monkeypatch.setattr(api_module, name, lambda *args, _value=value, **kwargs: _value)
+    if route == "/workflow/merge-batches":
+        monkeypatch.setattr(api_module, "validate_sample_run", lambda *args, **kwargs: malformed)
+    response = TestClient(app, raise_server_exceptions=False).post(route, json=payload)
+    assert response.status_code == 500
+    assert response.json()["detail"] == f"{detail_prefix}:ValueError"
+    registry_path = Path(payload[registry_dir]) / "run_registry.json"
+    assert json.loads(registry_path.read_text(encoding="utf-8"))["entries"][-1]["status"] == "failed"
+
+
 def test_api_single_case_accepts_report_text(tmp_path: Path):
     config_path = tmp_path / "api_config.yaml"
     config_path.write_text(
