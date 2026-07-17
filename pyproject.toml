@@ -33,6 +33,9 @@ test = [
   "PyMuPDF>=1.24",
   "pytest>=8.0",
 ]
+ocr-paddle = [
+  "paddleocr>=3.0",
+]
 
 [project.scripts]
 medharness2 = "medharness2.cli:main"

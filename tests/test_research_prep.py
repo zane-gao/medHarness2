@@ -279,7 +279,42 @@ def test_run_ocr_research_labels_unintegrated_paddle_provider(tmp_path: Path, mo
 
     sidecar = research / "ocr_runs" / "repeat_1" / "pilot-001" / "ocr_baseline_paddle.json"
     payload = json.loads(sidecar.read_text(encoding="utf-8"))
-    assert payload["blocked_reasons"] == ["paddleocr_provider_not_integrated"]
+    assert payload["blocked_reasons"] == ["paddleocr_provider_unavailable"]
+
+
+def test_run_ocr_research_uses_injected_paddle_adapter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    research = tmp_path / "research"
+    prepare_research_manifests(pilot, research)
+    source_pdf = tmp_path / "report.pdf"
+    source_pdf.write_bytes(b"placeholder")
+    monkeypatch.setattr(research_prep, "_build_source_pdf_index", lambda _root: {"a" * 64: source_pdf})
+    monkeypatch.setattr(
+        research_prep,
+        "_ocr_candidate_readiness",
+        lambda _config: {
+            "ocr_primary_doubao": {"ready": False, "reason": "missing_api_key"},
+            "ocr_verifier_qwen": {"ready": False, "reason": "missing_api_key"},
+            "ocr_baseline_paddle": {"ready": True, "reason": ""},
+        },
+    )
+    monkeypatch.setattr(
+        research_prep,
+        "_run_paddleocr_candidate",
+        lambda *args, **kwargs: {"text": "FINDINGS: normal\nIMPRESSION: normal", "warnings": [], "metadata": {"quality_status": "passed"}},
+    )
+
+    result = run_ocr_research(pilot, research)
+
+    payload = json.loads(
+        (research / "ocr_runs" / "repeat_1" / "pilot-001" / "ocr_baseline_paddle.json").read_text()
+    )
+    assert payload["status"] == "succeeded"
+    assert payload["model_key"] == "ocr_baseline_paddle"
+    assert result["success_count"] == 2
 
 
 def test_run_ocr_research_marks_verifier_audit_without_scoring_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -298,7 +333,7 @@ def test_run_ocr_research_marks_verifier_audit_without_scoring_it(tmp_path: Path
         lambda _config: {
             "ocr_primary_doubao": {"ready": True, "reason": ""},
             "ocr_verifier_qwen": {"ready": True, "reason": ""},
-            "ocr_baseline_paddle": {"ready": False, "reason": "paddleocr_provider_not_integrated"},
+            "ocr_baseline_paddle": {"ready": False, "reason": "paddleocr_provider_unavailable"},
         },
     )
 

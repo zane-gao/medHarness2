@@ -88,6 +88,8 @@
 
 > **2026-07-17 OCR 冻结 manifest 增量**：`research prepare-manifests` 现在额外生成 `ocr_benchmark_repeat_1.json` 和 `ocr_benchmark_repeat_2.json`，可直接交给 `ocr-benchmark`；每个 repeat 预注册北川 gold、三候选路由和输出 sidecar 路径。候选尚未落盘时评测器按设计返回 `blocked`。同时修复长篇中文 inline gold 被误当路径导致 `File name too long` 崩溃的问题，改为安全返回文本/阻塞结果。
 
+> **2026-07-17 OCR 研究执行收尾**：新增 `research run-ocr` 的执行状态回写与 route provenance 同步。实际核验 `annotation/pilot10/` 的 10 个 `source_case_sha256` 均能唯一映射到 `medHarness/data/sample_data_2026-06-05` 中的真实 `report.pdf`；无凭据/无本地 PaddleOCR 运行时的执行会对 Doubao、Paddle 侧车明确阻塞，Qwen audit-only 侧车单独记录为 verifier 未就绪，不进入 OCR winner 比较。自定义 provider/model 会同步写回 repeat benchmark 路由，避免静态候选模型名造成错误 provenance blocker。
+
 > **2026-07-17 真实资产路由 smoke 增量**：使用当前 A40 挂载路径 `/nfsdata_a40/isbi/gzp/medHarness/data/sample_data_2026-06-05` 和 `config/dmx_strong.yaml` 实测 `workflow preflight --limit 52` 通过：52 例，`cxr/ct/mri=20/25/7`，52/52 有本地候选，0 fallback，494 fresh + 175 artifact 本地候选。唯一 warning 为 `ocr_not_ready:missing_llm_api_key`；路由门禁已验证，真实 OCR provider 仍保持独立阻塞。
 
 > **2026-07-17 OCR 双路 readiness 增量**：preflight 现在同时检查 `ocr_primary` 与已配置的 `ocr_verifier`。主 OCR 可用但 verifier 缺凭据时，结果保留主路由兼容性，同时写出 `ocr.verifier.status=missing_api_key` 和 `ocr_verifier_not_ready:*`；`--require-real-ocr` 会进一步返回 `real_ocr_verifier_unavailable`，不会把缺少质量抽查误报成真实 OCR 已就绪。

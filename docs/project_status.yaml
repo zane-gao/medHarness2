@@ -5,9 +5,9 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: 39e7fbd5f379c68e67cc9053bd0b9b749be986fc
+  git_sha: 07a2c97
   dirty_worktree: false
-  pytest_passed: 1762
+  pytest_passed: 1763
   pytest_warnings: 20
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -81,13 +81,13 @@ workstreams:
     next_gate: Freeze repeated-run reliability targets, complete dual-reader gold labels, and benchmark every model role before a formal case run.
   ocr:
     status: in_progress
-    summary: OCR 现已升级为逐页 300 DPI 图像管线，记录页级 hash、provider/model/role、页序、墨量、空白页跳过和疑似截断；缓存 sidecar 绑定 case/source/provider/model/role，并新增缓存文本 `text_sha256` 与质量摘要一致性校验，模型变更、文本替换或 verifier 状态矛盾不会误复用旧 OCR。配置声明 `ocr_verifier` 但调用方未接入 verifier client 时，结果强制降为 `review_required`。新增 `research run-ocr`，按冻结 10 例双重复写入可审计 sidecar 并自动回写两次 benchmark；缺凭据、源 PDF 缺失、provider 异常或质量失败均 fail-closed。Doubao 是 primary OCR 候选，Qwen 仅 audit-only，不进入 winner；PaddleOCR-VL 已登记但 adapter 尚未接入。北川参考报告作为当前文本 benchmark gold；仍必须在真实 provider 输出上按 clinical CER、数字/否定词、截断率和重测一致性选择 production winner。
+    summary: OCR 现已升级为逐页 300 DPI 图像管线，记录页级 hash、provider/model/role、页序、墨量、空白页跳过和疑似截断；缓存 sidecar 绑定 case/source/provider/model/role，并新增缓存文本 `text_sha256` 与质量摘要一致性校验，模型变更、文本替换或 verifier 状态矛盾不会误复用旧 OCR。配置声明 `ocr_verifier` 但调用方未接入 verifier client 时，结果强制降为 `review_required`。新增 `research run-ocr`，按冻结 10 例双重复写入可审计 sidecar，并在执行后回写两次 benchmark、实际 route provenance 与 audit-only 状态；当前真实源映射 10/10，缺凭据、源 PDF 缺失、provider 异常或质量失败均 fail-closed。Doubao 是 primary OCR 候选，Qwen 仅 audit-only，不进入 winner；已接入可选 PaddleOCR-VL adapter，未安装 `paddleocr` 时明确为 `paddleocr_provider_unavailable`。北川参考报告作为当前文本 benchmark gold；仍必须在真实 provider 输出上按 clinical CER、数字/否定词、截断率和重测一致性选择 production winner。
     evidence_paths:
       - docs/superpowers/specs/2026-07-11-dmx-doubao-ocr-benchmark-design.md
       - outputs/ocr_quality_audit_qwen3vl4b_20260711/summary.json
       - outputs/ocr_quality_audit_qwen3vl4b_20260711/ocr_completeness_audit.png
-    implementation_update: "新增 research run-ocr：按冻结 10 例双重复写入可审计 sidecar 并自动回写两次 benchmark；缺凭据、源 PDF 缺失、provider 异常或质量失败均 fail-closed。Doubao 是 primary 候选，Qwen 仅 audit-only，不进入 winner；PaddleOCR-VL 已登记但 adapter 尚未接入。"
-    next_gate: 提供 DMX_API_KEY 后运行 `research run-ocr` 完成 Doubao 双次主 OCR；接入 PaddleOCR-VL adapter 后再纳入 baseline 比较；Qwen 只输出 disagreement audit artifact，不能直接成为 winner。
+    implementation_update: "新增 research run-ocr：按冻结 10 例双重复写入可审计 sidecar，并在执行后回写两次 benchmark、实际 route provenance 与 audit-only 状态；缺凭据、源 PDF 缺失、provider 异常或质量失败均 fail-closed。Doubao 是 primary 候选，Qwen 仅 audit-only，不进入 winner；PaddleOCR-VL adapter 已接入为可选本地 baseline。"
+    next_gate: 提供 DMX_API_KEY 并安装可用 PaddleOCR 运行时后执行 `research run-ocr`；Qwen 只输出 disagreement audit artifact，不能直接成为 winner。
   routing:
     status: validated
     summary: "路由器已改为三种主要模态（cxr/ct/mri）硬约束；body_part 不再阻塞兼容模型，只作为候选排序信号。配置中的 default_models wildcard 现在会按模态展开全部兼容候选，不再把 wildcard 当作普通模型名；当前挂载路径上的完整 52 例 dmx_strong preflight 已实测通过：cxr/ct/mri=20/25/7、52/52 有本地候选、0 fallback，另有 494 个 fresh 和 175 个 artifact 本地候选。preflight 对存在但空病例目录现在 fail-closed 返回 no_cases_discovered，不会把 cases=0 误报为通过。VLM 模态识别补充 MRI/CT/X-ray 常见句式归一化，并覆盖 DICOM、图片扩展名和 unknown 路径测试。"
@@ -127,7 +127,7 @@ workstreams:
       - tests/test_ocr_pipeline.py
       - tests/test_live_smoke.py
       - docs/ocr_model_selection_20260715.md
-    implementation_update: "research run-ocr 已回写逐病例 sidecar 与两次 benchmark 结果；候选身份与真实 provider 模型身份分离，Qwen audit-only 不进入 winner；候选缺失、源资产缺失、凭据缺失、Paddle adapter 缺失或损坏 sidecar 均明确 blocked。"
+    implementation_update: "research run-ocr 已回写逐病例 sidecar、两次 benchmark 结果、实际 route provenance 和 audit-only 状态；候选身份与真实 provider 模型身份分离，Qwen audit-only 不进入 winner；候选缺失、源资产缺失、凭据缺失、Paddle adapter 缺失或损坏 sidecar 均明确 blocked。"
     next_gate: 将真实 provider 输出写入两个 evaluator-ready repeat manifest，运行至少两个 OCR 候选各两次，并执行 `medharness2 live-smoke --config config/dmx_strong.yaml`；强配置的 hazard reviewer 已默认执行双次一致性重测。
   generation:
     status: in_progress

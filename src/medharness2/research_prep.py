@@ -132,13 +132,32 @@ def run_ocr_research(
                     payload["blocked_reasons"] = ["source_pdf_missing"]
                     blocked_count += 1
                 elif candidate["provider"] == "paddleocr":
-                    # The baseline candidate is declared for comparability,
-                    # but this runner has no PaddleOCR adapter yet.  Keep the
-                    # integration gap explicit instead of reporting a
-                    # misleading missing-key failure.
-                    payload["status"] = "blocked"
-                    payload["blocked_reasons"] = ["paddleocr_provider_not_integrated"]
-                    blocked_count += 1
+                    try:
+                        result = _run_paddleocr_candidate(source_pdf, case_id=case_id, output_dir=research / "ocr_cache" / candidate_id / f"repeat_{repeat}")
+                        quality = str((result.get("metadata") or {}).get("quality_status") or "blocked")
+                        payload.update({
+                            "status": "succeeded" if quality == "passed" else quality,
+                            "text": result.get("text", "") if quality in {"passed", "review_required"} else "",
+                            "warnings": list(result.get("warnings") or []),
+                            "quality_status": quality,
+                            "metadata": dict(result.get("metadata") or {}),
+                        })
+                        if quality == "passed":
+                            success_count += 1
+                        elif quality == "review_required":
+                            review_count += 1
+                        else:
+                            blocked_count += 1
+                    except Exception as exc:
+                        payload["status"] = "blocked"
+                        reason = str(exc) if str(exc) in {
+                            "paddleocr_provider_unavailable",
+                            "paddleocr_no_rendered_pages",
+                            "paddleocr_empty_result",
+                        } else f"provider_error:{type(exc).__name__}"
+                        payload["blocked_reasons"] = [reason]
+                        payload["error"] = str(exc)[:500]
+                        blocked_count += 1
                 elif not readiness["ready"]:
                     payload["status"] = "blocked"
                     payload["blocked_reasons"] = [readiness["reason"]]
@@ -301,6 +320,17 @@ def _build_source_pdf_index(source_root: Path) -> dict[str, Path]:
 def _ocr_candidate_readiness(config: AppConfig) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     for candidate in OCR_CANDIDATES:
+        if candidate["provider"] == "paddleocr":
+            try:
+                from paddleocr import PaddleOCR  # type: ignore[import-not-found,unused-ignore]
+                del PaddleOCR
+                result[candidate["candidate_id"]] = {"ready": True, "reason": ""}
+            except ImportError:
+                result[candidate["candidate_id"]] = {
+                    "ready": False,
+                    "reason": "paddleocr_provider_unavailable",
+                }
+            continue
         route = config.model_roles.get(candidate["role"])
         provider = str(route.provider if route and route.provider else "").lower()
         api_env = str(route.api_key_env if route else "")
@@ -383,6 +413,77 @@ def _audit_quality_status(audit: Any) -> str:
     if any(status in {"disagreement", "verifier_failed", "invalid_verifier_response"} for status in statuses):
         return "review_required"
     return "blocked"
+
+
+def _run_paddleocr_candidate(
+    report_pdf: Path,
+    *,
+    case_id: str,
+    output_dir: Path,
+) -> dict[str, Any]:
+    """Run the optional official PaddleOCR pipeline on rendered PDF pages.
+
+    PaddleOCR is intentionally an optional dependency.  Missing packages or
+    unsupported API responses become explicit blocked results at the caller.
+    """
+    try:
+        from paddleocr import PaddleOCR  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise RuntimeError("paddleocr_provider_unavailable") from exc
+    from medharness2.ocr import _render_pdf_pages
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    page_dir = output_dir / f"{case_id}_pages"
+    pages = _render_pdf_pages(report_pdf, page_dir)
+    if not pages:
+        raise RuntimeError("paddleocr_no_rendered_pages")
+    try:
+        engine = PaddleOCR(lang="ch")
+    except TypeError:
+        engine = PaddleOCR()
+    texts: list[str] = []
+    for page in pages:
+        result = engine.predict(page)
+        page_text = _paddleocr_text(result)
+        if page_text:
+            texts.append(page_text)
+    text = "\n\n".join(texts).strip()
+    if not text:
+        raise RuntimeError("paddleocr_empty_result")
+    return {
+        "text": text,
+        "warnings": [],
+        "metadata": {
+            "provider": "paddleocr",
+            "model": "PaddleOCR-VL",
+            "role": "ocr_baseline",
+            "quality_status": "passed",
+            "page_count": len(pages),
+        },
+    }
+
+
+def _paddleocr_text(result: Any) -> str:
+    """Extract text from current/legacy PaddleOCR result shapes."""
+    values: list[str] = []
+    items = result if isinstance(result, (list, tuple)) else [result]
+    for item in items:
+        if isinstance(item, dict):
+            for key in ("rec_texts", "texts", "text"):
+                raw = item.get(key)
+                if isinstance(raw, str):
+                    values.append(raw)
+                elif isinstance(raw, list):
+                    values.extend(value for value in raw if isinstance(value, str))
+        elif hasattr(item, "json"):
+            try:
+                raw_json = item.json() if callable(item.json) else item.json
+                nested = _paddleocr_text(raw_json)
+                if nested:
+                    values.append(nested)
+            except Exception:
+                continue
+    return "\n".join(value.strip() for value in values if value.strip())
 
 
 def _persist_ocr_run_state(

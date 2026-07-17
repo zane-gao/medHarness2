@@ -14,7 +14,7 @@
 | 候选 | 角色 | 当前状态 | 采用理由 | 不能直接推出的结论 |
 | --- | --- | --- | --- | --- |
 | Doubao Seed（Ark/DMX 精确模型 ID） | 主 OCR 候选 | 已接入配置，未完成北川真实 benchmark | 用户优先建议；OpenAI-compatible 路由便于复用逐页管线 | 不能仅凭模型名称宣布最强 |
-| PaddleOCR-VL 系列（当前公开文档/版本） | 独立本地/服务候选 | 已列入候选，尚未接入本仓库 provider | 官方项目提供文档解析管线和可部署推理路径；适合与 VLM 主 OCR 做独立比较 | 通用文档 benchmark 不等于放射报告临床 CER |
+| PaddleOCR-VL 系列（当前公开文档/版本） | 独立本地/服务候选 | 已接入可选 `ocr-paddle` provider adapter；未安装依赖时 fail-closed | 官方项目提供文档解析管线和可部署推理路径；适合与 VLM 主 OCR 做独立比较 | 通用文档 benchmark 不等于放射报告临床 CER |
 | PP-OCRv5/后续 PP-OCR 系列 | 专用 OCR 候选 | 已列入候选，尚未接入本仓库 provider | 专用文本识别路线，适合作为低成本基线和数字/标点对照 | 专用 OCR 不能自动完成版面/医学语义恢复 |
 | Qwen OCR/VLM verifier | 独立审计候选 | 已接入 `ocr_verifier` 配置，未完成真实 smoke | 与主 OCR 分离，能做页级差异审计 | verifier 一致不等于 gold 正确 |
 | Gemini Document Understanding | 可选外部审计候选 | 未接入 | 官方文档支持 PDF 原生视觉理解，适合抽查整页上下文 | 外部文档理解结果不能替代冻结集评分 |
