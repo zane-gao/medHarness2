@@ -4,7 +4,9 @@ import hashlib
 import json
 from pathlib import Path
 
-from medharness2.experiment_protocols import load_experiment_protocols
+import pytest
+
+from medharness2.experiment_protocols import evaluate_readiness, load_experiment_protocols, load_validation_evidence
 from medharness2.workflows.experiments import build_experiment_results
 
 
@@ -144,6 +146,24 @@ def test_passing_flag_without_existing_evidence_path_stays_pilot(tmp_path: Path)
     item = next(row for row in result["experiments"] if row["id"] == "radiologist_evaluation")
 
     assert item["status"] == "pilot"
+
+
+@pytest.mark.parametrize("payload", [{"experiments": []}, {"experiments": {"radiologist_evaluation": []}}])
+def test_validation_evidence_rejects_non_mapping_sections(tmp_path: Path, payload):
+    (tmp_path / "experiment_validation.json").write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="experiments"):
+        load_validation_evidence(tmp_path)
+
+
+def test_readiness_rejects_non_mapping_gate_payload(tmp_path: Path):
+    protocol = load_experiment_protocols()["radiologist_evaluation"]
+    with pytest.raises(ValueError, match="gates"):
+        evaluate_readiness(
+            protocol,
+            evidence_status="available",
+            validation_evidence={protocol.id: {"gates": []}},
+            run_dir=tmp_path,
+        )
 
 
 def _minimal_radiologist_run(root: Path) -> Path:

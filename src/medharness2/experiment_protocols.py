@@ -83,7 +83,15 @@ def load_validation_evidence(run_dir: str | Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     payload = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    return dict(payload.get("experiments") or {})
+    experiments = payload.get("experiments")
+    if experiments is None:
+        return {}
+    if not isinstance(experiments, dict):
+        raise ValueError("experiments must be a mapping")
+    for experiment_id, value in experiments.items():
+        if not isinstance(value, dict):
+            raise ValueError(f"experiments.{experiment_id} must be a mapping")
+    return dict(experiments)
 
 
 def evaluate_readiness(
@@ -94,10 +102,21 @@ def evaluate_readiness(
     run_dir: str | Path,
 ) -> dict[str, Any]:
     root = Path(run_dir)
-    configured = dict((validation_evidence.get(protocol.id) or {}).get("gates") or {})
+    configured_payload = validation_evidence.get(protocol.id) or {}
+    if not isinstance(configured_payload, dict):
+        raise ValueError(f"{protocol.id} must be a mapping")
+    configured_value = configured_payload.get("gates")
+    if configured_value is None:
+        configured_value = {}
+    if not isinstance(configured_value, dict):
+        raise ValueError(f"{protocol.id}.gates must be a mapping")
+    configured = dict(configured_value)
     gates = []
     for gate in protocol.validation_gates:
-        row = dict(configured.get(gate.id) or {})
+        raw_row = configured.get(gate.id) or {}
+        if not isinstance(raw_row, dict):
+            raise ValueError(f"gates.{gate.id} must be a mapping")
+        row = dict(raw_row)
         verification = _verify_gate_evidence(root, gate.id, row)
         gates.append(
             {
