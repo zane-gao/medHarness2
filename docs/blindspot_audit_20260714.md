@@ -2,11 +2,13 @@
 
 > 本文档是 2026-07-14 的历史审计快照，后续增量记录当前修复状态；原始发现保留用于追溯，不应直接当作当前代码事实。
 
-> **最新复核（2026-07-17）**：当前主分支回归为 `1850 passed, 20 warnings`。真实 `research run-ocr` 已核验 pilot10 的 10/10 源 PDF 映射；Yunwu Qwen VL 已完成真实视觉探索，但 OCR winner 仍因缺少可确认的 Doubao OCR 候选、DMX 401 和 PaddleOCR-VL runtime 未就绪而保持 blocked；这不是 OCR winner 或临床标注完成证据。下文更早的 `1718/1785/1801/1836/1847` 等数字均为历史快照。
+> **最新复核（2026-07-17）**：当前主分支回归为 `1850 passed, 20 warnings`。正式 `research run-ocr` 仍因真实候选/凭据缺失保持 blocked；另有 `/tmp` 中未注册的 Qwen exploratory sidecar，已核验 pilot10 首轮 8/10，针对两例的定向重试为 2/2，但不计入正式双重复 benchmark、winner 或论文统计。下文更早的 `1718/1785/1801/1836/1847` 等数字均为历史快照。
 
-> **2026-07-17 OCR 技术页误识别修复**：真实 CXR/CT/MRI PDF 均包含一张只有医院技术支持 logo 的稀疏末页。Yunwu Qwen VL 偶尔会在已完成的报告后追加“页面为空/请重新上传”元话术，旧逻辑把它当作截断并阻断整份 OCR。现在会保留页级 hash 和 `non_report_page` 审计记录，将该页从有效 OCR 文本中排除；真正未完成的报告文本仍保持 `ocr_possible_truncation`/`blocked`。同一行中已有报告文本的元话术会被截断但保留有效前缀；只有完整末尾日期/医生 metadata 才会豁免 truncation。上述真实复测三例均为 `quality_status=passed`，但仍仅属于探索性证据，不进入 winner 或 formal benchmark。
+> **2026-07-17 OCR 技术页误识别修复**：真实 CXR/CT/MRI PDF 均包含一张只有医院技术支持 logo 的稀疏末页。Yunwu Qwen VL 偶尔会在已完成的报告后追加“页面为空/请重新上传”元话术，旧逻辑把它当作截断并阻断整份 OCR。现在会保留页级 hash 和 `non_report_page` 审计记录，将该页从有效 OCR 文本中排除；在当前实现中，非报告页会保守标为 `review_required`，不会自动升级为 `passed`。真正未完成的报告文本仍保持 `ocr_possible_truncation`/`blocked`；同一行中已有报告文本的元话术会被截断但保留有效前缀；只有完整末尾日期/医生 metadata 才会豁免 truncation。旧探索 sidecar 的 `passed` 标记不覆盖当前门禁语义。
 
-> **2026-07-17 OCR 技术页脚收尾**：pilot10 首轮真实 Qwen OCR 为 8/10 通过；`pilot-002`、`pilot-004` 的第二页包含报告备注和 `万里云/Wanlicloud` 技术支持尾部，模型把尾部误当成短报告并触发截断。现在只剥离这些已知技术页脚，保留报告备注与页级 provenance；两例针对性重试均通过，pilot10 本轮最终 10/10 通过。该结果仍是单候选 exploratory 证据，不等于 OCR winner。
+> **2026-07-17 OCR 技术页脚探索记录**：未注册的 pilot10 Qwen exploratory 记录首轮为 8/10；`pilot-002`、`pilot-004` 的第二页包含报告备注和 `万里云/Wanlicloud` 技术支持尾部，针对性重试记录为 2/2。该记录尚未进入正式 research manifest，不能写成 pilot10 正式 10/10、OCR winner 或质量门禁通过。
+
+> **2026-07-17 OCR 重复稳定性复核**：同一未注册 pilot10 的第二次独立 Qwen 重复仅 `2/10` 直接通过，`4/10` 为探索脚本未接 verifier 导致的 `review_required`，`4/10` 为正文页疑似截断 `blocked`。这证明首轮结果不能升级为稳定结论；当前仍必须保留双重复、独立 verifier 和候选一致性门禁。
 
 > **2026-07-17 PaddleOCR 边界收口**：PaddleOCR readiness 现在同时检查 `PaddleOCRVL` 与 Paddle runtime；OCR sidecar 对文本、warnings、metadata、quality audit 结构执行 fail-closed 校验；源 PDF hash 不可读、对象式 `parsing_res_list`、空文本和空页均有明确阻断/复核语义。新增研究专项回归后全量为 `1783 passed, 20 warnings`。
 
