@@ -879,12 +879,13 @@ def test_run_ocr_research_labels_unintegrated_paddle_provider(tmp_path: Path, mo
         "_build_source_pdf_index",
         lambda _root: {"a" * 64: source_pdf},
     )
+    monkeypatch.setattr(research_prep, "_paddleocr_vl_weights_ready", lambda: False)
 
     run_ocr_research(pilot, research)
 
     sidecar = research / "ocr_runs" / "repeat_1" / "pilot-001" / "ocr_baseline_paddle.json"
     payload = json.loads(sidecar.read_text(encoding="utf-8"))
-    assert payload["blocked_reasons"] == ["paddleocr_provider_unavailable"]
+    assert payload["blocked_reasons"] == ["paddle_model_weights_unavailable"]
 
 
 def test_run_ocr_research_uses_injected_paddle_adapter(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
@@ -996,6 +997,23 @@ def test_paddleocr_readiness_reports_runtime_missing(monkeypatch: pytest.MonkeyP
     assert readiness["ocr_baseline_paddle"] == {
         "ready": False,
         "reason": "paddle_runtime_unavailable",
+    }
+
+
+def test_paddleocr_readiness_reports_missing_model_weights(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    import sys
+
+    class FakePaddleOCRVL:
+        pass
+
+    fake_module = type("FakeModule", (), {"PaddleOCRVL": FakePaddleOCRVL})
+    monkeypatch.setitem(sys.modules, "paddleocr", fake_module)
+    monkeypatch.setitem(sys.modules, "paddle", type("FakePaddle", (), {}))
+    monkeypatch.setenv("PADDLE_HOME", str(tmp_path))
+    readiness = research_prep._ocr_candidate_readiness(research_prep.load_config())
+    assert readiness["ocr_baseline_paddle"] == {
+        "ready": False,
+        "reason": "paddle_model_weights_unavailable",
     }
 
 

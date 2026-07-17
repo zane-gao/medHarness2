@@ -18,6 +18,7 @@
 
 > **2026-07-17 Tool 7 路由误判修复**：任意 PNG/JPG/JPEG 不再自动判为 CXR；CT/MRI 预处理生成的 `contact_sheet.png` 现在在缺少可信文件名提示时交给 VLM，无法调用 VLM 时明确返回 `unknown`。DICOM header、显式病例 modality 和三模态 body_part 软排序不变；路由专项当时全量回归为 `1857 passed, 20 warnings`，当前主分支基线为 `1859 passed, 20 warnings`。真实 preflight 仍以 `cxr/ct/mri=20/25/7`、52/52 有本地候选、0 fallback 为证据，OCR provider 门禁独立保持 blocked。
 > **2026-07-17 未知模态收敛修复**：VLM 返回 `pathology`、`ultrasound`、`PET` 等当前不支持的标签时，路由统一收敛为 `unknown`；生成器也不再把未知标签当作可用专科模态，云端 fallback 保留 `fallback_used` provenance。新增路由与 fallback 回归覆盖。
+> **2026-07-17 Paddle 权重门禁修复**：A40 已安装 PaddleOCR/Paddle runtime，但 `PaddleOCR-VL-1.6` 权重尚未完整落地；研究运行器现在在执行前检查权重缓存，返回 `paddle_model_weights_unavailable`，不再把模型初始化时的网络/文件异常归类为泛化的 provider error。
 
 > **2026-07-17 多模态 exploratory 收口**：Tool 2 已改为 source span ID + 完整报告原文回填；Tool 5 对 Qwen/VL 使用单错误块并裁剪无关上下文。MRI `MR2605270001`、CXR `CR2605290003`、CT `CT2605300030` 三例真实 Yunwu exploratory 链路均已完整通过，但仍不具备 formal 或 winner 资格。
 

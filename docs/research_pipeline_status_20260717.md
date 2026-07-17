@@ -38,6 +38,7 @@
 - 新增 `research paper-gate`：统一检查临床双读/OCR winner/正式实验三类证据；任一缺失都返回 `blocked`，只有三类均 validated 才允许 `formal_claim_allowed=true`。
 - 新增 `research freeze-ocr-winner`：真实 OCR 两次 benchmark 完成后，要求全量运行质量通过、两次 winner 一致、覆盖完整，再把冻结模型和证据 hash 写回 OCR manifest；当前因 manifest 仍为 `blocked` 而按预期拒绝。
 - PaddleOCR baseline 现要求 `PaddleOCRVL` 和 Paddle runtime 同时可导入；sidecar 结构、空页、空文本、源 PDF hash 读取失败均 fail-closed，不会把“部分页面成功”升级为 OCR 通过。
+- 2026-07-17 A40 本机已安装 `paddleocr==3.7.0`、`paddlepaddle==3.2.2`，`PaddleOCRVL` 可导入；官方 `PaddleOCR-VL-1.6` 权重下载在当前 Hugging Face 网络上卡在约 53%，因此 readiness 明确返回 `paddle_model_weights_unavailable`，研究运行器不会误启动未完成的模型。
 - 2026-07-17 已多次用 Yunwu `qwen3-vl-plus` 对 MR2605270001 做真实视觉链路探索：Tool 2、Tool 5、Tool 4 均曾成功越过，生成 fallback 也能返回非空 exploratory 文本。最新一次产物 `/tmp/single_yunwu_vl_mr2605270001_finalcheck` 完整生成 `generated_reports=1`、`generated_evaluations=1`、`rankings=1`、`pairwise=1`，无 errors 且质量门禁通过；但证据等级仍为 `exploratory_fresh`，fallback provenance 仍保留，且此前重复运行出现过 evidence 重排、枚举违规和 JSON 截断，因此尚未达到稳定小批次标准，不能作为正式评测结果。
 - 2026-07-17 修复了单病例空生成占位符级联：空报告不再进入 Tool 1–6、ranking 或 pairwise。真实外部 `llm_fallback` 若返回非空文本，会标记为 `exploratory_fresh`，先过内容质量门禁后可用于探索性评估/排序；mock/debug fallback 仍 fail-closed，所有 exploratory 结果仍不能进入 formal gate。
 - Tool 2 现在向视觉模型提供带 `span_id` 和源偏移的 source-ordered evidence spans，并由服务端按完整报告原文恢复 grounding；Tool 5 在 pairwise 中对 Qwen/VL 模型按每块 1 个错误、其他模型按每块 5 个错误请求，并对每个错误块只保留相关 finding/pair 上下文，把分块策略写入 checkpoint 指纹，降低多模态 JSON 截断和旧缓存复用风险。真实 Qwen 结果仍是 exploratory，不能升级为 winner。

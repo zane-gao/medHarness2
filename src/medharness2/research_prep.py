@@ -729,6 +729,10 @@ def run_ocr_research(
                         "source_pdf_unreadable" if source_pdf_hash_error else "source_pdf_missing"
                     ]
                     blocked_count += 1
+                elif not readiness["ready"]:
+                    payload["status"] = "blocked"
+                    payload["blocked_reasons"] = [readiness["reason"]]
+                    blocked_count += 1
                 elif candidate["provider"] == "paddleocr":
                     try:
                         result = _run_paddleocr_candidate(
@@ -774,6 +778,7 @@ def run_ocr_research(
                         reason = str(exc) if str(exc) in {
                             "paddleocr_provider_unavailable",
                             "paddle_runtime_unavailable",
+                            "paddle_model_weights_unavailable",
                             "paddleocr_no_rendered_pages",
                             "paddleocr_empty_result",
                             "paddleocr_invalid_result",
@@ -786,10 +791,6 @@ def run_ocr_research(
                         payload["blocked_reasons"] = [reason]
                         payload["error"] = str(exc)[:500]
                         blocked_count += 1
-                elif not readiness["ready"]:
-                    payload["status"] = "blocked"
-                    payload["blocked_reasons"] = [readiness["reason"]]
-                    blocked_count += 1
                 else:
                     try:
                         verifier_ready = route_status["ocr_verifier_qwen"]["ready"]
@@ -967,7 +968,13 @@ def _ocr_candidate_readiness(config: AppConfig) -> dict[str, dict[str, Any]]:
                     "reason": "paddle_runtime_unavailable",
                 }
             else:
-                result[candidate["candidate_id"]] = {"ready": True, "reason": ""}
+                if not _paddleocr_vl_weights_ready():
+                    result[candidate["candidate_id"]] = {
+                        "ready": False,
+                        "reason": "paddle_model_weights_unavailable",
+                    }
+                else:
+                    result[candidate["candidate_id"]] = {"ready": True, "reason": ""}
             continue
         route = config.model_roles.get(candidate["role"])
         provider = str(route.provider if route and route.provider else "").lower()
@@ -989,6 +996,22 @@ def _ocr_candidate_readiness(config: AppConfig) -> dict[str, dict[str, Any]]:
         ready = bool(api_env and str(os.environ.get(api_env) or "").strip())
         result[candidate["candidate_id"]] = {"ready": ready, "reason": "missing_api_key" if not ready else ""}
     return result
+
+
+def _paddleocr_vl_weights_ready() -> bool:
+    """Return whether the official PaddleOCR-VL 1.6 weights are local.
+
+    Importing ``PaddleOCRVL`` only proves that the optional Python package is
+    installed.  The first constructor call downloads PP-DocLayoutV3 and the
+    0.9B VL model, so readiness must fail closed until the model directory has
+    the core inference files.  This check is deliberately side-effect free.
+    """
+    root = Path(os.environ.get("PADDLE_HOME") or (Path.home() / ".paddlex"))
+    model_dir = root / "official_models" / "PaddleOCR-VL-1.6"
+    if not model_dir.is_dir():
+        return False
+    files = {path.name for path in model_dir.rglob("*") if path.is_file()}
+    return "inference.yml" in files and any(name.startswith("inference") and name.endswith(".pdiparams") for name in files)
 
 
 def _primary_candidate_config(
