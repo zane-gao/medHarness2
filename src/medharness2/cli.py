@@ -306,7 +306,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"medHarness2 research prepare-manifests failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0 if result["status"] != "blocked" else 2
+        # Preparing manifests is a successful setup operation even though the
+        # generated research gates intentionally start as blocked/pending until
+        # real provider or reader evidence is supplied.  Execution commands
+        # (for example ``research run-ocr``) retain non-zero exits for blocked
+        # evidence; setup must remain composable in automation.
+        return 0
     if args.command == "research" and args.research_command == "run-ocr":
         try:
             result = run_ocr_research(

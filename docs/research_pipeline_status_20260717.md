@@ -23,6 +23,7 @@
 
 - `workflow preflight` 在真实数据路径 `/nfsdata_a40/isbi/gzp/medHarness/data/sample_data_2026-06-05` 上发现 52 例，模态计数为 `cxr/ct/mri=20/25/7`；使用 `config/dmx_strong.yaml --require-real-ocr` 时按预期以非零退出，阻断原因为 `missing_llm_api_key` 与 `real_ocr_verifier_unavailable`。
 - `research run-ocr` 在 pilot10 上生成 60 个 sidecar，当前无外部凭据/本地 PaddleOCR-VL runtime 时保持 `blocked`；未把阻断结果计入 CER、winner 或论文统计。
+- `research prepare-manifests` 是准备阶段命令，即使生成的 OCR/论文 gate 初始为 `blocked/pending` 也返回 0；只有实际执行命令在证据缺失时返回非零，避免自动化把“清单已生成”误判成“执行失败”。
 - `annotation validate --package-dir annotation/pilot10` 返回 `not_started`、`0/10`，并以非零退出；没有把空标注包误报为完成。
 
 | 工作线 | 状态 | 原因 |

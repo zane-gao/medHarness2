@@ -1562,9 +1562,20 @@ def test_cli_research_run_ocr_returns_blocked_without_real_provider(tmp_path: Pa
     from tests.test_research_prep import _pilot
 
     _pilot(tmp_path, [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}])
-    main(["research", "prepare-manifests", "--pilot-dir", str(pilot), "--output-dir", str(research)])
+    assert main(["research", "prepare-manifests", "--pilot-dir", str(pilot), "--output-dir", str(research)]) == 0
     code = main(["research", "run-ocr", "--pilot-dir", str(pilot), "--research-dir", str(research)])
     assert code == 2
+
+
+def test_cli_prepare_manifests_returns_zero_for_blocked_future_gates(tmp_path: Path):
+    pilot = tmp_path / "pilot"
+    research = tmp_path / "research"
+    from tests.test_research_prep import _pilot
+
+    _pilot(tmp_path, [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}])
+    assert main(["research", "prepare-manifests", "--pilot-dir", str(pilot), "--output-dir", str(research)]) == 0
+    payload = json.loads((research / "ocr_manifest.json").read_text(encoding="utf-8"))
+    assert payload["status"] == "blocked"
 
 
 def test_cli_single_case_returns_nonzero_and_failed_registry_on_malformed_config(tmp_path: Path):
