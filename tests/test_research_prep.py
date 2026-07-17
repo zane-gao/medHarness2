@@ -297,7 +297,7 @@ def test_run_ocr_research_uses_injected_paddle_adapter(tmp_path: Path, monkeypat
         "_ocr_candidate_readiness",
         lambda _config: {
             "ocr_primary_doubao": {"ready": False, "reason": "missing_api_key"},
-            "ocr_verifier_qwen": {"ready": False, "reason": "missing_api_key"},
+            "ocr_verifier_qwen": {"ready": True, "reason": ""},
             "ocr_baseline_paddle": {"ready": True, "reason": ""},
         },
     )
@@ -315,6 +315,35 @@ def test_run_ocr_research_uses_injected_paddle_adapter(tmp_path: Path, monkeypat
     assert payload["status"] == "succeeded"
     assert payload["model_key"] == "ocr_baseline_paddle"
     assert result["success_count"] == 2
+
+
+def test_paddleocr_without_verifier_is_review_required(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    research = tmp_path / "research"
+    prepare_research_manifests(pilot, research)
+    source_pdf = tmp_path / "report.pdf"
+    source_pdf.write_bytes(b"placeholder")
+    monkeypatch.setattr(research_prep, "_build_source_pdf_index", lambda _root: {"a" * 64: source_pdf})
+    monkeypatch.setattr(
+        research_prep,
+        "_ocr_candidate_readiness",
+        lambda _config: {
+            "ocr_primary_doubao": {"ready": False, "reason": "missing_api_key"},
+            "ocr_verifier_qwen": {"ready": False, "reason": "missing_api_key"},
+            "ocr_baseline_paddle": {"ready": True, "reason": ""},
+        },
+    )
+    monkeypatch.setattr(
+        research_prep,
+        "_run_paddleocr_candidate",
+        lambda *args, **kwargs: {"text": "FINDINGS: normal", "warnings": [], "metadata": {"quality_status": "review_required"}},
+    )
+    run_ocr_research(pilot, research)
+    payload = json.loads((research / "ocr_runs/repeat_1/pilot-001/ocr_baseline_paddle.json").read_text())
+    assert payload["status"] == "review_required"
 
 
 @pytest.mark.parametrize(
@@ -351,6 +380,29 @@ def test_paddleocr_vl_dict_subclass_reads_markdown_property():
             return {"markdown_texts": "FINDINGS: from PaddleOCR-VL"}
 
     assert research_prep._paddleocr_text(FakeResult(parsing_res_list=[])) == "FINDINGS: from PaddleOCR-VL"
+
+
+def test_paddleocr_text_reads_official_result_markdown_export(tmp_path: Path):
+    class OfficialResult:
+        def save_to_markdown(self, *, save_path: Path):
+            output = Path(save_path) / "page.md"
+            output.write_text("FINDINGS: exported markdown", encoding="utf-8")
+            return output
+
+    assert research_prep._paddleocr_text(
+        OfficialResult(), markdown_dir=tmp_path, page_index=1
+    ) == "FINDINGS: exported markdown"
+
+
+def test_paddleocr_text_consumes_result_iterable(tmp_path: Path):
+    class OfficialResult:
+        def save_to_markdown(self, *, save_path: Path):
+            output = Path(save_path) / "page.md"
+            output.write_text("IMPRESSION: iterable result", encoding="utf-8")
+            return output
+
+    result = (item for item in [OfficialResult()])
+    assert research_prep._paddleocr_text(result, markdown_dir=tmp_path) == "IMPRESSION: iterable result"
 
 
 def test_run_ocr_research_rejects_unsafe_case_path(tmp_path: Path):

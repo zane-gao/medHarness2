@@ -5,6 +5,7 @@ import copy
 import hashlib
 import os
 import re
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -136,8 +137,16 @@ def run_ocr_research(
                     blocked_count += 1
                 elif candidate["provider"] == "paddleocr":
                     try:
-                        result = _run_paddleocr_candidate(source_pdf, case_id=case_id, output_dir=research / "ocr_cache" / candidate_id / f"repeat_{repeat}")
+                        result = _run_paddleocr_candidate(
+                            source_pdf,
+                            case_id=case_id,
+                            output_dir=research / "ocr_cache" / candidate_id / f"repeat_{repeat}",
+                            verifier_ready=route_status["ocr_verifier_qwen"]["ready"],
+                        )
                         quality = str((result.get("metadata") or {}).get("quality_status") or "blocked")
+                        if quality == "passed" and not route_status["ocr_verifier_qwen"]["ready"]:
+                            quality = "review_required"
+                            result.setdefault("warnings", []).append("ocr_verifier_not_ready")
                         payload.update({
                             "status": "succeeded" if quality == "passed" else quality,
                             "text": result.get("text", "") if quality in {"passed", "review_required"} else "",
@@ -423,6 +432,7 @@ def _run_paddleocr_candidate(
     *,
     case_id: str,
     output_dir: Path,
+    verifier_ready: bool,
 ) -> dict[str, Any]:
     """Run the optional official PaddleOCR pipeline on rendered PDF pages.
 
@@ -443,12 +453,29 @@ def _run_paddleocr_candidate(
     pages = _render_pdf_pages(report_pdf, page_dir)
     if not pages:
         raise RuntimeError("paddleocr_no_rendered_pages")
-    engine = PaddleOCRVL()
+    engine = PaddleOCRVL(pipeline_version="v1.6")
     texts: list[str] = []
     try:
-        for page in pages:
+        markdown_root = output_dir / f"{case_id}_markdown"
+        markdown_root.mkdir(parents=True, exist_ok=True)
+        for page_index, page in enumerate(pages, start=1):
             result = engine.predict(page)
-            page_text = _paddleocr_text(result)
+            # The official API returns an iterable of Result objects, not
+            # necessarily a list.  Consume it once so generators are not
+            # mistaken for an empty unsupported response.
+            if isinstance(result, (str, dict, list, tuple)):
+                result_items: Any = result
+            elif isinstance(result, Iterable):
+                result_items = list(result)
+            else:
+                result_items = result
+            page_markdown_dir = markdown_root / f"page_{page_index:04d}"
+            page_markdown_dir.mkdir(parents=True, exist_ok=True)
+            page_text = _paddleocr_text(
+                result_items,
+                markdown_dir=page_markdown_dir,
+                page_index=page_index,
+            )
             if page_text:
                 texts.append(page_text)
     finally:
@@ -458,29 +485,64 @@ def _run_paddleocr_candidate(
     text = "\n\n".join(texts).strip()
     if not text:
         raise RuntimeError("paddleocr_empty_result")
+    package_version = ""
+    try:
+        import paddleocr
+        package_version = str(getattr(paddleocr, "__version__", ""))
+    except Exception:
+        pass
     return {
         "text": text,
         "warnings": [],
         "metadata": {
             "provider": "paddleocr",
-            "model": "PaddleOCR-VL",
+            "model": "PaddleOCR-VL-1.6",
             "role": "ocr_baseline",
-            "quality_status": "passed",
+            "quality_status": "passed" if verifier_ready else "review_required",
+            "quality_gate": "verifier_audit" if verifier_ready else "verifier_not_run",
             "page_count": len(pages),
+            "pipeline_version": "v1.6",
+            "paddleocr_version": package_version,
         },
     }
 
 
-def _paddleocr_text(result: Any) -> str:
+def _paddleocr_text(
+    result: Any,
+    *,
+    markdown_dir: Path | None = None,
+    page_index: int = 1,
+) -> str:
     """Extract Markdown/text from current PaddleOCR-VL result shapes."""
     if isinstance(result, str):
         return result.strip()
     if isinstance(result, (list, tuple)):
-        return "\n".join(part for part in (_paddleocr_text(item) for item in result) if part)
+        return "\n".join(
+            part
+            for part in (
+                _paddleocr_text(
+                    item,
+                    markdown_dir=markdown_dir,
+                    page_index=page_index,
+                )
+                for item in result
+            )
+            if part
+        )
+    if isinstance(result, Iterable) and not isinstance(result, (dict, bytes, bytearray)):
+        return _paddleocr_text(
+            list(result),
+            markdown_dir=markdown_dir,
+            page_index=page_index,
+        )
     if isinstance(result, dict):
         for key in ("markdown_text", "markdown_texts", "text", "ocr_text", "markdown", "rec_texts", "texts"):
             if key in result:
-                text = _paddleocr_text(result[key])
+                text = _paddleocr_text(
+                    result[key],
+                    markdown_dir=markdown_dir,
+                    page_index=page_index,
+                )
                 if text:
                     return text
         blocks = result.get("parsing_res_list")
@@ -494,7 +556,11 @@ def _paddleocr_text(result: Any) -> str:
                 return text
         markdown_attr = getattr(result, "markdown", None)
         if markdown_attr is not None and markdown_attr is not result:
-            text = _paddleocr_text(markdown_attr)
+            text = _paddleocr_text(
+                markdown_attr,
+                markdown_dir=markdown_dir,
+                page_index=page_index,
+            )
             if text:
                 return text
         return ""
@@ -504,11 +570,37 @@ def _paddleocr_text(result: Any) -> str:
         try:
             value = getattr(result, attr)
             value = value() if callable(value) else value
-            text = _paddleocr_text(value)
+            text = _paddleocr_text(
+                value,
+                markdown_dir=markdown_dir,
+                page_index=page_index,
+            )
         except Exception:
             continue
         if text:
             return text
+    save_to_markdown = getattr(result, "save_to_markdown", None)
+    if markdown_dir is not None and callable(save_to_markdown):
+        before = set(markdown_dir.glob("*.md"))
+        try:
+            returned = save_to_markdown(save_path=markdown_dir)
+        except Exception:
+            returned = None
+        candidates: list[Path] = []
+        if isinstance(returned, (str, Path)):
+            candidates.append(Path(returned))
+        candidates.extend(sorted(markdown_dir.glob("*.md")))
+        for candidate in candidates:
+            if not candidate.is_absolute():
+                candidate = markdown_dir / candidate
+            if candidate in before or not candidate.is_file():
+                continue
+            try:
+                text = candidate.read_text(encoding="utf-8").strip()
+            except (OSError, UnicodeError):
+                continue
+            if text:
+                return text
     return ""
 
 

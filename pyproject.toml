@@ -34,7 +34,7 @@ test = [
   "pytest>=8.0",
 ]
 ocr-paddle = [
-  "paddleocr>=3.0",
+  "paddleocr[doc-parser]>=3.7,<3.8",
 ]
 
 [project.scripts]
