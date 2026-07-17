@@ -169,6 +169,7 @@ def _try_llm_json(client: LLMClient, prompt: str, default: dict[str, Any]) -> di
             payload_classification="deidentified_structured",
         )
         parsed = parse_json_object(raw, context="Workflow 4 education")
+        _validate_education_output_shape(parsed, default)
     except (ValueError, LLMClientError, RuntimeError):
         fallback = dict(default)
         metadata = dict(fallback.get("metadata") or {})
@@ -192,6 +193,22 @@ def _merge_required(default: dict[str, Any], parsed: dict[str, Any]) -> dict[str
         if value not in (None, "", [], {}):
             merged[key] = value
     return merged
+
+
+def _validate_education_output_shape(parsed: dict[str, Any], default: dict[str, Any]) -> None:
+    if "metadata" in parsed and not isinstance(parsed["metadata"], dict):
+        raise ValueError("education.metadata must be an object")
+    mode = default.get("mode")
+    object_fields = ["report_summary"] if mode == "eval_report" else ["radiologist_summary"]
+    for field in object_fields:
+        if field in parsed and not isinstance(parsed[field], dict):
+            raise ValueError(f"education.{field} must be an object")
+    for field in ("suggestions", "general_suggestions"):
+        if field not in parsed:
+            continue
+        value = parsed[field]
+        if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+            raise ValueError(f"education.{field} must be a list of objects")
 
 
 def _weakest_likert(likert: dict[str, Any]) -> tuple[str | None, int | None]:

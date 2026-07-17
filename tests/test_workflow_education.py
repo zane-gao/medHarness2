@@ -218,6 +218,41 @@ def test_education_real_client_is_marked_as_llm_judge(tmp_path: Path):
     assert result["metadata"]["fallback_used"] is False
 
 
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        {"metadata": "bad"},
+        {"suggestions": "bad"},
+        {"general_suggestions": ["bad"]},
+        {"radiologist_summary": "bad"},
+    ],
+)
+def test_education_rejects_malformed_llm_output_shapes(tmp_path: Path, malformed: dict[str, object]):
+    output = tmp_path / "education.json"
+    (tmp_path / "workflow2.json").write_text(json.dumps(_workflow2_payload()), encoding="utf-8")
+
+    class MalformedClient:
+        class Config:
+            class LLM:
+                provider = "chat_completions"
+            llm = LLM()
+
+        config = Config()
+
+        def call(self, *args, **kwargs):
+            payload = dict(kwargs["response_json"])
+            payload.update(malformed)
+            return json.dumps(payload)
+
+    result = run_education_suggestions(
+        eval_radiologist=tmp_path / "workflow2.json",
+        output_path=output,
+        llm_client=MalformedClient(),
+    )
+    assert result["metadata"]["source"] == "deterministic_fallback"
+    assert result["metadata"]["fallback_used"] is True
+
+
 def test_cli_workflow_education_eval_report(tmp_path: Path):
     workflow1 = tmp_path / "workflow1.json"
     output = tmp_path / "education.json"
