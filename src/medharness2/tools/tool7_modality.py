@@ -5,7 +5,7 @@ from typing import Any
 
 from medharness2.config import AppConfig, load_config
 from medharness2.llm_client import LLMClient
-from medharness2.modality import normalize_modality
+from medharness2.modality import canonical_modality
 
 
 def recognize_modality(image_path: str, config: AppConfig | None = None, llm_client: LLMClient | None = None) -> str:
@@ -13,7 +13,7 @@ def recognize_modality(image_path: str, config: AppConfig | None = None, llm_cli
     path = Path(image_path)
     detected = _detect_dicom_modality(path)
     if detected:
-        return normalize_modality(cfg.modality_map.get(detected, detected))
+        return canonical_modality(cfg.modality_map.get(detected, detected))
     suffix = path.suffix.lower()
     if suffix in {".png", ".jpg", ".jpeg"}:
         hinted = _filename_modality_hint(path)
@@ -26,7 +26,7 @@ def recognize_modality(image_path: str, config: AppConfig | None = None, llm_cli
             payload_classification="raw_medical_image",
         )
         token = _normalize_modality_token(text)
-        return normalize_modality(cfg.modality_map.get(token, token))
+        return canonical_modality(cfg.modality_map.get(token, token))
     return "unknown"
 
 
@@ -49,7 +49,7 @@ def _normalize_modality_token(text: str) -> str:
     raw = str(text or "").strip().upper()
     if not raw:
         return ""
-    canonical = normalize_modality(raw)
+    canonical = canonical_modality(raw)
     if canonical in {"cxr", "ct", "mri"}:
         return {"cxr": "DX", "ct": "CT", "mri": "MR"}[canonical]
     compact = raw.replace("-", "").replace("_", "")

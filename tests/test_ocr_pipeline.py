@@ -784,6 +784,38 @@ def test_ocr_verifier_is_audit_only_and_cannot_change_primary_text(tmp_path: Pat
     assert meta["quality_status"] == "review_required"
 
 
+def test_ocr_passes_verified_report_with_explicit_non_report_page(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    for _ in range(2):
+        page = doc.new_page(width=200, height=200)
+        page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+
+    class Primary:
+        calls = 0
+
+        def call(self, *args, **kwargs):
+            self.calls += 1
+            return "检查所见：双肺未见异常。\n诊断印象：未见急性病变。" if self.calls == 1 else "The image provided appears to be blank."
+
+    class Verifier:
+        def call(self, *args, **kwargs):
+            return '{"status":"agree"}'
+
+    result = extract_report_text(
+        pdf,
+        case_id="verified-footer",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=Primary(),
+        verifier_client=Verifier(),
+        verifier_options={"provider": "chat_completions", "model": "verifier"},
+        force=True,
+    )
+    assert result.metadata["quality_status"] == "passed"
+
+
 def test_ocr_verifier_failure_does_not_fail_primary_ocr(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()

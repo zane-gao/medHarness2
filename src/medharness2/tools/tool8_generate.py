@@ -5,6 +5,7 @@ from typing import Any
 from medharness2.config import AppConfig, load_config
 from medharness2.generators.registry import ReportGeneratorRegistry
 from medharness2.llm_client import LLMClient
+from medharness2.modality import canonical_modality
 from medharness2.schema import GeneratedReport
 
 
@@ -22,6 +23,7 @@ def generate_reports(
 ) -> list[GeneratedReport]:
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
+    modality = canonical_modality(modality)
     registry = ReportGeneratorRegistry(cfg)
     generation_reference = reference_report if cfg.generator.reference_assisted_generation else None
     reports: list[GeneratedReport] = []

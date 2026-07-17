@@ -871,14 +871,6 @@ def _ocr_quality_status(
         item.startswith("ocr_possible_truncation") for item in warning_set
     ):
         return "blocked"
-    if "ocr_non_report_page" in warning_set or any(
-        item.startswith("ocr_non_report_page:") for item in warning_set
-    ):
-        # A skipped page may be a provider miss rather than a true footer.
-        # Keep the text available for review, but do not promote it to passed.
-        return "review_required"
-    if verifier_missing or "ocr_verifier_client_missing" in warning_set:
-        return "review_required"
     audit_statuses: list[str] = []
     if isinstance(quality_audit, dict):
         pages = quality_audit.get("pages")
@@ -887,6 +879,15 @@ def _ocr_quality_status(
         else:
             audit_statuses = [str(quality_audit.get("status") or "").lower()]
     if any(status in {"disagreement", "verifier_failed", "invalid_verifier_response"} for status in audit_statuses):
+        return "review_required"
+    if "ocr_non_report_page" in warning_set or any(
+        item.startswith("ocr_non_report_page:") for item in warning_set
+    ):
+        # A technical page is safe to ignore only when every retained report
+        # page has an explicit verifier agreement.
+        if not audit_statuses or any(status != "agree" for status in audit_statuses):
+            return "review_required"
+    if verifier_missing or "ocr_verifier_client_missing" in warning_set:
         return "review_required"
     return "passed"
 

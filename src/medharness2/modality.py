@@ -70,3 +70,14 @@ def normalize_modality(value: Any) -> str:
     # collapsed so equivalent unknown labels do not create duplicate routes.
     return compact or "unknown"
 
+
+def canonical_modality(value: Any) -> str:
+    """Return one of the supported route keys, or ``unknown``.
+
+    ``normalize_modality`` intentionally preserves unfamiliar labels for
+    diagnostics.  Runtime routing boundaries must not turn those labels into
+    ad-hoc modality routes, so they use this fail-closed helper instead.
+    """
+
+    key = normalize_modality(value)
+    return key if key in CANONICAL_MODALITIES else "unknown"

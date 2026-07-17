@@ -7,6 +7,8 @@ from medharness2.config import AppConfig, GeneratorConfig
 from medharness2.generators.registry import GeneratorEntry, ReportGeneratorRegistry
 from medharness2.modality import normalize_modality
 from medharness2.tools.tool7_modality import _normalize_modality_token, recognize_modality
+from medharness2.tools.tool8_generate import generate_reports
+from medharness2.llm_client import build_mock_client
 from medharness2.tools.tool2_extract import _canonical_observation_code
 
 
@@ -239,6 +241,38 @@ def test_recognize_modality_normalizes_vlm_result_and_empty_reply(monkeypatch, t
 
     assert recognize_modality(str(path), config=AppConfig(), llm_client=Client("MRI examination")) == "mri"
     assert recognize_modality(str(path), config=AppConfig(), llm_client=Client("")) == "unknown"
+
+
+@pytest.mark.parametrize("reply", ["pathology", "ultrasound study", "PET scan"])
+def test_recognize_modality_collapses_unknown_vlm_values_to_unknown(tmp_path, reply):
+    path = tmp_path / "unknown.bin"
+    path.write_bytes(b"not a dicom")
+
+    class Client:
+        def call(self, *args, **kwargs):
+            return reply
+
+    assert recognize_modality(str(path), config=AppConfig(), llm_client=Client()) == "unknown"
+
+
+def test_cloud_fallback_preserves_unknown_modality_and_fallback_provenance():
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=True,
+            default_models=[],
+            local_models=[],
+        )
+    )
+    report = generate_reports(
+        "unknown.bin",
+        "pathology",
+        config=cfg,
+        llm_client=build_mock_client(),
+    )[0]
+
+    assert report.modality == "unknown"
+    assert report.source == "mock_fallback"
+    assert report.metadata["fallback_used"] is True
 
 
 def test_non_cxr_observation_codes_are_stable_slugs_for_alignment():
