@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from medharness2.ocr import _looks_truncated
 from medharness2.utils.io import write_json
 
 
@@ -555,20 +556,8 @@ def _token_accuracy(gold: Sequence[str], candidate: Sequence[str]) -> float:
 
 
 def _possible_truncation(text: str) -> bool:
-    stripped = text.strip()
-    if not stripped:
-        return True
-    # Terminal punctuation is strong evidence that the page response ended
-    # naturally.  Chinese reports often omit a final full stop, so only flag
-    # an unpunctuated ASCII word/number (the common cut-off pattern) and retain
-    # the existing short/empty-response safety behavior.
-    if stripped[-1] in "。！？.!?)]】}」』”\"'":
-        return False
-    if len(stripped) < 8:
-        return True
-    return stripped[-1].isascii() and stripped[-1].isalnum() and not stripped.lower().endswith(
-        ("stable", "normal", "negative", "正常")
-    )
+    """Use the page-level OCR truncation policy for benchmark metrics."""
+    return _looks_truncated(text)
 
 
 def _sequence_levenshtein(a: Sequence[str], b: Sequence[str]) -> int:

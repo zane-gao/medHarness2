@@ -201,11 +201,29 @@ def test_recognize_modality_uses_dicom_header_before_filename_or_llm(tmp_path):
     assert recognize_modality(str(path), config=AppConfig()) == "mri"
 
 
-def test_recognize_modality_uses_image_suffix_without_llm(tmp_path):
+def test_recognize_modality_does_not_assume_generic_image_is_cxr(tmp_path):
     path = tmp_path / "portable.jpg"
     path.write_bytes(b"not a dicom")
 
+    assert recognize_modality(str(path), config=AppConfig()) == "unknown"
+
+
+def test_recognize_modality_uses_explicit_cxr_filename_hint(tmp_path):
+    path = tmp_path / "chest_xray.jpg"
+    path.write_bytes(b"not a dicom")
+
     assert recognize_modality(str(path), config=AppConfig()) == "cxr"
+
+
+def test_recognize_modality_uses_vlm_for_generic_contact_sheet(tmp_path):
+    path = tmp_path / "contact_sheet.png"
+    path.write_bytes(b"not a dicom")
+
+    class Client:
+        def call(self, *args, **kwargs):
+            return "CT"
+
+    assert recognize_modality(str(path), config=AppConfig(), llm_client=Client()) == "ct"
 
 
 def test_recognize_modality_normalizes_vlm_result_and_empty_reply(monkeypatch, tmp_path):

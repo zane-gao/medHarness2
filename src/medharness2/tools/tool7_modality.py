@@ -16,7 +16,9 @@ def recognize_modality(image_path: str, config: AppConfig | None = None, llm_cli
         return normalize_modality(cfg.modality_map.get(detected, detected))
     suffix = path.suffix.lower()
     if suffix in {".png", ".jpg", ".jpeg"}:
-        return "cxr"
+        hinted = _filename_modality_hint(path)
+        if hinted:
+            return hinted
     if llm_client is not None:
         text = llm_client.call(
             "Identify imaging modality. Return one word such as CT, MR, DX, pathology.",
@@ -26,6 +28,21 @@ def recognize_modality(image_path: str, config: AppConfig | None = None, llm_cli
         token = _normalize_modality_token(text)
         return normalize_modality(cfg.modality_map.get(token, token))
     return "unknown"
+
+
+def _filename_modality_hint(path: Path) -> str:
+    """Infer CXR only from an explicit filename cue, never from image suffix.
+
+    CT/MRI preprocessing also emits PNG contact sheets, so treating every
+    raster image as a chest radiograph silently misroutes non-CXR cases.
+    """
+    stem = path.stem.lower().replace("-", "_").replace(" ", "_")
+    tokens = {token for token in stem.split("_") if token}
+    if {"cxr", "xray", "radiograph", "radiography"} & tokens:
+        return "cxr"
+    if "chest" in tokens and ({"x", "ray"} <= tokens or "radiograph" in tokens):
+        return "cxr"
+    return ""
 
 
 def _normalize_modality_token(text: str) -> str:

@@ -679,6 +679,11 @@ def test_ocr_strips_contracted_blank_page_commentary():
     assert _strip_non_report_commentary(text) == ""
 
 
+def test_ocr_strips_unable_to_transcribe_technical_page_commentary():
+    text = "I'm unable to transcribe the image as it contains only a logo and small text."
+    assert _strip_non_report_commentary(text) == ""
+
+
 def test_ocr_preserves_same_line_report_text_before_commentary():
     text = "FINDINGS: clear lungs. The provided image appears to be blank."
 
