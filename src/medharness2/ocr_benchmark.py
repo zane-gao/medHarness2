@@ -43,7 +43,8 @@ def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) 
             blocked.append(f"manifest:{item['_manifest_error']}")
             hard_blocked = True
             continue
-        case_id = str(item.get("case_id") or "")
+        raw_case_id = item.get("case_id")
+        case_id = raw_case_id.strip() if isinstance(raw_case_id, str) else ""
         gold_value = item.get("gold_text")
         gold = _resolve_text(gold_value, base_dir=manifest_file.parent)
         candidates = item.get("candidates") or {}
@@ -65,7 +66,7 @@ def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) 
             hard_blocked = True
             continue
         for model, value in candidates.items():
-            model_name = str(model).strip()
+            model_name = model.strip() if isinstance(model, str) else ""
             if not model_name:
                 blocked.append(f"manifest:{case_id}:empty_model_key")
                 hard_blocked = True

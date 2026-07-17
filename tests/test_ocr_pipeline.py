@@ -778,3 +778,24 @@ def test_ocr_candidate_benchmark_blocks_non_text_inline_values(tmp_path: Path, b
     result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
     assert result["status"] == "blocked"
     assert "case1:model-a" in result["blocked_items"]
+
+@pytest.mark.parametrize("bad_case_id", [True, 1, 1.5, {"id": "case1"}])
+def test_ocr_candidate_benchmark_rejects_non_string_case_ids(tmp_path: Path, bad_case_id):
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps([{"case_id": bad_case_id, "gold_text": "gold", "candidates": {"model-a": "gold"}}]),
+        encoding="utf-8",
+    )
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+    assert result["status"] == "blocked"
+
+
+def test_ocr_candidate_benchmark_rejects_non_string_model_keys(tmp_path: Path):
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps([{"case_id": "case1", "gold_text": "gold", "candidates": {"1": "gold"}}]),
+        encoding="utf-8",
+    )
+    # JSON object keys are strings on disk; this is a valid model key and must remain supported.
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+    assert result["status"] == "succeeded"
