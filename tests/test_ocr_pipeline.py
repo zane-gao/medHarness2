@@ -333,6 +333,52 @@ def test_direct_pdf_text_extraction_closes_document_and_preserves_text(tmp_path:
     assert "Clear lungs" in result.text
 
 
+def test_pdf_text_cache_is_not_reused_when_verifier_is_configured_but_missing(
+    tmp_path: Path,
+):
+    """A primary-only text-layer cache must not bypass a newly required audit."""
+    pdf = tmp_path / "text-layer-verifier.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=200)
+    page.insert_text((30, 60), "FINDINGS: Clear lungs. IMPRESSION: Normal.")
+    doc.save(pdf)
+
+    output_dir = tmp_path / "ocr"
+    first = extract_report_text(
+        pdf,
+        case_id="text-layer-verifier",
+        output_dir=output_dir,
+        config=AppConfig(llm=LLMConfig(provider="mock")),
+        force=True,
+    )
+    assert first.method == "pdf_text_layer"
+    assert first.metadata["quality_status"] == "passed"
+
+    second = extract_report_text(
+        pdf,
+        case_id="text-layer-verifier",
+        output_dir=output_dir,
+        config=AppConfig(
+            llm=LLMConfig(provider="mock"),
+            model_roles={
+                "ocr_verifier": ModelRoleConfig(
+                    provider="chat_completions",
+                    model="qwen-vl-ocr-latest",
+                    api_key_env="OCR_VERIFIER_KEY",
+                )
+            },
+        ),
+    )
+
+    assert second.method == "pdf_text_layer"
+    assert second.metadata["quality_status"] == "review_required"
+    assert "ocr_verifier_client_missing" in second.warnings
+    sidecar = json.loads(
+        (output_dir / "text-layer-verifier.ocr.json").read_text(encoding="utf-8")
+    )
+    assert sidecar["quality_status"] == "review_required"
+
+
 def test_scanned_pdf_ocr_skips_deterministic_blank_pages(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()

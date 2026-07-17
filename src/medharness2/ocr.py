@@ -339,9 +339,7 @@ def _cache_is_compatible(
     if cached_quality_status is not None and cached_quality_status != "passed":
         return False
     method = str(meta.get("method") or "").lower()
-    if method == "pdf_text_layer":
-        return meta.get("provider") == "local_pdf_text"
-    if method != "vlm_ocr":
+    if method not in {"pdf_text_layer", "vlm_ocr"}:
         return False
     # A blocked OCR result is evidence that the previous transcription is not
     # safe to consume.  Do not keep returning it forever from the cache:
@@ -386,6 +384,11 @@ def _cache_is_compatible(
         or str(cached_verifier.get("role") or "") != "ocr_verifier"
     ):
         return False
+    # Text-layer caches still carry verifier provenance.  Check it before
+    # accepting the fast path so enabling an audit cannot reuse an older
+    # primary-only artifact as if it had been reviewed.
+    if method == "pdf_text_layer":
+        return meta.get("provider") == "local_pdf_text"
     return True
 
 
