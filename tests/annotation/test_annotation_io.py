@@ -4,7 +4,13 @@ import json
 from pathlib import Path
 import pytest
 
-from medharness2.annotation import AnnotationCase, build_pilot_annotation_package, validate_pilot_annotation_package
+from medharness2.annotation import (
+    AnnotationCase,
+    build_pilot_annotation_package,
+    export_reader_annotation_package,
+    import_reader_annotation_package,
+    validate_pilot_annotation_package,
+)
 from pydantic import ValidationError
 from medharness2.annotation.models import HazardAnnotation
 from medharness2.cli import main
@@ -454,3 +460,72 @@ def test_pilot_source_hash_binds_case_content_not_only_case_id(tmp_path: Path):
     second = json.loads((second_output / "cases" / "pilot-001.json").read_text(encoding="utf-8"))
 
     assert first["source_case_sha256"] != second["source_case_sha256"]
+
+
+def test_import_reader_package_updates_only_assigned_slot(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    master = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, master, limit=1)
+    reader_dir = tmp_path / "reader_a"
+    export_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+
+    reader_case = reader_dir / "cases" / "pilot-001.json"
+    payload = json.loads(reader_case.read_text(encoding="utf-8"))
+    payload["annotations"]["reader_a"]["status"] = "complete"
+    payload["annotations"]["reader_a"]["overall_notes"] = "completed by reader A"
+    reader_case.write_text(json.dumps(payload), encoding="utf-8")
+    row = json.loads((reader_dir / "manifest.jsonl").read_text(encoding="utf-8"))
+    row["status"] = "in_progress"
+    (reader_dir / "manifest.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    result = import_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+
+    assert result["updated_case_count"] == 1
+    merged = json.loads((master / "cases" / "pilot-001.json").read_text(encoding="utf-8"))
+    assert merged["annotations"]["reader_a"]["overall_notes"] == "completed by reader A"
+    assert merged["annotations"]["reader_b"]["status"] == "not_started"
+    assert validate_pilot_annotation_package(master)["status"] == "in_progress"
+
+
+def test_import_reader_package_rejects_source_identity_drift(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    master = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, master, limit=1)
+    reader_dir = tmp_path / "reader_a"
+    export_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+    reader_case = reader_dir / "cases" / "pilot-001.json"
+    payload = json.loads(reader_case.read_text(encoding="utf-8"))
+    payload["source_case_sha256"] = "0" * 64
+    reader_case.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="source_case_sha256"):
+        import_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+
+
+def test_import_reader_package_requires_complete_case_set(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    master = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, master, limit=2)
+    reader_dir = tmp_path / "reader_a"
+    export_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+    (reader_dir / "cases" / "pilot-002.json").unlink()
+    rows = [json.loads(line) for line in (reader_dir / "manifest.jsonl").read_text().splitlines() if line.strip()]
+    (reader_dir / "manifest.jsonl").write_text(json.dumps(rows[0]) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="reader_case_set_mismatch"):
+        import_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+
+
+def test_import_reader_package_rejects_other_slot_data(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    master = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, master, limit=1)
+    reader_dir = tmp_path / "reader_a"
+    export_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+    reader_case = reader_dir / "cases" / "pilot-001.json"
+    payload = json.loads(reader_case.read_text(encoding="utf-8"))
+    payload["annotations"]["reader_b"]["overall_notes"] = "leak"
+    reader_case.write_text(json.dumps(payload), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="reader_annotation_package_invalid"):
+        import_reader_annotation_package(master, reader_dir, reader_slot="reader_a")

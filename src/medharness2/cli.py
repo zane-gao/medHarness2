@@ -9,6 +9,7 @@ from medharness2.catalog import build_capability_catalog
 from medharness2.annotation import (
     build_pilot_annotation_package,
     export_reader_annotation_package,
+    import_reader_annotation_package,
     validate_pilot_annotation_package,
 )
 from medharness2.research_prep import prepare_research_manifests
@@ -97,6 +98,10 @@ def build_parser() -> argparse.ArgumentParser:
     annotation_export.add_argument("--package-dir", required=True)
     annotation_export.add_argument("--output-dir", required=True)
     annotation_export.add_argument("--reader", choices=["reader_a", "reader_b"], required=True)
+    annotation_import = annotation_sub.add_parser("import-reader")
+    annotation_import.add_argument("--package-dir", required=True)
+    annotation_import.add_argument("--reader-package-dir", required=True)
+    annotation_import.add_argument("--reader", choices=["reader_a", "reader_b"], required=True)
     research = subparsers.add_parser("research")
     research_sub = research.add_subparsers(dest="research_command", required=True)
     research_prepare = research_sub.add_parser("prepare-manifests")
@@ -275,6 +280,16 @@ def main(argv: list[str] | None = None) -> int:
             result = export_reader_annotation_package(args.package_dir, args.output_dir, reader_slot=args.reader)
         except Exception as exc:
             print(f"medHarness2 annotation export-reader failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+    if args.command == "annotation" and args.annotation_command == "import-reader":
+        try:
+            result = import_reader_annotation_package(
+                args.package_dir, args.reader_package_dir, reader_slot=args.reader
+            )
+        except Exception as exc:
+            print(f"medHarness2 annotation import-reader failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0

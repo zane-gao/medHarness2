@@ -30,7 +30,7 @@
 
 > **2026-07-17 实验证据收尾**：实验 readiness 现在严格校验 `experiment_validation.json` 的 `experiments`、实验条目、`gates` 及 gate payload 为 mapping；错误结构不会再被 `dict()` 半合法化，也不会影响前端实验门禁状态。实验/项目面板专项回归 `52 passed`，全量回归更新为 `1160 passed, 20 warnings`。
 
-> **2026-07-17 OCR 缓存收尾**：OCR 缓存复用前新增 sidecar 结构门禁；`warnings` 必须是字符串列表，`verifier`/`quality_audit` 必须是对象，`quality_status` 只能是 `passed/review_required/blocked`。损坏缓存现在强制重新生成，不会把错误审计状态带入可用 OCR 文本；PDF 文本层缓存不再因无关 VLM 路由变化而失效。当前全量回归为 `1688 passed, 20 warnings`。
+> **2026-07-17 OCR 缓存收尾**：OCR 缓存复用前新增 sidecar 结构门禁；`warnings` 必须是字符串列表，`verifier`/`quality_audit` 必须是对象，`quality_status` 只能是 `passed/review_required/blocked`。损坏缓存现在强制重新生成，不会把错误审计状态带入可用 OCR 文本；PDF 文本层缓存不再因无关 VLM 路由变化而失效。当前全量回归为 `1691 passed, 20 warnings`。
 
 > **2026-07-15 执行增量**：已完成 OCR 逐页管线、可注入的 audit-only 多模态 verifier、三模态软部位路由、Likert 归一化、统计白名单/小样本区间、并列百分位、鲁棒 JSON 解析、fallback/mock 统计过滤、参考图 recall、seed/cache、Retry-After 和非 CXR observation slug 规范化。北川数据集按当前工程约定直接作为金标准数据源；API/敏感产物硬化按用户指示暂不作为本轮阻塞。以下清单仍保留原始审计事实，已修复项以当前代码和测试为准。
 

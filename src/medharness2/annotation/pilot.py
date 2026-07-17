@@ -413,6 +413,99 @@ def export_reader_annotation_package(
     return {"schema_version": "2.0", "case_count": len(exported_rows), "reader_slot": reader_slot, "output_dir": str(target)}
 
 
+def import_reader_annotation_package(
+    package_dir: str | Path,
+    reader_package_dir: str | Path,
+    *,
+    reader_slot: str,
+) -> dict[str, Any]:
+    """Merge one isolated reader copy into the master package safely.
+
+    Only the requested reader slot is copied.  Case identity, source hash,
+    modality, body part and candidate payload must match the master package;
+    an already completed master slot is never overwritten.
+    """
+    if reader_slot not in {"reader_a", "reader_b"}:
+        raise ValueError("reader_slot must be reader_a or reader_b")
+    master = Path(package_dir)
+    reader_root = Path(reader_package_dir)
+    master_validation = validate_pilot_annotation_package(master)
+    reader_validation = validate_pilot_annotation_package(reader_root)
+    if master_validation["errors"]:
+        raise ValueError("master_annotation_package_invalid")
+    if reader_validation["errors"]:
+        raise ValueError("reader_annotation_package_invalid")
+
+    reader_manifest = reader_root / "manifest.jsonl"
+    master_manifest = master / "manifest.jsonl"
+    rows = [json.loads(line) for line in reader_manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
+    master_rows = [json.loads(line) for line in master_manifest.read_text(encoding="utf-8").splitlines() if line.strip()]
+    for row in rows:
+        if row.get("reader_slot") != reader_slot:
+            raise ValueError("reader_slot_mismatch")
+    master_keys = {(str(row.get("pilot_case_id")), str(row.get("annotation_path"))) for row in master_rows}
+    reader_keys = {(str(row.get("pilot_case_id")), str(row.get("annotation_path"))) for row in rows}
+    if reader_keys != master_keys:
+        raise ValueError("reader_case_set_mismatch")
+
+    master_cases_root = (master / "cases").resolve()
+    reader_cases_root = (reader_root / "cases").resolve()
+    pending_cases: list[tuple[Path, AnnotationCase]] = []
+    updated = 0
+    for row in rows:
+        relative = str(row.get("annotation_path") or "")
+        master_case_path = (master / relative).resolve()
+        reader_case_path = (reader_root / relative).resolve()
+        if master_cases_root not in master_case_path.parents or not master_case_path.is_file():
+            raise ValueError(f"case_missing:{row.get('pilot_case_id')}")
+        if reader_cases_root not in reader_case_path.parents or not reader_case_path.is_file():
+            raise ValueError(f"reader_case_missing:{row.get('pilot_case_id')}")
+        master_case = AnnotationCase.model_validate_json(master_case_path.read_text(encoding="utf-8"))
+        reader_case = AnnotationCase.model_validate_json(reader_case_path.read_text(encoding="utf-8"))
+        if reader_case.pilot_case_id != master_case.pilot_case_id:
+            raise ValueError("pilot_case_id_mismatch")
+        for field in ("source_case_sha256", "modality", "body_part"):
+            if getattr(reader_case, field) != getattr(master_case, field):
+                raise ValueError(field)
+        if [candidate.model_dump() for candidate in reader_case.candidate_reports] != [candidate.model_dump() for candidate in master_case.candidate_reports]:
+            raise ValueError("candidate_reports_mismatch")
+        existing = master_case.annotations[reader_slot]
+        if existing.status == "complete":
+            raise ValueError(f"reader_slot_already_complete:{reader_slot}")
+        imported = reader_case.annotations[reader_slot]
+        for slot in ("reader_a", "reader_b", "adjudication"):
+            if slot == reader_slot:
+                continue
+            annotation = reader_case.annotations[slot]
+            if annotation.status != "not_started" or annotation.findings or annotation.hazards or annotation.overall_notes.strip() or annotation.confidence is not None:
+                raise ValueError("reader_package_contains_other_slot_data")
+        pending_cases.append(
+            (
+                master_case_path,
+                master_case.model_copy(update={"annotations": {**master_case.annotations, reader_slot: imported}}),
+            )
+        )
+        updated += 1
+
+    # Recompute the master manifest statuses after the slot updates.
+    pending_by_path = {path: case for path, case in pending_cases}
+    for row in master_rows:
+        case_path = (master / str(row["annotation_path"])).resolve()
+        case = pending_by_path.get(case_path)
+        if case is None:
+            case = AnnotationCase.model_validate_json(case_path.read_text(encoding="utf-8"))
+        row["status"] = _annotation_status({slot: case.annotations[slot].status for slot in ("reader_a", "reader_b", "adjudication")})
+    # All identity and isolation checks happen before any write, avoiding a
+    # partially merged package when a later case is malformed.
+    for case_path, case in pending_cases:
+        case_path.write_text(case.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    master_manifest.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in master_rows), encoding="utf-8")
+    final_validation = validate_pilot_annotation_package(master)
+    if final_validation["errors"]:
+        raise ValueError("master_annotation_package_invalid_after_import")
+    return {"schema_version": "2.0", "reader_slot": reader_slot, "updated_case_count": updated, "status": final_validation["status"]}
+
+
 def _annotation_status(statuses: dict[str, str]) -> str:
     if all(statuses[slot] == "complete" for slot in ("reader_a", "reader_b", "adjudication")):
         return "complete"

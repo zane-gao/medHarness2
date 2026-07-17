@@ -30,6 +30,18 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
 `annotation validate`；管理员回收时再将对应 `cases/` 合并回主包，不能把两个 reader
 的副本直接互相覆盖。
 
+管理员回收指定 reader 的结果：
+
+```bash
+PYTHONPATH=src .venv/bin/python -m medharness2.cli \
+  annotation import-reader \
+  --package-dir annotation/pilot10 \
+  --reader-package-dir /path/to/reader_a_package \
+  --reader reader_a
+```
+
+该命令只更新指定槽位，并在写回前核对病例身份、源 hash、模态、部位和候选文本；主包中已完成的同名槽位不会被覆盖。
+
 - Cases: 10
 - Blinding: model identities and source case identifiers are not included.
 - Readers: reader_a and reader_b annotate independently; adjudication is completed only after both readers finish.

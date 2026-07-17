@@ -7,7 +7,7 @@ baseline:
   branch: main
   git_sha: 2330c8452250ca28914c4041e8b4b6b105f0b397
   dirty_worktree: false
-  pytest_passed: 1688
+  pytest_passed: 1691
   pytest_warnings: 20
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -138,13 +138,13 @@ workstreams:
     next_gate: Expand the frozen CXR chest exploratory matrix, add clinician labels and formal validation IDs, then promote only models that pass the locked benchmark.
   clinical_validation:
     status: not_started
-    summary: 已从 52 例确定性筛出覆盖 cxr/ct/mri 的 10 例，生成盲化双读者标注包；已提供 annotation export-reader 隔离交付命令；当前 reader A、reader B 和 adjudication 全部 not_started（0/10 complete）。模型身份映射隔离在 internal 文件，不进入医生包；reader 标注用于临床校准，不改变当前北川文本 gold。
+    summary: 已从 52 例确定性筛出覆盖 cxr/ct/mri 的 10 例，生成盲化双读者标注包；已提供 annotation export-reader 隔离交付和 annotation import-reader 安全回收命令；当前 reader A、reader B 和 adjudication 全部 not_started（0/10 complete）。模型身份映射隔离在 internal 文件，不进入医生包；reader 标注用于临床校准，不改变当前北川文本 gold。
     evidence_paths:
       - src/medharness2/annotation/pilot.py
       - docs/research_pipeline_status_20260717.md
       - docs/real_clinician_handoff_20260717.md
       - annotation/pilot10/annotation.schema.json
-    next_gate: 使用 annotation export-reader 分别交付 reader_a/reader_b，独立完成 10 例标注，再 adjudication；完成后重新运行 annotation validate 并计算 inter-rater reliability。
+    next_gate: 使用 annotation export-reader 分别交付 reader_a/reader_b，独立完成 10 例标注，再用 annotation import-reader 安全回收并 adjudication；完成后重新运行 annotation validate 并计算 inter-rater reliability。
   experiments:
     status: in_progress
     summary: 六条 executable YAML protocol 和严格门禁仍在；新增 10 例临床标注准备、OCR 候选双次比较和论文实验 manifest。研究 manifest 现在会逐条校验 annotation case 文件存在性、路径必须位于 cases/、Pydantic contract、病例身份和模态一致性；北川文本 gold 已登记，当前 OCR winner 仍 blocked（候选 provider 双次运行未完成），论文 formal claim false，尚无 validated gate。
@@ -170,7 +170,7 @@ workstreams:
     next_gate: Re-enable strict data-governance review before any external clinical-data run.
   control_panel:
     status: validated
-    summary: The internal project-status dashboard is rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Current and legacy reader panels preserve missing scores/percentiles as null and exclude or show them as unavailable instead of rendering zero/P0. Reader totals are separated from statistically eligible reader counts, so mock/fallback rows are excluded from aggregates without changing completed-reader accounting. Rule extraction keeps missing measurements distinct from explicit zero values during finding de-duplication. Static checks, source inspection, and the latest full regression (`1688 passed, 20 warnings`) pass. Formal benchmark case metrics preserve explicit zero agreement and adjudication counts instead of deriving nonzero fallbacks. Dashboard summaries and KPI rendering preserve explicit zero counts instead of falling back to stale analysis or artifact rows. Optional OCR preflight surfaces primary and configured verifier readiness separately. Complete Chinese OCR responses are not mislabeled as truncated. Legacy generation preserves caller case_id provenance in its input overlay. Explicit empty modality counts and aggregate arrays remain distinct from missing values. Model-role, top-level LLM, per-call provider, manifest, migration, ranking, provenance, and analysis identity fields use fail-closed type boundaries. Playwright visual regression remains unverified because the host lacks `libnspr4.so`.
+    summary: The internal project-status dashboard is rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Current and legacy reader panels preserve missing scores/percentiles as null and exclude or show them as unavailable instead of rendering zero/P0. Reader totals are separated from statistically eligible reader counts, so mock/fallback rows are excluded from aggregates without changing completed-reader accounting. Rule extraction keeps missing measurements distinct from explicit zero values during finding de-duplication. Static checks, source inspection, and the latest full regression (`1691 passed, 20 warnings`) pass. Formal benchmark case metrics preserve explicit zero agreement and adjudication counts instead of deriving nonzero fallbacks. Dashboard summaries and KPI rendering preserve explicit zero counts instead of falling back to stale analysis or artifact rows. Optional OCR preflight surfaces primary and configured verifier readiness separately. Complete Chinese OCR responses are not mislabeled as truncated. Legacy generation preserves caller case_id provenance in its input overlay. Explicit empty modality counts and aggregate arrays remain distinct from missing values. Model-role, top-level LLM, per-call provider, manifest, migration, ranking, provenance, and analysis identity fields use fail-closed type boundaries. Playwright visual regression remains unverified because the host lacks `libnspr4.so`.
     evidence_paths:
       - web/build_panel.py
       - web/panel_template.html

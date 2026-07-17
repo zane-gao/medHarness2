@@ -8,6 +8,7 @@ from medharness2.annotation.models import (
 from medharness2.annotation.pilot import (
     build_pilot_annotation_package,
     export_reader_annotation_package,
+    import_reader_annotation_package,
     validate_pilot_annotation_package,
 )
 
@@ -19,5 +20,6 @@ __all__ = [
     "ReaderAnnotation",
     "build_pilot_annotation_package",
     "export_reader_annotation_package",
+    "import_reader_annotation_package",
     "validate_pilot_annotation_package",
 ]
