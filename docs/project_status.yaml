@@ -5,9 +5,9 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: 7c1efe2
+  git_sha: 4d80029
   dirty_worktree: false
-  pytest_passed: 1132
+  pytest_passed: 1136
   pytest_warnings: 20
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
