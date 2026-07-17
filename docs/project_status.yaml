@@ -5,15 +5,15 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: b3fcafc
-  ledger_commit: b3fcafc
+  git_sha: a452b5a
+  ledger_commit: a452b5a
   evidence_baseline_sha: 07a2c97
   dirty_worktree: false
-  pytest_passed: 1859
+  pytest_passed: 1864
   pytest_warnings: 20
-  latest_pytest_passed: 1859
+  latest_pytest_passed: 1864
   latest_pytest_warnings: 20
-  latest_regression_sha: b3fcafc
+  latest_regression_sha: a452b5a
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
   generated_report_count: 81
