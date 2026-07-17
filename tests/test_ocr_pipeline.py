@@ -839,6 +839,33 @@ def test_ocr_candidate_benchmark_normalizes_model_keys_for_coverage(tmp_path: Pa
     assert result["selection"]["primary_model"] in {"model-a", "model-b"}
 
 
+def test_ocr_candidate_benchmark_normalizes_case_id_for_provenance_and_coverage(tmp_path: Path):
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({"case_id": "case1", "model_key": "model-a", "text": "same"}),
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {
+                    "case_id": " case1 ",
+                    "gold_text": "same",
+                    "candidates": {"model-a": str(candidate)},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "succeeded"
+    assert result["evaluated_count"] == 1
+    assert result["metrics"][0]["case_id"] == "case1"
+
+
 def test_ocr_candidate_benchmark_blocks_duplicate_case_model_rows(tmp_path: Path):
     manifest = tmp_path / "ocr_manifest.jsonl"
     manifest.write_text(

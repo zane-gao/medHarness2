@@ -79,8 +79,12 @@ def evaluate_ocr_candidates(manifest_path: str | Path, output_path: str | Path) 
                 else:
                     blocked.append(f"{case_id}:{model_name}")
                 continue
+            # Use the same normalized case identity for scoring, coverage and
+            # sidecar provenance.  Without this, a harmless surrounding space
+            # in the manifest could create a phantom coverage/provenance split.
+            provenance_item = {**item, "case_id": case_id}
             provenance_blockers = _validate_candidate_provenance(
-                item,
+                provenance_item,
                 model_name,
                 value,
                 manifest_dir=manifest_file.parent,
@@ -206,12 +210,15 @@ def _coverage_blockers(rows: list[dict[str, Any]], manifest: list[Any] | None = 
     for item in manifest or []:
         if not isinstance(item, dict) or item.get("_manifest_error"):
             continue
-        case_id = str(item.get("case_id") or "")
+        raw_case_id = item.get("case_id")
+        case_id = raw_case_id.strip() if isinstance(raw_case_id, str) else ""
         candidates = item.get("candidates")
         if not case_id or not isinstance(candidates, dict):
             continue
         for model in candidates:
-            manifest_cases_by_model.setdefault(str(model).strip(), set()).add(case_id)
+            model_name = model.strip() if isinstance(model, str) else ""
+            if model_name:
+                manifest_cases_by_model.setdefault(model_name, set()).add(case_id)
     for model, cases in manifest_cases_by_model.items():
         cases_by_model.setdefault(model, set()).update(cases & cases_by_model.get(model, set()))
     if len(cases_by_model) < 2:
