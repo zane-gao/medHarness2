@@ -63,6 +63,7 @@ def extract_report_text(
     source_page_count = _pdf_page_count(pdf)
     if cache_path.exists() and cache_path.read_text(encoding="utf-8").strip() and not force:
         cached_meta = _read_meta(meta_path)
+        cached_text = cache_path.read_text(encoding="utf-8")
         if _cache_metadata_valid(cached_meta) and _cache_is_compatible(
             cached_meta,
             case_id=case_id,
@@ -72,10 +73,10 @@ def extract_report_text(
             role=ocr_role if primary_options else "default",
             verifier_options=effective_verifier_options,
             require_real=require_real,
-        ):
+        ) and _cache_text_matches(cached_meta, cached_text):
             return ReportTextResult(
                 case_id=case_id,
-                text=cache_path.read_text(encoding="utf-8"),
+                text=cached_text,
                 method="cache",
                 cache_path=str(cache_path),
                 warnings=list(cached_meta.get("warnings") or []),
@@ -83,7 +84,7 @@ def extract_report_text(
                     "cached_ocr": cached_meta,
                     "quality_audit": cached_meta.get("quality_audit"),
                     "quality_status": cached_meta.get("quality_status") or _ocr_quality_status(
-                        list(cached_meta.get("warnings") or []), cached_meta.get("quality_audit"), cache_path.read_text(encoding="utf-8")
+                        list(cached_meta.get("warnings") or []), cached_meta.get("quality_audit"), cached_text
                     ),
                 },
             )
@@ -216,7 +217,8 @@ def extract_report_text(
         warnings.append("ocr_quality_blocked")
     elif quality_status == "review_required":
         warnings.append("ocr_quality_review_required")
-    cache_path.write_text(text + ("\n" if text and not text.endswith("\n") else ""), encoding="utf-8")
+    persisted_text = text + ("\n" if text and not text.endswith("\n") else "")
+    cache_path.write_text(persisted_text, encoding="utf-8")
     meta_path.write_text(
         json.dumps(
             {
@@ -240,6 +242,10 @@ def extract_report_text(
                 "source_page_count": source_page_count,
                 "retained_page_count": retained_page_count,
                 "pages": page_meta,
+                # Bind the sidecar to the exact cached text.  Legacy sidecars
+                # without this field remain readable, but all newly written
+                # caches fail closed if the text file is later modified.
+                "text_sha256": _text_sha256(persisted_text),
                 "source_pdf_sha256": source_pdf_sha256,
                 "prompt_version": "ocr-page-v2",
                 "quality_audit": quality_audit,
@@ -381,6 +387,7 @@ def _cache_metadata_valid(meta: dict[str, Any]) -> bool:
         "model",
         "role",
         "prompt_version",
+        "text_sha256",
     ):
         if field in meta and meta[field] is not None and not isinstance(meta[field], str):
             return False
@@ -459,6 +466,18 @@ def _cache_metadata_valid(meta: dict[str, Any]) -> bool:
         if isinstance(meta.get("retained_page_count"), int) and retained != meta["retained_page_count"]:
             return False
     return True
+
+
+def _cache_text_matches(meta: dict[str, Any], cached_text: str) -> bool:
+    """Ensure a sidecar cannot be paired with a silently replaced text file."""
+    expected = meta.get("text_sha256")
+    if expected is None:
+        # Older sidecars predate the text binding; retain compatibility while
+        # requiring the field for all newly generated artifacts.
+        return True
+    if not isinstance(expected, str) or len(expected) != 64:
+        return False
+    return expected == _text_sha256(cached_text)
 
 
 def _cache_ocr_page_valid(page: dict[str, Any]) -> bool:
