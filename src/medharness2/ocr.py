@@ -359,6 +359,7 @@ def _cache_is_compatible(
     if expected_verifier_configured and (
         str(cached_verifier.get("provider") or "").lower() != expected_verifier["provider"]
         or str(cached_verifier.get("model") or "") != expected_verifier["model"]
+        or str(cached_verifier.get("role") or "") != "ocr_verifier"
     ):
         return False
     return True
@@ -441,8 +442,6 @@ def _cache_metadata_valid(meta: dict[str, Any]) -> bool:
         method == "vlm_ocr"
         and isinstance(pages, list)
         and not pages
-        and isinstance(meta.get("source_page_count"), int)
-        and meta["source_page_count"] > 0
     ):
         return False
     if isinstance(pages, list) and pages and isinstance(meta.get("source_page_count"), int):
