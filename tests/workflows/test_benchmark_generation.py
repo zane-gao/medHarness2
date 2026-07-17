@@ -10,6 +10,7 @@ import pytest
 from medharness2.config import AppConfig, GeneratorConfig
 from medharness2.workflows.benchmark_generation import (
     _numeric_summary,
+    _strict_bool,
     plan_generation_benchmark,
     run_generation_benchmark,
 )
@@ -23,6 +24,12 @@ def test_numeric_summary_excludes_non_finite_latency_values():
         "min": 1.5,
         "max": 2.5,
     }
+
+
+@pytest.mark.parametrize("bad", [1, 0, "true", [], {}])
+def test_generation_benchmark_rejects_implicit_reference_usage_flag(bad):
+    with pytest.raises(ValueError, match="reference_report_used"):
+        _strict_bool(bad, "reference_report_used")
 
 
 def _manifest(path: Path) -> Path:

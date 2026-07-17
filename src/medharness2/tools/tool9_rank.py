@@ -28,8 +28,7 @@ def select_top_k(
         total = sum(metric_weights.values()) or 1.0
         score = score / total
         score_interval = _score_interval(evaluation, metric_weights, total, metrics)
-        rows.append(
-            {
+        row = {
                 "index": index,
                 "model": evaluation.get("model"),
                 "score": round(score, 4),
@@ -38,7 +37,11 @@ def select_top_k(
                 "score_ci_upper": None if score_interval is None else round(score_interval[1], 4),
                 "uncertainty_status": "available" if score_interval is not None else "unavailable",
             }
-        )
+        if "near_cutoff_review" in evaluation:
+            if not isinstance(evaluation["near_cutoff_review"], bool):
+                raise ValueError("near_cutoff_review must be a boolean")
+            row["near_cutoff_review"] = evaluation["near_cutoff_review"]
+        rows.append(row)
     ranked = sorted(rows, key=lambda row: row["score"], reverse=True)
     for rank, row in enumerate(ranked, start=1):
         row["rank"] = rank
@@ -65,7 +68,9 @@ def select_top_k(
             selected.sort(key=lambda row: row["score"], reverse=True)
     for row in selected:
         row.setdefault("uncertainty_overlap", False)
-        row.setdefault("requires_review", bool(row.get("near_cutoff_review", False)))
+        if "near_cutoff_review" in row and not isinstance(row["near_cutoff_review"], bool):
+            raise ValueError("near_cutoff_review must be a boolean")
+        row.setdefault("requires_review", row.get("near_cutoff_review", False))
     return selected
 
 

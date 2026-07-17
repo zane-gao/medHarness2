@@ -1063,11 +1063,19 @@ def _build_evaluation_summary(
                 for metrics in case_metrics
             ),
             "third_hazard_adjudication_required_count": sum(
-                bool(metrics.get("third_hazard_adjudication_required"))
+                _strict_bool(
+                    metrics.get("third_hazard_adjudication_required"),
+                    "third_hazard_adjudication_required",
+                    default=False,
+                )
                 for metrics in case_metrics
             ),
             "clinical_validation_required_count": sum(
-                bool(metrics.get("clinical_validation_required"))
+                _strict_bool(
+                    metrics.get("clinical_validation_required"),
+                    "clinical_validation_required",
+                    default=False,
+                )
                 for metrics in case_metrics
             ),
             "alignment_audit_verdict_counts": dict(
@@ -1172,6 +1180,14 @@ def _valid_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool)
 
 
+def _strict_bool(value: Any, label: str, default: bool | None = None) -> bool:
+    if value is None and default is not None:
+        return default
+    if not isinstance(value, bool):
+        raise ValueError(f"{label} must be a boolean")
+    return value
+
+
 def _strict_nonnegative_int(value: Any, label: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"{label} must be a non-negative integer")
@@ -1205,6 +1221,14 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
     agreement_summary = dict(hazard_review.get("agreement_summary") or {})
     hazard_adjudication = dict(comparison.get("hazard_adjudication") or {})
     adjudication_decisions = _object_list(hazard_adjudication.get("decisions"), "decisions")
+    for index, decision in enumerate(adjudication_decisions):
+        if "abstain" in decision:
+            _strict_bool(decision.get("abstain"), f"decisions[{index}].abstain")
+    if "clinical_validation_required" in hazard_adjudication:
+        _strict_bool(
+            hazard_adjudication.get("clinical_validation_required"),
+            "clinical_validation_required",
+        )
     alignment_audit = dict(comparison.get("alignment_audit") or {})
     adjudication_summary = dict(
         alignment_audit.get("adjudication_summary") or {}
@@ -1247,7 +1271,7 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
         "hazard_action_agreement_count": _count_or_zero(agreement_summary.get("action_agreement_count"), "hazard action_agreement_count"),
         "hazard_adjudication_decision_count": len(adjudication_decisions),
         "hazard_adjudication_abstained_count": sum(
-            bool(decision.get("abstain"))
+            _strict_bool(decision.get("abstain"), "decisions.abstain", default=False)
             for decision in adjudication_decisions
             if isinstance(decision, dict)
         ),
@@ -1269,8 +1293,10 @@ def _case_evaluation_metrics(payload: dict[str, Any]) -> dict[str, Any]:
             level >= 3 for level in consensus_hazard_levels
         ),
         "consensus_unresolved_error_count": consensus_unresolved_count,
-        "third_hazard_adjudication_required": bool(
-            hazard_adjudication.get("clinical_validation_required")
+        "third_hazard_adjudication_required": _strict_bool(
+            hazard_adjudication.get("clinical_validation_required"),
+            "clinical_validation_required",
+            default=False,
         ),
         "clinical_validation_required": True,
         "alignment_audit_verdict": (
@@ -1307,7 +1333,7 @@ def _consensus_hazard_levels(
             decision = decisions.get(index)
             if (
                 not isinstance(decision, dict)
-                or bool(decision.get("abstain"))
+                or _strict_bool(decision.get("abstain"), "decisions.abstain", default=False)
                 or not _valid_int(decision.get("hazard_level"))
             ):
                 unresolved += 1

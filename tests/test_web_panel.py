@@ -235,6 +235,44 @@ def test_health_strip_surfaces_preflight_ocr_blocker():
     assert "OCR 未就绪: missing_llm_api_key" in html
 
 
+@pytest.mark.parametrize("bad", [1, 0, "true", [], {}])
+def test_health_strip_rejects_implicit_boolean_coercion(bad):
+    with pytest.raises(ValueError, match="boolean"):
+        _render_health_strip(
+            {"passed": bad, "require_real_ocr": False, "mock_ocr_count": 0},
+            {},
+        )
+
+
+@pytest.mark.parametrize("bad", [1, 0, "true", [], {}])
+def test_health_strip_rejects_malformed_ocr_boolean(bad):
+    with pytest.raises(ValueError, match="boolean"):
+        _render_health_strip(
+            {
+                "passed": True,
+                "mock_ocr_count": 0,
+                "ocr": {"status": "ready", "real_ocr_capable": bad},
+            },
+            {},
+        )
+
+
+@pytest.mark.parametrize("bad", [1, 0, "true", [], {}])
+def test_status_chip_rejects_implicit_boolean_coercion(bad):
+    from medharness2.dashboard import _render_status_chip
+
+    with pytest.raises(ValueError, match="boolean"):
+        _render_status_chip({"passed": bad})
+
+
+@pytest.mark.parametrize("bad", [1, 0, "true", [], {}])
+def test_dashboard_model_policy_rejects_implicit_boolean_coercion(bad):
+    from medharness2.dashboard import _format_medical_model_policy
+
+    with pytest.raises(ValueError, match="boolean"):
+        _format_medical_model_policy(bad)
+
+
 def test_extract_project_status_uses_real_yaml():
     path = Path("docs/project_status.yaml")
     status = build_panel.extract_project_status(path)

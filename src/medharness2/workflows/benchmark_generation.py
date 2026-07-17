@@ -394,7 +394,10 @@ def run_generation_benchmark(
         "model_counts": dict(sorted(model_counts.items())),
         "evidence_tier_counts": dict(sorted(tier_counts.items())),
         "execution_mode_counts": dict(sorted(execution_mode_counts.items())),
-        "reference_report_used_count": sum(bool(row.get("reference_report_used")) for row in results),
+        "reference_report_used_count": sum(
+            _strict_bool(row.get("reference_report_used"), "reference_report_used", default=False)
+            for row in results
+        ),
         "empty_report_count": sum(not report for report in report_texts),
         "unique_report_count": len({report for report in report_texts if report}),
         "unique_report_rate": round(
@@ -603,6 +606,14 @@ def _file_sha256(path: Path) -> str:
 
 def _stable_json(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+
+
+def _strict_bool(value: Any, label: str, default: bool | None = None) -> bool:
+    if value is None and default is not None:
+        return default
+    if not isinstance(value, bool):
+        raise ValueError(f"{label} must be a boolean")
+    return value
 
 
 def _numeric_summary(values: list[float]) -> dict[str, Any]:

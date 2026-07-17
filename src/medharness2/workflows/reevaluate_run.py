@@ -290,9 +290,16 @@ def _source_validation_options(source: Path) -> dict[str, Any]:
         payload = read_json(run_summary_path)
         if isinstance(payload.get("validation"), dict):
             validation = dict(payload["validation"])
+    require_real_ocr = validation.get("require_real_ocr", False)
+    if not isinstance(require_real_ocr, bool):
+        raise ValueError("validation.require_real_ocr must be a boolean")
     return {
-        "expected_cases": _optional_int(validation.get("expected_cases") if validation.get("expected_cases") is not None else validation.get("case_count")),
-        "require_real_ocr": bool(validation.get("require_real_ocr", False)),
+        "expected_cases": _optional_int(
+            validation.get("expected_cases")
+            if validation.get("expected_cases") is not None
+            else validation.get("case_count")
+        ),
+        "require_real_ocr": require_real_ocr,
     }
 
 

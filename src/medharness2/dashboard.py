@@ -284,7 +284,8 @@ def _build_template_fragments(payload: dict[str, Any]) -> dict[str, str]:
 def _render_status_chip(validation: dict[str, Any]) -> str:
     if not validation:
         return '<span class="chip"><span class="dot"></span>未运行验证</span>'
-    if validation.get("passed"):
+    passed = _bool_or_default(validation.get("passed"), "validation.passed")
+    if passed:
         return '<span class="chip ok"><span class="dot"></span>验证通过</span>'
     return '<span class="chip bad"><span class="dot"></span>验证未通过</span>'
 
@@ -294,6 +295,14 @@ def _count_or_zero(value: Any, label: str) -> int:
         return 0
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
+def _bool_or_default(value: Any, label: str, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if not isinstance(value, bool):
+        raise ValueError(f"{label} must be a boolean")
     return value
 
 
@@ -341,17 +350,18 @@ def _render_health_strip(validation: dict[str, Any], analysis: dict[str, Any]) -
         return f'<span class="chip {cls}"><span class="dot"></span>{_esc(text)}</span>'
 
     if validation:
-        chips.append(chip(bool(validation.get("passed")), "validate-run " + ("passed" if validation.get("passed") else "failed")))
+        validation_passed = _bool_or_default(validation.get("passed"), "validation.passed")
+        chips.append(chip(validation_passed, "validate-run " + ("passed" if validation_passed else "failed")))
         mock = _count_or_zero(validation.get("mock_ocr_count"), "mock_ocr_count")
         chips.append(chip(mock == 0, f"mock OCR {mock}"))
         ocr = validation.get("ocr") or {}
         if ocr:
             ocr_status = str(ocr.get("status") or "unknown")
-            ocr_ready = bool(ocr.get("real_ocr_capable")) and ocr_status == "ready"
+            ocr_ready = _bool_or_default(ocr.get("real_ocr_capable"), "validation.ocr.real_ocr_capable") and ocr_status == "ready"
             label = "OCR ready" if ocr_ready else f"OCR 未就绪: {ocr.get('blocker') or ocr_status}"
             chips.append(chip(ocr_ready, label))
         else:
-            required = bool(validation.get("require_real_ocr"))
+            required = _bool_or_default(validation.get("require_real_ocr"), "validation.require_real_ocr")
             real = _count_or_zero(validation.get("real_ocr_count"), "real_ocr_count")
             unknown = _count_or_zero(validation.get("unknown_ocr_count"), "unknown_ocr_count")
             if required and real > 0 and mock == 0 and unknown == 0:
@@ -417,7 +427,7 @@ def _format_io(rows: list[dict[str, Any]]) -> str:
 
 
 def _format_medical_model_policy(required: Any) -> str:
-    return "Required" if bool(required) else "Optional"
+    return "Required" if _bool_or_default(required, "medical_model_required") else "Optional"
 
 
 def _format_gate_status(item: dict[str, Any]) -> str:

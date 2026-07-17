@@ -250,6 +250,21 @@ def test_legacy_registry_rejects_implicit_boolean_coercion(tmp_path, field, bad)
     with pytest.raises(ValueError, match=field):
         ReportGeneratorRegistry(config)
 
+
+@pytest.mark.parametrize("bad", ["false", "true", 0, 1, 0.0, 1.0])
+def test_legacy_readiness_helper_rejects_implicit_boolean_coercion(bad):
+    from medharness2.generators.registry import _is_legacy_report_generator_ready
+
+    with pytest.raises(ValueError, match="report_trained"):
+        _is_legacy_report_generator_ready(
+            "legacy_model",
+            {
+                "report_trained": bad,
+                "category": "ready_or_artifact",
+                "adapter": "medharness_cli",
+            },
+        )
+
 @pytest.mark.parametrize("field", ["ready", "report_trained", "fresh_inference"])
 @pytest.mark.parametrize("bad", ["false", "true", 1, 0, 1.0])
 def test_registry_rejects_implicit_boolean_coercion(field, bad):

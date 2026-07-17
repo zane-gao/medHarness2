@@ -79,6 +79,59 @@ def test_cli_analyze_run_rejects_malformed_result(tmp_path: Path, monkeypatch):
     assert registry["entries"][-1]["status"] == "failed"
 
 
+def test_cli_sample_full_rejects_malformed_validation_result(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(
+        cli_module,
+        "run_sample_full",
+        lambda *args, **kwargs: {
+            "summary": {
+                "case_count": 1,
+                "workflow2_case_count": 0,
+                "workflow2_failed_case_count": 0,
+                "workflow3_case_count": 0,
+                "reader_count": 0,
+            },
+            "validation": {"passed": "true", "errors": []},
+            "paths": {},
+        },
+    )
+    code = main(
+        [
+            "workflow",
+            "sample-full",
+            "--sample-root",
+            str(tmp_path / "sample"),
+            "--output-dir",
+            str(tmp_path / "run"),
+        ]
+    )
+    assert code == 1
+    registry = json.loads((tmp_path / "run" / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
+def test_cli_merge_batches_rejects_malformed_validation_result(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(
+        cli_module,
+        "merge_batch_results",
+        lambda *args, **kwargs: {"case_count": 1, "failed_case_count": 0, "per_reader": {}},
+    )
+    monkeypatch.setattr(cli_module, "validate_sample_run", lambda *args, **kwargs: {"passed": "true"})
+    code = main(
+        [
+            "workflow",
+            "merge-batches",
+            "--batch-result",
+            str(tmp_path / "batch.json"),
+            "--output-dir",
+            str(tmp_path / "run"),
+        ]
+    )
+    assert code == 1
+    registry = json.loads((tmp_path / "run" / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_reference_report_coverage_is_self_recall_not_template_size():
     result = evaluate_single_report(
         "FINDINGS: Mild right lung opacity. IMPRESSION: Mild opacity.",

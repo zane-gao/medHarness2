@@ -743,6 +743,26 @@ def test_case_evaluation_metrics_ignore_boolean_hazard_levels():
     assert metrics["consensus_unresolved_error_count"] == 1
 
 
+@pytest.mark.parametrize("bad", [1, 0, "true", [], {}])
+def test_case_evaluation_metrics_reject_implicit_boolean_flags(bad):
+    payload = _strict_case_evaluation()
+    _add_hazard_disagreement(payload, include_adjudication=True)
+    comparison = payload["pairwise_comparisons"][0]["comparison"]
+    comparison["hazard_adjudication"]["clinical_validation_required"] = bad
+    with pytest.raises(ValueError, match="clinical_validation_required"):
+        _case_evaluation_metrics(payload)
+
+
+@pytest.mark.parametrize("bad", [1, 0, "true", [], {}])
+def test_case_evaluation_metrics_reject_implicit_abstain_flags(bad):
+    payload = _strict_case_evaluation()
+    _add_hazard_disagreement(payload, include_adjudication=True)
+    comparison = payload["pairwise_comparisons"][0]["comparison"]
+    comparison["hazard_adjudication"]["decisions"] = [{"error_index": 0, "abstain": bad}]
+    with pytest.raises(ValueError, match="abstain"):
+        _case_evaluation_metrics(payload)
+
+
 def test_evaluation_summary_filters_invalid_hazard_level_lists():
     payload = _strict_case_evaluation()
     summary = _build_evaluation_summary(

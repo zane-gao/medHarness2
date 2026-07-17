@@ -943,14 +943,20 @@ def _default_body_part(modality: str) -> str:
 def _is_legacy_report_generator_ready(key: str, row: dict[str, Any]) -> bool:
     if key in _LEGACY_FORMAL_ROUTE_EXCLUDE:
         return False
-    if not bool(row.get("report_trained", False)):
+    report_trained = row.get("report_trained", False)
+    if not isinstance(report_trained, bool):
+        raise ValueError("report_trained must be a boolean")
+    if not report_trained:
         return False
     category = str(row.get("category") or "")
     if category not in {"ready_or_artifact", "report_trained_target"}:
         return False
     adapter = str(row.get("adapter") or "")
     if adapter == "artifact_reuse":
-        return bool(row.get("source_generation_jsonl"))
+        source_generation_jsonl = row.get("source_generation_jsonl", "")
+        if source_generation_jsonl is not None and not isinstance(source_generation_jsonl, str):
+            raise ValueError("source_generation_jsonl must be a string")
+        return bool(source_generation_jsonl)
     return adapter not in {"source_audit_only", "blocked_no_public_weights", "gated_waitlist", ""}
 
 

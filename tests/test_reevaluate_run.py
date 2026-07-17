@@ -7,7 +7,7 @@ import pytest
 
 from medharness2.cli import main
 from medharness2.config import AppConfig, ExtractorConfig, GeneratorConfig, LLMConfig
-from medharness2.workflows.reevaluate_run import _generated_reports, reevaluate_run
+from medharness2.workflows.reevaluate_run import _generated_reports, _source_validation_options, reevaluate_run
 
 
 def test_generated_reports_migrates_legacy_medharness_cli_as_debug_fallback():
@@ -316,6 +316,14 @@ def test_reevaluate_run_preserves_source_real_ocr_validation_policy(tmp_path: Pa
     assert validation["real_ocr_count"] == 1
     assert validation["mock_ocr_count"] == 0
     assert validation["unknown_ocr_count"] == 0
+
+
+def test_reevaluate_run_rejects_malformed_source_ocr_policy(tmp_path: Path):
+    source = tmp_path / "source_run"
+    source.mkdir()
+    _write_json(source / "run_summary.json", {"validation": {"require_real_ocr": "true"}})
+    with pytest.raises(ValueError, match="require_real_ocr"):
+        _source_validation_options(source)
 
 
 def test_reevaluate_run_marks_reconstructed_report_as_fallback(tmp_path: Path):

@@ -699,7 +699,23 @@ def main(argv: list[str] | None = None) -> int:
                 f"fallback={result['summary']['cases_requiring_fallback']}"
             )
             return 0 if result["summary"]["case_count"] else 1
-        validation_passed = bool(result.get("validation", {}).get("passed"))
+        try:
+            result = _result_mapping(result, "sample_full.result")
+            result_summary = _result_mapping(result.get("summary"), "sample_full.summary")
+            result_validation = _result_mapping(result.get("validation"), "sample_full.validation")
+            validation_passed = _result_bool(result_validation.get("passed"), "sample_full.validation.passed")
+            validation_errors = _result_string_list(result_validation.get("errors"), "sample_full.validation.errors")
+            result_paths = _result_mapping(result.get("paths"), "sample_full.paths")
+        except Exception as exc:
+            _record_registry(
+                args.output_dir, command=command, stage="workflow.sample-full", status="failed",
+                inputs={"sample_root": args.sample_root, "config": args.config or ""},
+                outputs={"output_dir": args.output_dir},
+                metrics={"error_count": 1, "exception_type": type(exc).__name__},
+                warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 sample-full failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         _record_registry(
             args.output_dir,
             command=command,
@@ -716,25 +732,25 @@ def main(argv: list[str] | None = None) -> int:
                 "model_sources": args.model_sources or [],
                 "config": args.config or "",
             },
-            outputs=dict(result.get("paths") or {}),
+            outputs=result_paths,
             metrics={
-                "case_count": _count_or_zero(result.get("summary", {}).get("case_count"), "case_count"),
-                "workflow2_case_count": _count_or_zero(result.get("summary", {}).get("workflow2_case_count"), "workflow2_case_count"),
-                "workflow2_failed_case_count": _count_or_zero(result.get("summary", {}).get("workflow2_failed_case_count"), "workflow2_failed_case_count"),
-                "workflow3_case_count": _count_or_zero(result.get("summary", {}).get("workflow3_case_count"), "workflow3_case_count"),
-                "reader_count": _count_or_zero(result.get("summary", {}).get("reader_count"), "reader_count"),
+                "case_count": _count_or_zero(result_summary.get("case_count"), "case_count"),
+                "workflow2_case_count": _count_or_zero(result_summary.get("workflow2_case_count"), "workflow2_case_count"),
+                "workflow2_failed_case_count": _count_or_zero(result_summary.get("workflow2_failed_case_count"), "workflow2_failed_case_count"),
+                "workflow3_case_count": _count_or_zero(result_summary.get("workflow3_case_count"), "workflow3_case_count"),
+                "reader_count": _count_or_zero(result_summary.get("reader_count"), "reader_count"),
                 "validation_passed": validation_passed,
-                "validation_error_count": len(result.get("validation", {}).get("errors") or []),
+                "validation_error_count": len(validation_errors),
             },
         )
         print(f"wrote medHarness2 sample full-run summary to {Path(args.output_dir) / 'run_summary.json'}")
         print(
             "cases="
-            f"{result['summary']['case_count']} "
-            f"workflow2={result['summary']['workflow2_case_count']} "
-            f"validation_passed={result['validation']['passed']}"
+            f"{result_summary['case_count']} "
+            f"workflow2={result_summary['workflow2_case_count']} "
+            f"validation_passed={validation_passed}"
         )
-        return 0 if result["validation"]["passed"] else 1
+        return 0 if validation_passed else 1
     if args.command == "workflow" and args.workflow == "batch-readers":
         try:
             config = load_config(args.config) if args.config else load_config()
@@ -824,11 +840,27 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"medHarness2 merge-batches failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
-        validation = validate_sample_run(
-            args.output_dir,
-            expected_cases=args.expected_cases,
-            require_real_ocr=args.require_real_ocr,
-        )
+        try:
+            validation = _result_mapping(
+                validate_sample_run(
+                    args.output_dir,
+                    expected_cases=args.expected_cases,
+                    require_real_ocr=args.require_real_ocr,
+                ),
+                "merge_batches.validation",
+            )
+            validation_passed = _result_bool(validation.get("passed"), "merge_batches.validation.passed")
+            validation_errors = _result_string_list(validation.get("errors"), "merge_batches.validation.errors")
+        except Exception as exc:
+            _record_registry(
+                args.output_dir, command=command, stage="workflow.merge-batches", status="failed",
+                inputs={"batch_results": args.batch_results, "manifest": args.manifest or ""},
+                outputs={"output_dir": args.output_dir},
+                metrics={"error_count": 1, "exception_type": type(exc).__name__},
+                warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 merge-batches failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         summary = {
             "paths": {
                 "manifest": str(Path(args.output_dir) / "manifest.jsonl") if args.manifest else "",
@@ -845,7 +877,6 @@ def main(argv: list[str] | None = None) -> int:
             "merge_metadata": result.get("merge_metadata") or {},
         }
         write_json(Path(args.output_dir) / "run_summary.json", summary)
-        validation_passed = bool(validation.get("passed"))
         _record_registry(
             args.output_dir,
             command=command,
@@ -863,7 +894,7 @@ def main(argv: list[str] | None = None) -> int:
                 "failed_case_count": _count_or_zero(result.get("failed_case_count"), "failed_case_count"),
                 "reader_count": len(result.get("per_reader") or {}),
                 "validation_passed": validation_passed,
-                "validation_error_count": len(validation.get("errors") or []),
+                "validation_error_count": len(validation_errors),
             },
         )
         print(f"wrote medHarness2 merged batch outputs to {args.output_dir}")
@@ -871,9 +902,9 @@ def main(argv: list[str] | None = None) -> int:
             "cases="
             f"{result['case_count']} "
             f"failed={result['failed_case_count']} "
-            f"validation_passed={validation['passed']}"
+            f"validation_passed={validation_passed}"
         )
-        return 0 if validation["passed"] else 1
+        return 0 if validation_passed else 1
     if args.command == "workflow" and args.workflow == "analyze-run":
         try:
             result = analyze_run(args.output_dir, args.analysis_dir)

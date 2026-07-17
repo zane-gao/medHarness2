@@ -2010,6 +2010,20 @@ def test_tool9_rejects_non_strict_ranking_controls():
         select_top_k(rows, near_cutoff_tolerance="0.01")
 
 
+@pytest.mark.parametrize("bad", [1, 0, "true", [], {}])
+def test_tool9_rejects_malformed_near_cutoff_review_flag(bad):
+    rows = [
+        {"model": "a", "composite_inputs": {"likert_mean": 4, "structure_score": 0.8, "finding_coverage": 0.8}},
+        {
+            "model": "b",
+            "composite_inputs": {"likert_mean": 3.9, "structure_score": 0.8, "finding_coverage": 0.8},
+            "near_cutoff_review": bad,
+        },
+    ]
+    with pytest.raises(ValueError, match="near_cutoff_review"):
+        select_top_k(rows, top_k=1)
+
+
 def test_tool9_ignores_invalid_metric_weights_instead_of_coercing_them():
     rows = [{"model": "a", "composite_inputs": {"likert_mean": 4, "structure_score": 0.8, "finding_coverage": 0.8}}]
     with pytest.raises(ValueError, match="weights"):
