@@ -314,9 +314,13 @@ def _declared_text_path(value: Any, *, base_dir: Path | None = None) -> tuple[Pa
         candidate = value.strip()
         if candidate:
             path = Path(candidate)
+            try:
+                exists = path.exists()
+            except OSError:
+                exists = False
             path_like = (
                 path.is_absolute()
-                or path.exists()
+                or exists
                 or path.suffix.lower() in _TEXT_PATH_SUFFIXES
                 or (not any(char.isspace() for char in candidate) and ("/" in candidate or "\\" in candidate))
                 or candidate.startswith(("./", "../", "~"))
@@ -363,7 +367,7 @@ def _clinical_text(text: str) -> str:
 def _candidate_payload(value: Any, *, base_dir: Path | None = None) -> dict[str, Any]:
     if isinstance(value, dict):
         path, declared_path = _declared_text_path(value, base_dir=base_dir)
-        if declared_path and path is not None and path.is_file() and path.suffix.lower() == ".json":
+        if declared_path and path is not None and _safe_is_file(path) and path.suffix.lower() == ".json":
             try:
                 payload = json.loads(path.read_text(encoding="utf-8"))
             except (OSError, TypeError, ValueError):
@@ -373,13 +377,20 @@ def _candidate_payload(value: Any, *, base_dir: Path | None = None) -> dict[str,
     path = Path(value) if isinstance(value, str) else None
     if path is not None and not path.is_absolute() and base_dir is not None:
         path = base_dir / path
-    if path is not None and path.is_file() and path.suffix.lower() == ".json":
+    if path is not None and _safe_is_file(path) and path.suffix.lower() == ".json":
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, TypeError, ValueError):
             return {}
         return payload if isinstance(payload, dict) else {}
     return {}
+
+
+def _safe_is_file(path: Path) -> bool:
+    try:
+        return path.is_file()
+    except OSError:
+        return False
 
 
 def _gold_quality_blocker(value: Any, *, case_id: str, base_dir: Path) -> str | None:

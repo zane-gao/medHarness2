@@ -7,7 +7,7 @@ baseline:
   branch: main
   git_sha: 4583f18f89b99416823e76a3001928224b2eb087
   dirty_worktree: false
-  pytest_passed: 1675
+  pytest_passed: 1683
   pytest_warnings: 20
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -81,7 +81,7 @@ workstreams:
     next_gate: Freeze repeated-run reliability targets, complete dual-reader gold labels, and benchmark every model role before a formal case run.
   ocr:
     status: in_progress
-    summary: OCR 现已升级为逐页 300 DPI 图像管线，记录页级 hash、provider/model/role、页序、墨量、空白页跳过和疑似截断；缓存 sidecar 绑定 case/source/provider/model/role，并新增缓存文本 `text_sha256` 与质量摘要一致性校验，模型变更、文本替换或 verifier 状态矛盾不会误复用旧 OCR。OCR 结果现在显式分为 passed、review_required、blocked：空结果或疑似截断不再作为可用 report_text 进入样本清单，verifier disagreement/失败只进入人工复核，不静默改写主 OCR。北川参考报告作为当前文本 benchmark gold 已就绪；dmx_strong 已提供 Doubao Seed 候选主 OCR 与独立 Qwen OCR verifier 的 audit-only 路由，但二者仍是候选，尚未凭宣传或单例样本指定生产 winner；必须在北川冻结集上按 clinical CER、数字/否定词、截断率和重测一致性实测。独立多模态模型只允许产出差异审计，不静默改写主 OCR。
+    summary: OCR 现已升级为逐页 300 DPI 图像管线，记录页级 hash、provider/model/role、页序、墨量、空白页跳过和疑似截断；缓存 sidecar 绑定 case/source/provider/model/role，并新增缓存文本 `text_sha256` 与质量摘要一致性校验，模型变更、文本替换或 verifier 状态矛盾不会误复用旧 OCR。配置声明 `ocr_verifier` 但调用方未接入 verifier client 时，结果强制降为 `review_required`。OCR 结果现在显式分为 passed、review_required、blocked：空结果或疑似截断不再作为可用 report_text 进入样本清单，verifier disagreement/失败只进入人工复核，不静默改写主 OCR。北川参考报告作为当前文本 benchmark gold 已就绪；dmx_strong 已提供 Doubao Seed 候选主 OCR 与独立 Qwen OCR verifier 的 audit-only 路由，但二者仍是候选，尚未凭宣传或单例样本指定生产 winner；必须在北川冻结集上按 clinical CER、数字/否定词、截断率和重测一致性实测。独立多模态模型只允许产出差异审计，不静默改写主 OCR。
     evidence_paths:
       - docs/superpowers/specs/2026-07-11-dmx-doubao-ocr-benchmark-design.md
       - outputs/ocr_quality_audit_qwen3vl4b_20260711/summary.json
@@ -119,14 +119,14 @@ workstreams:
     next_gate: 在北川冻结集上重跑候选模型和双次重复调用，验证 fallback_count、recall、seed/cache、评委一致性和临床错误率，再决定 formal benchmark promotion。
   benchmark_gates:
     status: in_progress
-    summary: 已提供 `ocr-benchmark` 冻结集评测 CLI（CER、数字/否定词、截断率、provisional winner）和 `live-smoke` 真实评委连通性/JSON 门禁。北川参考报告作为当前 gold 输入；缺少 candidate、声明路径或凭据时返回 blocked；缺失/空 manifest 分别记录 `manifest:missing_file` / `manifest:empty`；空白凭据也按缺失处理，正式 benchmark role gate 与 LLMClient 传输层保持同一语义；mock/deterministic/fallback provider 即使配置了 key 也会被 live-smoke 拒绝；`benchmark run` 的 CLI 退出码现在跟随结果状态，不会把 failed/completed_with_failures 当作成功；损坏 UTF-8 manifest、空模型键、病例身份或模型身份不匹配的 OCR sidecar 也会明确 blocked，不会用 0 分或 mock 结果冒充完成。
+    summary: 已提供 `ocr-benchmark` 冻结集评测 CLI（CER、数字/否定词、截断率、provisional winner）和 `live-smoke` 真实评委连通性/JSON 门禁。研究准备命令现在额外生成两个 evaluator-ready 的 repeat manifest，预注册北川 gold、候选路由和输出 sidecar 路径；候选缺失时直接 blocked。长篇中文 inline gold 的路径探测已做 OSError 安全处理。北川参考报告作为当前 gold 输入；缺少 candidate、声明路径或凭据时返回 blocked；缺失/空 manifest 分别记录 `manifest:missing_file` / `manifest:empty`；空白凭据也按缺失处理，正式 benchmark role gate 与 LLMClient 传输层保持同一语义；mock/deterministic/fallback provider 即使配置了 key 也会被 live-smoke 拒绝；`benchmark run` 的 CLI 退出码现在跟随结果状态，不会把 failed/completed_with_failures 当作成功；损坏 UTF-8 manifest、空模型键、病例身份或模型身份不匹配的 OCR sidecar 也会明确 blocked，不会用 0 分或 mock 结果冒充完成。
     evidence_paths:
       - src/medharness2/ocr_benchmark.py
       - src/medharness2/validation/live_smoke.py
       - tests/test_ocr_pipeline.py
       - tests/test_live_smoke.py
       - docs/ocr_model_selection_20260715.md
-    next_gate: 生成北川 10 例视觉核验 manifest，运行至少两个 OCR 候选各两次，并执行 `medharness2 live-smoke --config config/dmx_strong.yaml`；强配置的 hazard reviewer 已默认执行双次一致性重测。
+    next_gate: 将真实 provider 输出写入两个 evaluator-ready repeat manifest，运行至少两个 OCR 候选各两次，并执行 `medharness2 live-smoke --config config/dmx_strong.yaml`；强配置的 hazard reviewer 已默认执行双次一致性重测。
   generation:
     status: in_progress
     summary: Every report has an evidence tier. Benchmark planning separates eligible/rejected models, formal candidate coverage, and modality-aware image/volume assets. Eleven frozen CXR chest cases completed true Qwen3-VL 8B fresh inference with do_sample=false and seed 20260710. The reports remain exploratory_fresh, contain only five unique outputs, and the 52-case legacy run contains no formal_fresh report.
@@ -170,7 +170,7 @@ workstreams:
     next_gate: Re-enable strict data-governance review before any external clinical-data run.
   control_panel:
     status: validated
-    summary: The internal project-status dashboard is rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Current and legacy reader panels preserve missing scores/percentiles as null and exclude or show them as unavailable instead of rendering zero/P0. Reader totals are separated from statistically eligible reader counts, so mock/fallback rows are excluded from aggregates without changing completed-reader accounting. Rule extraction keeps missing measurements distinct from explicit zero values during finding de-duplication. Static checks, source inspection, and the latest full regression (`1675 passed, 20 warnings`) pass. Formal benchmark case metrics preserve explicit zero agreement and adjudication counts instead of deriving nonzero fallbacks. Dashboard summaries and KPI rendering preserve explicit zero counts instead of falling back to stale analysis or artifact rows. Optional OCR preflight surfaces OCR readiness separately from validate-run status. Complete Chinese OCR responses are not mislabeled as truncated. Legacy generation preserves caller case_id provenance in its input overlay. Explicit empty modality counts and aggregate arrays remain distinct from missing values. Model-role, top-level LLM, per-call provider, manifest, migration, ranking, provenance, and analysis identity fields use fail-closed type boundaries. Playwright visual regression remains unverified because the host lacks `libnspr4.so`.
+    summary: The internal project-status dashboard is rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Current and legacy reader panels preserve missing scores/percentiles as null and exclude or show them as unavailable instead of rendering zero/P0. Reader totals are separated from statistically eligible reader counts, so mock/fallback rows are excluded from aggregates without changing completed-reader accounting. Rule extraction keeps missing measurements distinct from explicit zero values during finding de-duplication. Static checks, source inspection, and the latest full regression (`1683 passed, 20 warnings`) pass. Formal benchmark case metrics preserve explicit zero agreement and adjudication counts instead of deriving nonzero fallbacks. Dashboard summaries and KPI rendering preserve explicit zero counts instead of falling back to stale analysis or artifact rows. Optional OCR preflight surfaces OCR readiness separately from validate-run status. Complete Chinese OCR responses are not mislabeled as truncated. Legacy generation preserves caller case_id provenance in its input overlay. Explicit empty modality counts and aggregate arrays remain distinct from missing values. Model-role, top-level LLM, per-call provider, manifest, migration, ranking, provenance, and analysis identity fields use fail-closed type boundaries. Playwright visual regression remains unverified because the host lacks `libnspr4.so`.
     evidence_paths:
       - web/build_panel.py
       - web/panel_template.html

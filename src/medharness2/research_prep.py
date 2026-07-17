@@ -44,7 +44,19 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
     required = {"cxr", "ct", "mri"}
     coverage_ok = required.issubset(modalities)
     ocr_rows = []
+    benchmark_cases_by_repeat: dict[int, list[dict[str, Any]]] = {1: [], 2: []}
     for row in rows:
+        annotation_case = AnnotationCase.model_validate_json(
+            (pilot / str(row["annotation_path"])).read_text(encoding="utf-8")
+        )
+        candidate_routes = {
+            item["candidate_id"]: {
+                "provider": item["provider"],
+                "model": item["model"],
+                "role": item["role"],
+            }
+            for item in OCR_CANDIDATES
+        }
         for candidate in OCR_CANDIDATES:
             for repeat in (1, 2):
                 ocr_rows.append({
@@ -58,6 +70,25 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
                     "gold_status": CURRENT_GOLD_STATUS,
                     "blocked_reasons": ["real_provider_run_not_available"],
                 })
+        for repeat in (1, 2):
+            benchmark_cases_by_repeat[repeat].append(
+                {
+                    "case_id": annotation_case.pilot_case_id,
+                    "modality": annotation_case.modality,
+                    "gold_text": annotation_case.reference_report,
+                    "candidates": {
+                        candidate["candidate_id"]: {
+                            "path": (
+                                f"ocr_runs/repeat_{repeat}/{annotation_case.pilot_case_id}/"
+                                f"{candidate['candidate_id']}.json"
+                            )
+                        }
+                        for candidate in OCR_CANDIDATES
+                    },
+                    "candidate_routes": candidate_routes,
+                }
+            )
+    benchmark_manifest_names = ["ocr_benchmark_repeat_1.json", "ocr_benchmark_repeat_2.json"]
     output.mkdir(parents=True, exist_ok=True)
     ocr_manifest = {
         "schema_version": "1.0",
@@ -71,6 +102,7 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
         "winner_status": "blocked",
         "candidates": list(OCR_CANDIDATES),
         "runs": ocr_rows,
+        "benchmark_manifests": benchmark_manifest_names,
         "winner_rule": ["clinical_cer", "truncation_count", "numeric_token_accuracy", "negation_accuracy", "repeat_consistency"],
     }
     paper_manifest = {
@@ -95,6 +127,20 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
         "formal_claim_allowed": False,
     }
     (output / "ocr_manifest.json").write_text(json.dumps(ocr_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    for repeat, name in ((1, benchmark_manifest_names[0]), (2, benchmark_manifest_names[1])):
+        benchmark_manifest = {
+            "schema_version": "1.0",
+            "artifact_type": "ocr_candidate_benchmark_manifest",
+            "status": "blocked",
+            "gold_source": CURRENT_GOLD_SOURCE,
+            "gold_status": CURRENT_GOLD_STATUS,
+            "repeat": repeat,
+            "cases": benchmark_cases_by_repeat[repeat],
+        }
+        (output / name).write_text(
+            json.dumps(benchmark_manifest, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     (output / "paper_experiment_manifest.json").write_text(json.dumps(paper_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {"status": "blocked", "case_count": len(rows), "modality_coverage": sorted(modalities), "output_dir": str(output)}
 
