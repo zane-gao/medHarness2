@@ -141,6 +141,14 @@ def _optional_list(value: dict[str, Any], key: str, *, prefix: str = "") -> list
     return item
 
 
+def _optional_mapping_list(value: dict[str, Any], key: str, *, prefix: str = "") -> list[dict[str, Any]]:
+    items = _optional_list(value, key, prefix=prefix)
+    label = f"{prefix}.{key}" if prefix else key
+    if any(not isinstance(item, dict) for item in items):
+        raise ValueError(f"{label} items must be objects")
+    return items
+
+
 def _first_present(*values: Any) -> Any:
     """Return the first non-None value, preserving explicit zeroes."""
     for value in values:
@@ -250,16 +258,16 @@ def _build_template_fragments(payload: dict[str, Any]) -> dict[str, str]:
         "__MH2_MODELSRC_ROWS__": _render_modelsrc_rows(_optional_list(tables, "model_source", prefix="analysis_tables")),
         "__MH2_QGF_BLOCK__": _render_qgf_block(_optional_list(tables, "quality_gate_failures", prefix="analysis_tables")),
         "__MH2_ROUTES_BLOCK__": _render_routes_block(_optional_list(tables, "case_routes", prefix="analysis_tables")),
-        "__MH2_WORKFLOW_ROWS__": _render_workflow_rows(_optional_list(catalog, "workflow_stages", prefix="catalog")),
-        "__MH2_TOOL_CARDS__": _render_tool_cards(_optional_list(catalog, "tools", prefix="catalog")),
-        "__MH2_TOOL_TABLE_ROWS__": _render_tool_table_rows(_optional_list(catalog, "tools", prefix="catalog")),
-        "__MH2_MODEL_COUNT__": str(len(_optional_list(catalog, "models", prefix="catalog"))),
-        "__MH2_MODEL_ROWS__": _render_model_rows(_optional_list(catalog, "models", prefix="catalog")),
+        "__MH2_WORKFLOW_ROWS__": _render_workflow_rows(_optional_mapping_list(catalog, "workflow_stages", prefix="catalog")),
+        "__MH2_TOOL_CARDS__": _render_tool_cards(_optional_mapping_list(catalog, "tools", prefix="catalog")),
+        "__MH2_TOOL_TABLE_ROWS__": _render_tool_table_rows(_optional_mapping_list(catalog, "tools", prefix="catalog")),
+        "__MH2_MODEL_COUNT__": str(len(_optional_mapping_list(catalog, "models", prefix="catalog"))),
+        "__MH2_MODEL_ROWS__": _render_model_rows(_optional_mapping_list(catalog, "models", prefix="catalog")),
         "__MH2_ROLE_CARDS__": _render_role_cards(catalog.get("providers") or {}),
-        "__MH2_EXPERIMENT_CARDS__": _render_experiment_cards(_optional_list(experiments, "experiments", prefix="experiments")),
-        "__MH2_PROTOCOL_CARDS__": _render_protocol_cards(_optional_list(protocol, "experiments", prefix="experiment_protocol")),
-        "__MH2_FIGURE_GALLERY__": _render_figure_gallery(_optional_list(figures, "figures", prefix="figures")),
-        "__MH2_REGISTRY_ROWS__": _render_registry_rows(_optional_list(registry, "entries", prefix="run_registry")),
+        "__MH2_EXPERIMENT_CARDS__": _render_experiment_cards(_optional_mapping_list(experiments, "experiments", prefix="experiments")),
+        "__MH2_PROTOCOL_CARDS__": _render_protocol_cards(_optional_mapping_list(protocol, "experiments", prefix="experiment_protocol")),
+        "__MH2_FIGURE_GALLERY__": _render_figure_gallery(_optional_mapping_list(figures, "figures", prefix="figures")),
+        "__MH2_REGISTRY_ROWS__": _render_registry_rows(_optional_mapping_list(registry, "entries", prefix="run_registry")),
         "__MH2_PAYLOAD__": payload_json,
     }
 

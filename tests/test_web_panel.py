@@ -95,6 +95,36 @@ def test_dashboard_summary_rejects_malformed_external_shapes(field_path, bad, la
         summarize_dashboard_payload(payload)
 
 
+@pytest.mark.parametrize(
+    ("field_path", "label"),
+    [
+        (("catalog", "tools"), "catalog.tools"),
+        (("catalog", "models"), "catalog.models"),
+        (("experiments", "experiments"), "experiments.experiments"),
+        (("figures", "figures"), "figures.figures"),
+        (("run_registry", "entries"), "run_registry.entries"),
+    ],
+)
+def test_dashboard_summary_rejects_malformed_list_items(field_path, label):
+    payload = {
+        "run_summary": {"summary": {"case_count": 0}},
+        "analysis": {},
+        "catalog": {"tools": [], "models": []},
+        "figures": {"figure_count": 0, "figures": []},
+        "run_registry": {"entries": []},
+        "experiments": {"experiment_count": 0, "experiments": []},
+    }
+    target = payload
+    for key in field_path[:-1]:
+        target = target[key]
+    target[field_path[-1]] = ["malformed"]
+    with pytest.raises(ValueError, match=label):
+        if field_path[0] in {"catalog", "experiments", "figures", "run_registry"}:
+            from medharness2.dashboard import _build_template_fragments
+
+            _build_template_fragments(payload)
+
+
 @pytest.mark.parametrize("field", ["passed", "total"])
 @pytest.mark.parametrize("bad", [True, 1.5, "2", -1])
 def test_dashboard_gate_status_rejects_invalid_counts(field, bad):
