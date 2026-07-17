@@ -225,16 +225,16 @@ def _empty_row(colspan: int, message: str = "暂无数据") -> str:
 
 
 def _build_template_fragments(payload: dict[str, Any]) -> dict[str, str]:
-    catalog = payload["catalog"]
-    experiments = payload["experiments"]
-    protocol = payload.get("experiment_protocol") or {}
-    run_summary = payload.get("run_summary") or {}
-    summary = run_summary.get("summary") or {}
-    validation = run_summary.get("validation") or {}
-    analysis = payload.get("analysis") or {}
-    tables = payload.get("analysis_tables") or {}
-    registry = payload.get("run_registry") or {}
-    figures = payload.get("figures") or {}
+    catalog = _optional_mapping(payload, "catalog")
+    experiments = _optional_mapping(payload, "experiments")
+    protocol = _optional_mapping(payload, "experiment_protocol")
+    run_summary = _optional_mapping(payload, "run_summary")
+    summary = _optional_mapping(run_summary, "summary", prefix="run_summary")
+    validation = _optional_mapping(run_summary, "validation", prefix="run_summary")
+    analysis = _optional_mapping(payload, "analysis")
+    tables = _optional_mapping(payload, "analysis_tables")
+    registry = _optional_mapping(payload, "run_registry")
+    figures = _optional_mapping(payload, "figures")
 
     # JSON 嵌入 <script type="application/json">：转义 "</" 防止提前闭合标签
     payload_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
@@ -245,21 +245,21 @@ def _build_template_fragments(payload: dict[str, Any]) -> dict[str, str]:
         "__MH2_GENERATED__": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "__MH2_KPI__": _render_kpis(summary, validation, analysis, catalog, experiments, figures),
         "__MH2_HEALTH__": _render_health_strip(validation, analysis),
-        "__MH2_READER_ROWS__": _render_reader_rows(tables.get("readers") or []),
-        "__MH2_MODBP_ROWS__": _render_modbp_rows(tables.get("modality_body_part") or []),
-        "__MH2_MODELSRC_ROWS__": _render_modelsrc_rows(tables.get("model_source") or []),
-        "__MH2_QGF_BLOCK__": _render_qgf_block(tables.get("quality_gate_failures") or []),
-        "__MH2_ROUTES_BLOCK__": _render_routes_block(tables.get("case_routes") or []),
-        "__MH2_WORKFLOW_ROWS__": _render_workflow_rows(catalog.get("workflow_stages") or []),
-        "__MH2_TOOL_CARDS__": _render_tool_cards(catalog.get("tools") or []),
-        "__MH2_TOOL_TABLE_ROWS__": _render_tool_table_rows(catalog.get("tools") or []),
-        "__MH2_MODEL_COUNT__": str(len(catalog.get("models") or [])),
-        "__MH2_MODEL_ROWS__": _render_model_rows(catalog.get("models") or []),
+        "__MH2_READER_ROWS__": _render_reader_rows(_optional_list(tables, "readers", prefix="analysis_tables")),
+        "__MH2_MODBP_ROWS__": _render_modbp_rows(_optional_list(tables, "modality_body_part", prefix="analysis_tables")),
+        "__MH2_MODELSRC_ROWS__": _render_modelsrc_rows(_optional_list(tables, "model_source", prefix="analysis_tables")),
+        "__MH2_QGF_BLOCK__": _render_qgf_block(_optional_list(tables, "quality_gate_failures", prefix="analysis_tables")),
+        "__MH2_ROUTES_BLOCK__": _render_routes_block(_optional_list(tables, "case_routes", prefix="analysis_tables")),
+        "__MH2_WORKFLOW_ROWS__": _render_workflow_rows(_optional_list(catalog, "workflow_stages", prefix="catalog")),
+        "__MH2_TOOL_CARDS__": _render_tool_cards(_optional_list(catalog, "tools", prefix="catalog")),
+        "__MH2_TOOL_TABLE_ROWS__": _render_tool_table_rows(_optional_list(catalog, "tools", prefix="catalog")),
+        "__MH2_MODEL_COUNT__": str(len(_optional_list(catalog, "models", prefix="catalog"))),
+        "__MH2_MODEL_ROWS__": _render_model_rows(_optional_list(catalog, "models", prefix="catalog")),
         "__MH2_ROLE_CARDS__": _render_role_cards(catalog.get("providers") or {}),
-        "__MH2_EXPERIMENT_CARDS__": _render_experiment_cards(experiments.get("experiments") or []),
-        "__MH2_PROTOCOL_CARDS__": _render_protocol_cards(protocol.get("experiments") or []),
-        "__MH2_FIGURE_GALLERY__": _render_figure_gallery(figures.get("figures") or []),
-        "__MH2_REGISTRY_ROWS__": _render_registry_rows(registry.get("entries") or []),
+        "__MH2_EXPERIMENT_CARDS__": _render_experiment_cards(_optional_list(experiments, "experiments", prefix="experiments")),
+        "__MH2_PROTOCOL_CARDS__": _render_protocol_cards(_optional_list(protocol, "experiments", prefix="experiment_protocol")),
+        "__MH2_FIGURE_GALLERY__": _render_figure_gallery(_optional_list(figures, "figures", prefix="figures")),
+        "__MH2_REGISTRY_ROWS__": _render_registry_rows(_optional_list(registry, "entries", prefix="run_registry")),
         "__MH2_PAYLOAD__": payload_json,
     }
 
