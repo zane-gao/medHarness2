@@ -179,7 +179,7 @@ workstreams:
       - tests/web_panel.spec.mjs
       - playwright.config.mjs
       - tests/test_project_metadata.py
-    next_gate: 在已声明的 `@playwright/test` 依赖基础上补齐宿主 `libnspr4.so`，运行 tests/web_panel.spec.mjs 的 1440x900 和 390x844 回归，审阅截图并核对发布 HTML 与最新本地证据源一致。
+    next_gate: 保持 1440x900 和 390x844 的 Playwright 回归；当前两项均已通过，后续只需在宿主系统永久安装 Chromium 依赖后复跑以消除临时用户态依赖。
 
 api_verification:
   preferred_profile: config/dmx_strong.yaml
