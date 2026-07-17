@@ -464,6 +464,13 @@ def _cache_ocr_page_valid(page: dict[str, Any]) -> bool:
             return False
     if "skipped" in page and not isinstance(page["skipped"], bool):
         return False
+    if page.get("skipped") is False:
+        # A retained page must carry non-empty OCR evidence.  Accepting a
+        # zero-length page while a sidecar claims a usable status would let a
+        # malformed cache bypass the normal quality gate.
+        char_count = page.get("char_count")
+        if not isinstance(char_count, int) or isinstance(char_count, bool) or char_count <= 0:
+            return False
     return True
 
 
