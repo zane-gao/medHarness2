@@ -80,6 +80,47 @@ def test_api_rejects_malformed_workflow_results(
     assert registry["entries"][-1]["status"] == "failed"
 
 
+def test_api_single_case_rejects_malformed_result(tmp_path: Path, monkeypatch):
+    output_path = tmp_path / "single.json"
+    monkeypatch.setattr(
+        api_module,
+        "run_single_case",
+        lambda *args, **kwargs: {
+            "input": "bad",
+            "generated_reports": "bad",
+            "generated_evaluations": [],
+            "rankings": [],
+            "pairwise_comparisons": [],
+            "errors": [],
+        },
+    )
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/workflow/single-case",
+        json={"report_text": "report", "image_path": "image.dcm", "output_path": str(output_path)},
+    )
+    assert response.status_code == 500
+    assert response.json()["detail"] == "single_case_failed:ValueError"
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
+def test_api_experiments_run_rejects_malformed_result(tmp_path: Path, monkeypatch):
+    output_dir = tmp_path / "experiments"
+    monkeypatch.setattr(
+        api_module,
+        "run_experiments",
+        lambda *args, **kwargs: {"experiment_count": "1", "experiments": [], "errors": "bad"},
+    )
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/experiments/run",
+        json={"run_dir": str(tmp_path / "run"), "output_dir": str(output_dir)},
+    )
+    assert response.status_code == 500
+    assert response.json()["detail"] == "experiments_run_failed:ValueError"
+    registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_api_single_case_accepts_report_text(tmp_path: Path):
     config_path = tmp_path / "api_config.yaml"
     config_path.write_text(

@@ -296,6 +296,13 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
                 model_sources=request.model_sources,
                 config=cfg,
             )
+        result = _result_mapping(result, "single_case.result")
+        _result_mapping(result.get("input"), "single_case.input")
+        _result_string_list(result.get("errors"), "single_case.errors")
+        for field in ("generated_reports", "generated_evaluations", "rankings", "pairwise_comparisons"):
+            value = result.get(field)
+            if value is not None and not isinstance(value, list):
+                raise ValueError(f"single_case.{field} must be a list")
     except Exception as exc:
         _record_registry(
             Path(request.output_path).parent,
@@ -307,23 +314,28 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
             warnings=[f"{type(exc).__name__}: {exc}"],
         )
         raise HTTPException(status_code=500, detail=f"single_case_failed:{type(exc).__name__}") from exc
-    result_errors = list(result.get("errors") or [])
+    result_errors = _result_string_list(result.get("errors"), "single_case.errors")
+    result_input = _result_mapping(result.get("input"), "single_case.input")
+    generated_reports = result.get("generated_reports") or []
+    generated_evaluations = result.get("generated_evaluations") or []
+    rankings = result.get("rankings") or []
+    pairwise_comparisons = result.get("pairwise_comparisons") or []
     _record_registry(
         Path(request.output_path).parent,
         stage="workflow.single-case",
         status="failed" if result_errors else "passed",
         inputs={"output_path": request.output_path, "case_id": request.case_id or ""},
         outputs={"result": request.output_path},
-        metrics={"generated_report_count": len(result.get("generated_reports") or []), "error_count": len(result_errors)},
+        metrics={"generated_report_count": len(generated_reports), "error_count": len(result_errors)},
         warnings=result_errors,
     )
     return {
         "output_path": request.output_path,
         "summary": {
-            "modality": result.get("input", {}).get("modality"),
-            "generated_reports": len(result.get("generated_reports") or []),
-            "pairwise_comparisons": len(result.get("pairwise_comparisons") or []),
-            "rankings": len(result.get("rankings") or []),
+            "modality": result_input.get("modality"),
+            "generated_reports": len(generated_reports),
+            "pairwise_comparisons": len(pairwise_comparisons),
+            "rankings": len(rankings),
             "errors": result_errors,
         },
         "result": result,
@@ -334,6 +346,12 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
 def experiments_run(request: ExperimentRunRequest) -> dict[str, Any]:
     try:
         result = run_experiments(request.run_dir, request.output_dir)
+        result = _result_mapping(result, "experiments.result")
+        _count_or_zero(result.get("experiment_count"), "experiment_count")
+        experiments = result.get("experiments")
+        if not isinstance(experiments, list):
+            raise ValueError("experiments.experiments must be a list")
+        _result_string_list(result.get("errors"), "experiments.errors")
     except Exception as exc:
         for registry_dir in (request.output_dir, request.run_dir):
             _record_registry(
@@ -346,6 +364,7 @@ def experiments_run(request: ExperimentRunRequest) -> dict[str, Any]:
                 warnings=[f"{type(exc).__name__}: {exc}"],
             )
         raise HTTPException(status_code=500, detail=f"experiments_run_failed:{type(exc).__name__}") from exc
+    errors = _result_string_list(result.get("errors"), "experiments.errors")
     metrics = experiment_registry_metrics(result)
     outputs = {
         "results": str(Path(request.output_dir) / "results.json"),
@@ -355,7 +374,7 @@ def experiments_run(request: ExperimentRunRequest) -> dict[str, Any]:
     _record_registry(
         request.output_dir,
         stage="experiments.run",
-        status="failed" if result.get("errors") else "passed",
+        status="failed" if errors else "passed",
         inputs={"run_dir": request.run_dir},
         outputs=outputs,
         metrics=metrics,
@@ -363,14 +382,14 @@ def experiments_run(request: ExperimentRunRequest) -> dict[str, Any]:
     _record_registry(
         request.run_dir,
         stage="experiments.run",
-        status="failed" if result.get("errors") else "passed",
+        status="failed" if errors else "passed",
         inputs={"run_dir": request.run_dir},
         outputs={"experiment_dir": request.output_dir, **outputs},
         metrics=metrics,
     )
     return {
         "output_dir": request.output_dir,
-        "summary": {"experiments": result["experiment_count"], "errors": list(result.get("errors") or [])},
+        "summary": {"experiments": result["experiment_count"], "errors": errors},
         "result": result,
     }
 
