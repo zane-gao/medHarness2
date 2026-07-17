@@ -279,6 +279,9 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
     for index, raw in enumerate(payload.get("findings") or [], start=1):
         if not isinstance(raw, dict):
             raise TypeError(f"finding_graph.findings[{index - 1}] must be an object")
+        raw_attributes = raw.get("attributes")
+        if raw_attributes is not None and not isinstance(raw_attributes, dict):
+            raise TypeError(f"finding_graph.findings[{index - 1}].attributes must be an object")
         for field in ("finding_id", "id", "observation_text", "observation", "observation_code", "source_text", "text"):
             value = raw.get(field)
             if value is not None and not isinstance(value, str):
@@ -297,7 +300,7 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
         observation_text = (observation_value or "unparsed_legacy_finding").strip()
         location_text = _optional_text(raw.get("location_text") or raw.get("location"))
         measurements, unparsed_measurement = _migrate_measurements(raw)
-        attributes = deepcopy(dict(raw.get("attributes") or {}))
+        attributes = deepcopy(raw.get("attributes") or {})
         legacy_fields = {
             key: deepcopy(value)
             for key, value in raw.items()
@@ -379,6 +382,10 @@ def _migrate_hazard_result(payload: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         pass
 
+    raw_metadata = payload.get("metadata")
+    if raw_metadata is not None and not isinstance(raw_metadata, dict):
+        raise TypeError("hazard_result.metadata must be an object")
+
     errors: list[dict[str, Any]] = []
     legacy_error_fields: list[dict[str, Any]] = []
     for index, raw in enumerate(payload.get("errors") or []):
@@ -439,7 +446,7 @@ def _migrate_hazard_result(payload: dict[str, Any]) -> dict[str, Any]:
         if extras:
             legacy_error_fields.append({"error_index": index, "fields": extras})
 
-    metadata = deepcopy(dict(payload.get("metadata") or {}))
+    metadata = deepcopy(payload.get("metadata") or {})
     metadata.update(
         {
             "migrated_from_schema_version": str(payload.get("schema_version") or "1"),

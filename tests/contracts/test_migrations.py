@@ -239,6 +239,22 @@ def test_hazard_migration_rejects_non_boolean_abstain(bad):
         _migrate_hazard_result({"errors": [{"error_type": "false_finding", "abstain": bad}]})
 
 
+@pytest.mark.parametrize("bad", ["x", ["x"], 7, True])
+def test_finding_graph_migration_rejects_non_object_attributes(bad):
+    from medharness2.contracts.migrations import _migrate_finding_graph
+
+    with pytest.raises((TypeError, ValueError), match="attributes"):
+        _migrate_finding_graph({"modality": "cxr", "backend": "legacy", "findings": [{"id": "f1", "observation": "opacity", "attributes": bad}]})
+
+
+@pytest.mark.parametrize("bad", ["x", ["x"], 7, True])
+def test_hazard_migration_rejects_non_object_metadata(bad):
+    from medharness2.contracts.migrations import _migrate_hazard_result
+
+    with pytest.raises((TypeError, ValueError), match="metadata"):
+        _migrate_hazard_result({"errors": [], "metadata": bad})
+
+
 def test_migrate_v1_hazard_preserves_unknown_top_level_fields():
     legacy = _legacy_case()
     legacy["pairwise_comparisons"] = [
