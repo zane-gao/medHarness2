@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from medharness2.modality import normalize_modality
+from medharness2.annotation.models import AnnotationCase
 from medharness2.utils.io import read_json
 
 
@@ -33,7 +34,7 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
         raise ValueError("pilot_manifest_empty")
     if any(not isinstance(row, dict) for row in rows):
         raise ValueError("pilot_manifest_malformed_row")
-    _validate_pilot_rows(rows)
+    _validate_pilot_rows(rows, pilot)
     modalities = {normalize_modality(row.get("modality")) for row in rows}
     required = {"cxr", "ct", "mri"}
     coverage_ok = required.issubset(modalities)
@@ -82,7 +83,7 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
     return {"status": "blocked", "case_count": len(rows), "modality_coverage": sorted(modalities), "output_dir": str(output)}
 
 
-def _validate_pilot_rows(rows: list[dict[str, Any]]) -> None:
+def _validate_pilot_rows(rows: list[dict[str, Any]], pilot_dir: Path) -> None:
     """Reject malformed package identity fields before creating research runs."""
     seen_ids: set[str] = set()
     seen_paths: set[str] = set()
@@ -102,5 +103,22 @@ def _validate_pilot_rows(rows: list[dict[str, Any]]) -> None:
             raise ValueError(f"pilot_manifest_duplicate_case_id:{normalized_id}")
         if normalized_path in seen_paths:
             raise ValueError(f"pilot_manifest_duplicate_annotation_path:{normalized_path}")
+        raw_path = Path(normalized_path)
+        if raw_path.is_absolute():
+            raise ValueError(f"pilot_manifest_row_{index}:annotation_path_must_be_relative")
+        case_root = (pilot_dir / "cases").resolve()
+        case_path = (pilot_dir / raw_path).resolve()
+        if case_root not in case_path.parents or case_path == case_root:
+            raise ValueError(f"pilot_manifest_row_{index}:annotation_path_outside_cases")
+        if not case_path.is_file():
+            raise ValueError(f"pilot_manifest_row_{index}:annotation_case_missing:{normalized_path}")
+        try:
+            case = AnnotationCase.model_validate_json(case_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise ValueError(f"pilot_manifest_row_{index}:annotation_case_invalid:{normalized_path}") from exc
+        if case.pilot_case_id != normalized_id:
+            raise ValueError(f"pilot_manifest_row_{index}:annotation_case_identity_mismatch")
+        if normalize_modality(case.modality) != normalize_modality(modality):
+            raise ValueError(f"pilot_manifest_row_{index}:annotation_case_modality_mismatch")
         seen_ids.add(normalized_id)
         seen_paths.add(normalized_path)

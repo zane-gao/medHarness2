@@ -5,12 +5,38 @@ from pathlib import Path
 
 import pytest
 
+from medharness2.annotation.models import AnnotationCase, CandidateReportForAnnotation, ReaderAnnotation
 from medharness2.research_prep import prepare_research_manifests
 
 
 def _pilot(tmp_path: Path, rows: list[dict]) -> Path:
     root = tmp_path / "pilot"
     root.mkdir()
+    cases = root / "cases"
+    cases.mkdir()
+    for row in rows:
+        relative = row.get("annotation_path")
+        if not isinstance(relative, str) or not relative.startswith("cases/"):
+            continue
+        case = AnnotationCase(
+            pilot_case_id=str(row.get("pilot_case_id") or "pilot-test"),
+            source_case_sha256="a" * 64,
+            modality=str(row.get("modality") or "unknown").lower(),
+            body_part="unknown",
+            reference_report="reference",
+            candidate_reports=[
+                CandidateReportForAnnotation(
+                    candidate_id="candidate-01",
+                    blinded_model_id="model-01",
+                    report_text="candidate",
+                )
+            ],
+            annotations={
+                slot: ReaderAnnotation(reader_slot=slot)
+                for slot in ("reader_a", "reader_b", "adjudication")
+            },
+        )
+        (root / relative).write_text(case.model_dump_json(indent=2) + "\n", encoding="utf-8")
     (root / "manifest.jsonl").write_text(
         "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
     )
@@ -73,4 +99,27 @@ def test_prepare_research_manifests_rejects_duplicate_identity(tmp_path: Path):
         ],
     )
     with pytest.raises(ValueError, match="duplicate_case_id"):
+        prepare_research_manifests(pilot, tmp_path / "research")
+
+
+def test_prepare_research_manifests_rejects_missing_annotation_case(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/missing.json"}],
+    )
+    (pilot / "cases" / "missing.json").unlink()
+    with pytest.raises(ValueError, match="annotation_case"):
+        prepare_research_manifests(pilot, tmp_path / "research")
+
+
+def test_prepare_research_manifests_rejects_annotation_case_identity_mismatch(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    case_path = pilot / "cases" / "pilot-001.json"
+    raw = json.loads(case_path.read_text(encoding="utf-8"))
+    raw["pilot_case_id"] = "pilot-999"
+    case_path.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(ValueError, match="annotation_case"):
         prepare_research_manifests(pilot, tmp_path / "research")
