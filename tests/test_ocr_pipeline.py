@@ -268,6 +268,30 @@ def test_ocr_cache_does_not_reuse_when_text_file_changes_after_sidecar(tmp_path:
     assert result.text.startswith("FINDINGS: page 1")
 
 
+def test_ocr_cache_invalid_utf8_is_treated_as_miss(tmp_path: Path):
+    pdf = tmp_path / "invalid-cache.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+    ocr_dir = tmp_path / "ocr"
+    ocr_dir.mkdir()
+    (ocr_dir / "case-invalid-cache.txt").write_bytes(b"\xff\xfe\xfa")
+
+    client = PageOCRClient()
+    result = extract_report_text(
+        pdf,
+        case_id="case-invalid-cache",
+        output_dir=ocr_dir,
+        config=AppConfig(llm=LLMConfig(provider="openai", model="ocr-v1")),
+        llm_client=client,
+    )
+
+    assert result.method == "vlm_ocr"
+    assert len(client.paths) == 1
+    assert result.text.startswith("FINDINGS: page 1")
+
+
 def test_scanned_pdf_ocr_is_page_ordered_and_records_provenance(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()
@@ -1065,6 +1089,23 @@ def test_ocr_benchmark_ignores_clinical_history_when_scoring_clinical_sections(t
     assert result["status"] == "succeeded"
     assert result["metrics"][0]["clinical_cer"] == 0.0
     assert result["metrics"][0]["clinical_text_source"] == "sections"
+
+
+def test_ocr_candidate_benchmark_accepts_long_inline_gold_text(tmp_path: Path):
+    gold = "检查所见：" + ("未见明显异常。" * 80) + "\n诊断印象：未见急性改变。"
+    manifest = tmp_path / "ocr_manifest.json"
+    manifest.write_text(
+        json.dumps(
+            [{"case_id": "case-long-inline", "gold_text": gold, "candidates": {"model-a": gold}}],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["status"] == "succeeded"
+    assert result["metrics"][0]["clinical_cer"] == 0.0
 
 @pytest.mark.parametrize("bad", [True, 1, 1.5, ["text"], {"unexpected": "value"}])
 def test_ocr_candidate_benchmark_blocks_non_text_inline_values(tmp_path: Path, bad):

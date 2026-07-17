@@ -67,9 +67,9 @@ def extract_report_text(
     meta_path = out_dir / f"{case_id}.ocr.json"
     source_pdf_sha256 = _sha256(pdf)
     source_page_count = _pdf_page_count(pdf)
-    if cache_path.exists() and cache_path.read_text(encoding="utf-8").strip() and not force:
+    cached_text = _read_cached_text(cache_path) if not force else None
+    if cached_text is not None and cached_text.strip() and not force:
         cached_meta = _read_meta(meta_path)
-        cached_text = cache_path.read_text(encoding="utf-8")
         if _cache_metadata_valid(cached_meta) and _cache_is_compatible(
             cached_meta,
             case_id=case_id,
@@ -725,6 +725,19 @@ def _read_meta(path: Path) -> dict[str, Any]:
     except Exception:
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _read_cached_text(path: Path) -> str | None:
+    """Read cached OCR text without allowing a corrupt file to abort OCR.
+
+    A cache is an optimization, not an input requirement.  Treat decoding,
+    permission, and other filesystem failures as a cache miss so the caller
+    can regenerate the sidecar/text pair from the configured OCR provider.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return None
 
 
 def _is_real_ocr_meta(meta: dict[str, Any]) -> bool:
