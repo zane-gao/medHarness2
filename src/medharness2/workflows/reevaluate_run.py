@@ -37,7 +37,14 @@ def reevaluate_run(
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
     workflow2 = read_json(source / "workflow2.json")
-    source_case_count = len(workflow2.get("cases") or [])
+    raw_cases = workflow2.get("cases")
+    if raw_cases in (None, "", []):
+        cases = []
+    elif not isinstance(raw_cases, list) or any(not isinstance(case, dict) for case in raw_cases):
+        raise ValueError("workflow2.cases must be a list of objects")
+    else:
+        cases = raw_cases
+    source_case_count = len(cases)
     _copy_optional_source_files(source, out)
 
     case_results: list[dict[str, Any]] = []
@@ -45,7 +52,7 @@ def reevaluate_run(
     per_reader: dict[str, dict[str, Any]] = {}
     reused_generated_report_count = 0
 
-    for case in workflow2.get("cases") or []:
+    for case in cases:
         try:
             case_id = _case_string(case, "case_id", "")
             reader = _case_string(case, "reader", "unknown")
