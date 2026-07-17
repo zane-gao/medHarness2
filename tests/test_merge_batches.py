@@ -5,7 +5,9 @@ from pathlib import Path
 
 from medharness2.cli import main
 from medharness2.validation.sample_run import validate_sample_run
-from medharness2.workflows.merge_batches import merge_batch_results
+from medharness2.workflows.merge_batches import _count_workflow1, merge_batch_results
+from collections import Counter
+import pytest
 
 
 def test_merge_batch_results_builds_unified_workflow_outputs(tmp_path: Path):
@@ -116,6 +118,16 @@ def test_cli_merge_batches_rejects_empty_batch(tmp_path: Path):
     summary = json.loads((output_dir / "run_summary.json").read_text(encoding="utf-8"))
     assert summary["validation"]["passed"] is False
     assert "no_cases_discovered" in summary["validation"]["errors"]
+
+
+@pytest.mark.parametrize("field,bad", [("model", 7), ("source", ["artifact"]), ("warnings", "bad"), ("metadata", [])])
+def test_merge_report_summary_rejects_malformed_generated_report_fields(tmp_path: Path, field, bad):
+    path = tmp_path / "case.json"
+    payload = {"generated_reports": [{"model": "m", "source": "s", "warnings": [], "metadata": {}}]}
+    payload["generated_reports"][0][field] = bad
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=f"generated_reports.*{field}"):
+        _count_workflow1(path, Counter(), Counter(), Counter(), Counter())
 
 
 def _write_manifest(path: Path, case_ids: list[str]) -> None:

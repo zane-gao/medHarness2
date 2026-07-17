@@ -148,12 +148,25 @@ def _count_workflow1(
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return
-    for report in data.get("generated_reports") or []:
-        model_counts[str(report.get("model") or "unknown")] += 1
-        source_counts[str(report.get("source") or "unknown")] += 1
-        for warning in report.get("warnings") or []:
-            warning_counts[str(warning)] += 1
-        quality_gate = (report.get("metadata") or {}).get("quality_gate") or {}
+    reports = data.get("generated_reports") or []
+    if not isinstance(reports, list) or any(not isinstance(report, dict) for report in reports):
+        raise ValueError("generated_reports must be a list of objects")
+    for report in reports:
+        for field in ("model", "source", "report", "modality", "evidence_tier"):
+            value = report.get(field)
+            if value is not None and value != "" and not isinstance(value, str):
+                raise ValueError(f"generated_reports.{field} must be a string")
+        warnings = report.get("warnings", [])
+        if not isinstance(warnings, list) or any(not isinstance(warning, str) for warning in warnings):
+            raise ValueError("generated_reports.warnings must be a string list")
+        report_metadata = report.get("metadata", {})
+        if not isinstance(report_metadata, dict):
+            raise ValueError("generated_reports.metadata must be an object")
+        model_counts[report.get("model") or "unknown"] += 1
+        source_counts[report.get("source") or "unknown"] += 1
+        for warning in warnings:
+            warning_counts[warning] += 1
+        quality_gate = report_metadata.get("quality_gate") or {}
         if quality_gate:
             quality_counts["passed" if quality_gate.get("passed") else "failed"] += 1
 
