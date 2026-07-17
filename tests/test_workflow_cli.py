@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+import medharness2.cli as cli_module
 
 from medharness2.checkpoints import StageCheckpointStore
 from medharness2.cli import main
@@ -26,6 +27,27 @@ def test_single_report_module_returns_composite_inputs():
 def test_cli_registry_counts_reject_invalid_values(bad):
     with pytest.raises(ValueError, match="count"):
         _count_or_zero(bad, "count")
+
+
+def test_cli_validate_run_rejects_malformed_result(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(cli_module, "validate_sample_run", lambda *args, **kwargs: {"passed": "true", "errors": []})
+    code = main(["workflow", "validate-run", "--output-dir", str(tmp_path)])
+    assert code == 1
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
+def test_cli_preflight_rejects_malformed_result(tmp_path: Path, monkeypatch):
+    output = tmp_path / "preflight.json"
+    monkeypatch.setattr(
+        cli_module,
+        "run_sample_preflight",
+        lambda *args, **kwargs: {"passed": 1, "sample": {}, "paths": {}, "blockers": [], "warnings": []},
+    )
+    code = main(["workflow", "preflight", "--sample-root", str(tmp_path / "sample"), "--output", str(output)])
+    assert code == 1
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
 
 
 def test_reference_report_coverage_is_self_recall_not_template_size():

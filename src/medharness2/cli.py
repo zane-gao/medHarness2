@@ -40,6 +40,28 @@ def _count_or_zero(value: object, label: str) -> int:
     return value
 
 
+def _result_mapping(value: object, label: str) -> dict:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
+def _result_string_list(value: object, label: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{label} must be a list of strings")
+    return value
+
+
+def _result_bool(value: object, label: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{label} must be a boolean")
+    return value
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="medharness2", description="medHarness2 MVP CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -923,13 +945,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1 if (failed_case_count or workflow_errors or validation_failed) else 0
     if args.command == "workflow" and args.workflow == "validate-run":
-        result = validate_sample_run(
-            args.output_dir,
-            expected_cases=args.expected_cases,
-            require_real_ocr=args.require_real_ocr,
-            require_workflows=not args.no_require_workflows,
-        )
-        validation_passed = bool(result.get("passed"))
+        try:
+            result = validate_sample_run(
+                args.output_dir,
+                expected_cases=args.expected_cases,
+                require_real_ocr=args.require_real_ocr,
+                require_workflows=not args.no_require_workflows,
+            )
+            result = _result_mapping(result, "validate_run.result")
+            validation_passed = _result_bool(result.get("passed"), "validate_run.passed")
+            validation_errors = _result_string_list(result.get("errors"), "validate_run.errors")
+            validation_warnings = _result_string_list(result.get("warnings"), "validate_run.warnings")
+        except Exception as exc:
+            _record_registry(
+                args.output_dir, command=command, stage="workflow.validate-run", status="failed",
+                inputs={"output_dir": args.output_dir, "expected_cases": args.expected_cases},
+                outputs={}, metrics={"error_count": 1}, warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 validate-run failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         _record_registry(
             args.output_dir,
             command=command,
@@ -949,8 +983,8 @@ def main(argv: list[str] | None = None) -> int:
                 "failed_case_count": _count_or_zero(result.get("failed_case_count"), "failed_case_count"),
                 "mock_ocr_count": _count_or_zero(result.get("mock_ocr_count"), "mock_ocr_count"),
                 "real_ocr_count": _count_or_zero(result.get("real_ocr_count"), "real_ocr_count"),
-                "error_count": len(result.get("errors") or []),
-                "warning_count": len(result.get("warnings") or []),
+                "error_count": len(validation_errors),
+                "warning_count": len(validation_warnings),
             },
         )
         print(__import__("json").dumps(result, ensure_ascii=False, indent=2))
@@ -987,7 +1021,27 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"medHarness2 preflight failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
-        passed = bool(result.get("passed"))
+        try:
+            result = _result_mapping(result, "preflight.result")
+            passed = _result_bool(result.get("passed"), "preflight.passed")
+            sample = _result_mapping(result.get("sample"), "preflight.sample")
+            paths = _result_mapping(result.get("paths"), "preflight.paths")
+            blockers = _result_string_list(result.get("blockers"), "preflight.blockers")
+            warnings = _result_string_list(result.get("warnings"), "preflight.warnings")
+            routing = _result_mapping(result.get("routing"), "preflight.routing")
+        except Exception as exc:
+            _record_registry(
+                Path(args.output).parent,
+                command=command,
+                stage="workflow.preflight",
+                status="failed",
+                inputs={"sample_root": args.sample_root, "limit": args.limit},
+                outputs={"preflight": args.output},
+                metrics={"error_count": 1},
+                warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 preflight failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         _record_registry(
             Path(args.output).parent,
             command=command,
@@ -1003,22 +1057,22 @@ def main(argv: list[str] | None = None) -> int:
             },
             outputs={
                 "preflight": args.output,
-                "route_plan": str(result.get("paths", {}).get("route_plan") or ""),
+                    "route_plan": str(paths.get("route_plan") or ""),
             },
             metrics={
                 "passed": passed,
-                "case_count": _count_or_zero(result.get("sample", {}).get("case_count"), "case_count"),
-                "blocker_count": len(result.get("blockers") or []),
-                "warning_count": len(result.get("warnings") or []),
-                "fallback_count": _count_or_zero(result.get("routing", {}).get("cases_requiring_fallback"), "cases_requiring_fallback"),
+                    "case_count": _count_or_zero(sample.get("case_count"), "case_count"),
+                    "blocker_count": len(blockers),
+                    "warning_count": len(warnings),
+                    "fallback_count": _count_or_zero(routing.get("cases_requiring_fallback"), "cases_requiring_fallback"),
             },
         )
         print(f"wrote medHarness2 preflight output to {args.output}")
         print(
             "passed="
             f"{result['passed']} "
-            f"cases={result['sample']['case_count']} "
-            f"blockers={','.join(result['blockers']) if result['blockers'] else '-'}"
+                f"cases={sample['case_count']} "
+                f"blockers={','.join(blockers) if blockers else '-'}"
         )
         return 0 if result["passed"] else 1
     if args.command == "workflow" and args.workflow == "education":
