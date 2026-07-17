@@ -237,6 +237,8 @@ def _likert01_or_none(value: Any) -> float | None:
 
 
 def _eligible_for_statistics(evaluation: dict[str, Any]) -> bool:
+    if not isinstance(evaluation, dict) or not _valid_provenance_shape(evaluation):
+        return False
     metadata = evaluation.get("metadata") or evaluation.get("provenance") or {}
     fallback_used = metadata.get("fallback_used")
     if fallback_used is not None and not isinstance(fallback_used, bool):
@@ -248,3 +250,10 @@ def _eligible_for_statistics(evaluation: dict[str, Any]) -> bool:
     if str(evaluation.get("source") or "").lower() in {"local_vlm_fallback", "mock", "fallback", "mock_fallback", "mock_judge"}:
         return False
     return True
+
+
+def _valid_provenance_shape(evaluation: dict[str, Any]) -> bool:
+    return all(
+        field not in evaluation or evaluation[field] is None or isinstance(evaluation[field], dict)
+        for field in ("metadata", "provenance")
+    )

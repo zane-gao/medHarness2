@@ -58,6 +58,8 @@ def _numeric_metrics(row: dict[str, Any]) -> dict[str, float]:
 
 
 def _eligible(row: dict[str, Any]) -> bool:
+    if not isinstance(row, dict) or not _valid_provenance_shape(row):
+        return False
     metadata = row.get("metadata") or row.get("provenance") or {}
     fallback_used = metadata.get("fallback_used")
     if fallback_used is not None and not isinstance(fallback_used, bool):
@@ -67,6 +69,13 @@ def _eligible(row: dict[str, Any]) -> bool:
     if str(row.get("evidence_tier") or "").lower() in {"debug_fallback", "mock"}:
         return False
     return str(row.get("source") or "").lower() not in {"local_vlm_fallback", "mock", "fallback", "mock_fallback", "mock_judge"}
+
+
+def _valid_provenance_shape(row: dict[str, Any]) -> bool:
+    return all(
+        field not in row or row[field] is None or isinstance(row[field], dict)
+        for field in ("metadata", "provenance")
+    )
 
 
 def _strict_weights(value: dict[str, float] | None) -> dict[str, float]:

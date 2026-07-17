@@ -88,6 +88,36 @@ def test_tool10_excludes_fallback_rows_from_weighted_metrics():
     assert result["_provenance"]["fallback_count"] == 1
 
 
+@pytest.mark.parametrize("field", ["metadata", "provenance"])
+@pytest.mark.parametrize("bad", ["not-an-object", [], ["x"], 7, True])
+def test_weighted_tools_exclude_malformed_provenance_without_crashing(field, bad):
+    row = {"model": "bad", "metrics": {"precision": 1.0}, field: bad}
+    result = modelwise_weighted([row])
+    assert result["_provenance"] == {"eligible_count": 0, "fallback_count": 1, "input_count": 1}
+
+
+@pytest.mark.parametrize("field", ["metadata", "provenance"])
+@pytest.mark.parametrize("bad", ["not-an-object", [], ["x"], 7, True])
+def test_statistics_excludes_malformed_provenance_without_crashing(field, bad):
+    assert calculate_statistics([{"score": 1.0, field: bad}]) == {}
+
+
+@pytest.mark.parametrize("field", ["metadata", "provenance"])
+@pytest.mark.parametrize("bad", ["not-an-object", [], ["x"], 7, True])
+def test_ranking_excludes_malformed_provenance_without_crashing(field, bad):
+    assert select_top_k(
+        [{"model": "bad", field: bad, "composite_inputs": {"likert_mean": 4.0, "structure_score": 0.5, "finding_coverage": 0.5}}]
+    ) == []
+
+
+@pytest.mark.parametrize("field", ["metadata", "provenance"])
+@pytest.mark.parametrize("bad", ["not-an-object", [], ["x"], 7, True])
+def test_hazardwise_excludes_malformed_provenance_without_crashing(field, bad):
+    assert hazardwise_weighted(
+        [{"error_type": "false_finding", "hazard_level": 3, "metrics": {"error_rate": 0.2}, field: bad}]
+    ) == []
+
+
 def test_tool12_excludes_malformed_fallback_provenance():
     rows = [
         {"score": 1.0, "metadata": {"fallback_used": "false"}},

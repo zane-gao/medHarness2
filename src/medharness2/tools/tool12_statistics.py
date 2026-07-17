@@ -92,6 +92,8 @@ def eligible_for_statistics(row: dict[str, Any]) -> bool:
     Reader-level aggregates use the same provenance gate as Tool 12 so a
     fallback/mock evaluation cannot silently become an ``overall_score``.
     """
+    if not isinstance(row, dict) or not _valid_provenance_shape(row):
+        return False
     metadata = row.get("metadata") or row.get("provenance") or {}
     fallback_used = metadata.get("fallback_used")
     if fallback_used is not None and not isinstance(fallback_used, bool):
@@ -107,6 +109,13 @@ def eligible_for_statistics(row: dict[str, Any]) -> bool:
         "fallback",
         "mock_fallback",
     }
+
+
+def _valid_provenance_shape(row: dict[str, Any]) -> bool:
+    return all(
+        field not in row or row[field] is None or isinstance(row[field], dict)
+        for field in ("metadata", "provenance")
+    )
 
 
 def _eligible_for_statistics(row: dict[str, Any]) -> bool:
