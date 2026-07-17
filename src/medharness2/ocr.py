@@ -824,6 +824,7 @@ def _strip_non_report_commentary(text: str) -> str:
         return ""
     markers = (
         "the image provided",
+        "the image you've provided",
         "the provided image",
         "the image you provided",
         "appears to be blank",
@@ -835,6 +836,8 @@ def _strip_non_report_commentary(text: str) -> str:
         "未见可识别的报告文字",
         "万里云",
         "wanlicloud",
+        "阿里云",
+        "alibaba cloud",
         "提供技术支持",
         "了解详情",
     )

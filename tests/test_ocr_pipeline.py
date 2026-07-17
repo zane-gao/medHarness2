@@ -10,7 +10,7 @@ import pytest
 from medharness2.config import AppConfig, LLMConfig, ModelRoleConfig
 from medharness2.ocr import extract_report_text, _looks_truncated, _strip_non_report_commentary
 from medharness2.ocr import _cache_metadata_valid
-from medharness2.ocr_benchmark import _aggregate, evaluate_ocr_candidates
+from medharness2.ocr_benchmark import _aggregate, _possible_truncation, evaluate_ocr_candidates
 
 
 class PageOCRClient:
@@ -669,6 +669,16 @@ def test_ocr_strips_hospital_technical_footer_but_keeps_report_note():
     assert _strip_non_report_commentary(text) == "注：此报告仅供临床医生参考"
 
 
+def test_ocr_strips_alibaba_technical_footer_variants():
+    text = "注：此报告仅供临床医生参考\n阿里云 提供技术支持\nAlibaba Cloud support"
+    assert _strip_non_report_commentary(text) == "注：此报告仅供临床医生参考"
+
+
+def test_ocr_strips_contracted_blank_page_commentary():
+    text = "The image you've provided appears to be a blank page with only a logo."
+    assert _strip_non_report_commentary(text) == ""
+
+
 def test_ocr_preserves_same_line_report_text_before_commentary():
     text = "FINDINGS: clear lungs. The provided image appears to be blank."
 
@@ -684,6 +694,12 @@ def test_ocr_detects_truncation_after_metadata_marker():
     text = "报告医生：张三 审核医生：李四\n审核时间：2026-05-29 08:07 FINDINGS: unfinished"
 
     assert _looks_truncated(text) is True
+
+
+def test_ocr_benchmark_accepts_complete_report_metadata_tail():
+    text = "所见：双肺未见异常。\n审核时间：2026-05-29 08:07"
+
+    assert _possible_truncation(text) is False
 
 
 def test_ocr_drops_non_report_page_after_valid_page(tmp_path: Path):
