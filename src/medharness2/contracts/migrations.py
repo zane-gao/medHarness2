@@ -155,7 +155,12 @@ def migrate_generated_report_v1(
 
 
 def migrate_case_evaluation_v1(payload: dict[str, Any], *, case_id: str) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise TypeError("case evaluation payload must be an object")
     source = deepcopy(payload)
+    input_value = _object_or_default(source.get("input"), "input")
+    human_value = _object_or_default(source.get("human_evaluation"), "human_evaluation")
+    legacy_extensions_value = _object_or_default(source.get("legacy_extensions"), "legacy_extensions")
     generated_reports = _dict_list(source.get("generated_reports"), "generated_reports")
     rankings = _dict_list(source.get("rankings"), "rankings")
     unknown = {key: value for key, value in source.items() if key not in _CASE_FIELDS}
@@ -164,7 +169,7 @@ def migrate_case_evaluation_v1(payload: dict[str, Any], *, case_id: str) -> dict
         warnings.append("preserved_unknown_top_level_fields")
     if any(str(item.get("source") or "") == "medharness_cli" for item in generated_reports):
         warnings.append("legacy_reference_assisted_generation_assumed")
-    human_evaluation, human_migrated = _migrate_evaluation(source.get("human_evaluation") or {})
+    human_evaluation, human_migrated = _migrate_evaluation(human_value)
     generated_evaluations, generated_migrated = _migrate_generated_evaluations(
         _dict_list(source.get("generated_evaluations"), "generated_evaluations")
     )
@@ -173,11 +178,11 @@ def migrate_case_evaluation_v1(payload: dict[str, Any], *, case_id: str) -> dict
     )
     if human_migrated or generated_migrated or pairwise_migrated:
         warnings.append("legacy_nested_contracts_migrated")
-    legacy_extensions = deepcopy(dict(source.get("legacy_extensions") or {}))
+    legacy_extensions = deepcopy(legacy_extensions_value)
     legacy_extensions.update(unknown)
     artifact = CaseEvaluationArtifact(
         case_id=case_id,
-        input=dict(source.get("input") or {}),
+        input=input_value,
         human_evaluation=human_evaluation,
         generated_reports=[
             migrate_generated_report_v1(item, legacy_reference_assisted=True)
@@ -216,6 +221,14 @@ def _dict_list(value: Any, label: str) -> list[dict[str, Any]]:
     return [deepcopy(item) for item in value]
 
 
+def _object_or_default(value: Any, label: str) -> dict[str, Any]:
+    if value in (None, ""):
+        return {}
+    if not isinstance(value, dict):
+        raise TypeError(f"{label} must be an object")
+    return deepcopy(value)
+
+
 def _migrate_pairwise_comparisons(rows: list[Any]) -> tuple[list[dict[str, Any]], bool]:
     migrated_rows: list[dict[str, Any]] = []
     migrated_any = False
@@ -245,7 +258,9 @@ def _migrate_pairwise_comparisons(rows: list[Any]) -> tuple[list[dict[str, Any]]
 
 
 def _migrate_evaluation(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    migrated = deepcopy(dict(payload))
+    if not isinstance(payload, dict):
+        raise TypeError("human_evaluation must be an object")
+    migrated = deepcopy(payload)
     graph = migrated.get("finding_graph")
     if not isinstance(graph, dict):
         return migrated, False

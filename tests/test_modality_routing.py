@@ -32,6 +32,23 @@ def test_registry_rejects_invalid_generation_limits_without_coercion(field, bad)
         ReportGeneratorRegistry(config)
 
 
+@pytest.mark.parametrize("bad", ["not-a-mapping", [], ["temperature", 0.2], 1, True])
+def test_registry_rejects_invalid_generation_parameters_without_coercion(bad):
+    config = AppConfig(
+        generator=GeneratorConfig(
+            local_models=[
+                {
+                    "key": "bad_model",
+                    "source": "artifact_reuse",
+                    "generation_parameters": bad,
+                }
+            ]
+        )
+    )
+    with pytest.raises(ValueError, match="generation_parameters"):
+        ReportGeneratorRegistry(config)
+
+
 @pytest.mark.parametrize("field", ["max_new_tokens", "timeout_sec"])
 @pytest.mark.parametrize("bad", [True, 1.5, "160", 0, -1])
 def test_generator_entry_rejects_invalid_generation_limits_without_coercion(field, bad):

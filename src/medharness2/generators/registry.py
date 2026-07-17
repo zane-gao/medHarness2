@@ -57,6 +57,22 @@ def _strict_bool(value: Any, label: str, default: bool) -> bool:
     return value
 
 
+def _strict_mapping(value: Any, label: str, default: dict[str, Any] | None = None) -> dict[str, Any]:
+    if value is None:
+        return dict(default or {})
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return dict(value)
+
+
+def _strict_string_list(value: Any, label: str, default: list[str] | None = None) -> list[str]:
+    if value is None:
+        return list(default or [])
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{label} must be a list of strings")
+    return list(value)
+
+
 @dataclass
 class GeneratorEntry:
     key: str
@@ -668,7 +684,7 @@ class ReportGeneratorRegistry:
                     source=entry.source,
                     report=str(report),
                     modality=str(row.get("modality") or ""),
-                    warnings=list(row.get("warnings") or []),
+                    warnings=_strict_string_list(row.get("warnings"), "warnings"),
                     metadata=_legacy_output_metadata(row, cmd),
                     evidence_tier=entry.evidence_tier,
                 )
@@ -701,8 +717,8 @@ class ReportGeneratorRegistry:
                     device=str(row.get("device") or "cuda:0"),
                     dtype=str(row.get("dtype") or "bf16"),
                     max_new_tokens=_strict_positive_int(row.get("max_new_tokens"), "max_new_tokens", 160),
-                    generation_parameters=dict(
-                        row.get("generation_parameters") or {}
+                    generation_parameters=_strict_mapping(
+                        row.get("generation_parameters"), "generation_parameters"
                     ),
                     timeout_sec=_strict_positive_int(row.get("timeout_sec"), "timeout_sec", 1800),
                     evidence_tier=str(row.get("evidence_tier") or ""),

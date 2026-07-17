@@ -442,3 +442,12 @@ def test_case_migration_rejects_malformed_top_level_object_lists(field, bad):
 
     with pytest.raises(TypeError, match=field):
         migrate_case_evaluation_v1({field: bad}, case_id="case-1")
+
+
+@pytest.mark.parametrize("field", ["input", "human_evaluation", "legacy_extensions"])
+@pytest.mark.parametrize("bad", ["not-an-object", [], ["x"], 7, True])
+def test_case_migration_rejects_malformed_top_level_objects(field, bad):
+    from medharness2.contracts.migrations import migrate_case_evaluation_v1
+
+    with pytest.raises(TypeError, match=field):
+        migrate_case_evaluation_v1({field: bad}, case_id="case-1")

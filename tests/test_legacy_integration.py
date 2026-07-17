@@ -6,6 +6,7 @@ import subprocess
 from pathlib import Path
 
 import medharness2.config as config_module
+import pytest
 import yaml
 from medharness2.config import AppConfig, GeneratorConfig, LLMConfig, load_config
 from medharness2.generators.registry import ReportGeneratorRegistry
@@ -122,6 +123,39 @@ def test_artifact_generator_rejects_non_string_identity_and_report_fields(tmp_pa
     report = registry.generate(entry, "image.png", "cxr", case_id="case-a")
     assert report.report == ""
     assert "artifact_invalid_case_id" in report.warnings
+
+
+def test_legacy_output_map_rejects_non_string_warnings(tmp_path: Path):
+    output = tmp_path / "legacy_out.jsonl"
+    output.write_text(
+        json.dumps(
+            {
+                "case_id": "case-a",
+                "generated_text": "FINDINGS: Clear lungs.",
+                "warnings": "not-a-list",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            include_legacy_ready_models=False,
+            default_models=["legacy"],
+            local_models=[
+                {
+                    "key": "legacy",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["cxr"],
+                    "ready": True,
+                    "output_jsonl": str(output),
+                }
+            ],
+        )
+    )
+    registry = ReportGeneratorRegistry(cfg)
+    with pytest.raises(ValueError, match="warnings"):
+        registry._read_legacy_output_map(registry.entries["legacy"], output, cmd=[])
 
 
 def test_fallback_records_failed_local_generation_attempt(tmp_path: Path):
