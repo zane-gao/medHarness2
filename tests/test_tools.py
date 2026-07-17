@@ -1713,6 +1713,25 @@ def test_tool4_third_adjudicator_rejects_invalid_max_retries(bad):
         )
 
 
+@pytest.mark.parametrize("bad", ["3", 3.0, True])
+def test_tool4_adjudicator_response_rejects_implicit_numeric_types(bad):
+    from medharness2.tools.tool4_hazard import _HazardAdjudicationDecisionResponse
+
+    with pytest.raises(Exception):
+        _HazardAdjudicationDecisionResponse.model_validate(
+            {
+                "error_index": bad,
+                "error_type": "other",
+                "hazard_level": 3,
+                "recommended_action": "review_if_relevant",
+                "explanation": "x",
+                "confidence": 0.5,
+                "evidence_ids": ["d1"],
+                "abstain": False,
+            }
+        )
+
+
 def test_tool4_strict_mode_raises_instead_of_using_template_fallback():
     client = _SequenceClient(["not json", {"wrong": []}])
 

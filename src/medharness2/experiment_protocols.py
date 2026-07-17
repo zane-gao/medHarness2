@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import Field, PrivateAttr
+from pydantic import Field, PrivateAttr, StrictBool
 
 from medharness2.config import PROJECT_ROOT
 from medharness2.contracts.common import ContractModel
@@ -27,12 +27,12 @@ class ValidationEvidenceArtifact(ContractModel):
 
 class ValidationCheck(ContractModel):
     id: str = Field(min_length=1)
-    passed: bool
+    passed: StrictBool
     details: str = Field(min_length=1)
 
 
 class GateValidationEvidence(ContractModel):
-    passed: bool
+    passed: StrictBool
     verifier: Literal["medharness2.experiments.verify"]
     verification_version: Literal["1.0"]
     evidence_artifacts: list[ValidationEvidenceArtifact] = Field(min_length=1)

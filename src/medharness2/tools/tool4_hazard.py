@@ -5,7 +5,7 @@ import json
 from typing import Any
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt
 
 from medharness2.contracts import (
     HazardAdjudicationArtifact,
@@ -36,14 +36,14 @@ def _strict_positive_int(value: Any, label: str) -> int:
 class _HazardAdjudicationDecisionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    error_index: int = Field(ge=0)
+    error_index: StrictInt = Field(ge=0)
     error_type: str = Field(min_length=1)
-    hazard_level: int = Field(ge=1, le=5)
+    hazard_level: StrictInt = Field(ge=1, le=5)
     recommended_action: str = Field(min_length=1)
     explanation: str = Field(min_length=1)
-    confidence: float = Field(ge=0, le=1)
+    confidence: StrictFloat = Field(ge=0, le=1)
     evidence_ids: list[str]
-    abstain: bool
+    abstain: StrictBool
 
 
 class _HazardAdjudicationResponse(BaseModel):

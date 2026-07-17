@@ -6,7 +6,7 @@ import re
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt
 
 from medharness2.contracts import StructureAuditArtifact, StructureAuditIssue
 from medharness2.llm_client import LLMClient, LLMClientError
@@ -24,8 +24,8 @@ class _StructureAssessmentResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     verdict: Literal["no_material_issue", "minor_issue", "major_issue", "abstain"]
-    clinical_impact: int = Field(ge=1, le=5)
-    confidence: float = Field(ge=0, le=1)
+    clinical_impact: StrictInt = Field(ge=1, le=5)
+    confidence: StrictFloat = Field(ge=0, le=1)
     summary: str = Field(min_length=1)
     issues: list[StructureAuditIssue]
 
