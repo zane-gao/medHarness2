@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import yaml
 
 from medharness2.config import AppConfig, GeneratorConfig
 from medharness2.generators.registry import GeneratorEntry, ReportGeneratorRegistry
@@ -183,6 +184,67 @@ def test_registry_rejects_malformed_string_list_fields(field, bad):
                     field: bad,
                 }
             ],
+        )
+    )
+    with pytest.raises(ValueError, match=field):
+        ReportGeneratorRegistry(config)
+
+
+@pytest.mark.parametrize("field", ["supported_modalities", "supported_body_parts", "python_paths"])
+@pytest.mark.parametrize("bad", ["cxr", {"x": 1}, ["cxr", 2]])
+def test_legacy_registry_rejects_malformed_string_list_fields(tmp_path, field, bad):
+    legacy_path = tmp_path / "legacy_models.yaml"
+    legacy_path.write_text(
+        yaml.safe_dump(
+            {
+                "models": {
+                    "legacy_model": {
+                        "adapter": "artifact_reuse",
+                        "category": "ready_or_artifact",
+                        "report_trained": True,
+                        "source_generation_jsonl": "artifact.jsonl",
+                        field: bad,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        generator=GeneratorConfig(
+            include_legacy_ready_models=True,
+            legacy_config_path=str(legacy_path),
+            local_models=[],
+        )
+    )
+    with pytest.raises(ValueError, match=field):
+        ReportGeneratorRegistry(config)
+
+
+@pytest.mark.parametrize("field", ["report_trained"])
+@pytest.mark.parametrize("bad", ["false", "true", 0, 1, 0.0, 1.0])
+def test_legacy_registry_rejects_implicit_boolean_coercion(tmp_path, field, bad):
+    legacy_path = tmp_path / "legacy_models.yaml"
+    legacy_path.write_text(
+        yaml.safe_dump(
+            {
+                "models": {
+                    "legacy_model": {
+                        "adapter": "artifact_reuse",
+                        "category": "ready_or_artifact",
+                        "report_trained": bad,
+                        "source_generation_jsonl": "artifact.jsonl",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        generator=GeneratorConfig(
+            include_legacy_ready_models=True,
+            legacy_config_path=str(legacy_path),
+            local_models=[],
         )
     )
     with pytest.raises(ValueError, match=field):

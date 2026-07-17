@@ -745,12 +745,25 @@ class ReportGeneratorRegistry:
             return []
         entries: list[GeneratorEntry] = []
         for key, row in models.items():
-            if not isinstance(row, dict) or not _is_legacy_report_generator_ready(str(key), row):
+            if not isinstance(row, dict):
+                continue
+            # Validate explicit booleans before readiness filtering.  Otherwise
+            # values such as ``0``/``"false"`` could be silently treated as an
+            # ineligible model instead of surfacing malformed configuration.
+            report_trained = _strict_bool(row.get("report_trained"), "report_trained", False)
+            if not _is_legacy_report_generator_ready(str(key), {**row, "report_trained": report_trained}):
                 continue
             adapter = str(row.get("adapter") or "")
             source = "artifact_reuse" if adapter == "artifact_reuse" else "medharness_cli"
-            modalities = _normalize_modalities(row.get("supported_modalities") or ["unknown"])
-            body_parts = [str(item).lower() for item in row.get("supported_body_parts") or ["unknown"]]
+            modalities = _normalize_modalities(
+                _strict_string_list(row.get("supported_modalities"), "supported_modalities", ["unknown"])
+            )
+            body_parts = [
+                item.lower()
+                for item in _strict_string_list(
+                    row.get("supported_body_parts"), "supported_body_parts", ["unknown"]
+                )
+            ]
             entries.append(
                 GeneratorEntry(
                     key=str(key),
@@ -760,14 +773,14 @@ class ReportGeneratorRegistry:
                     supported_body_parts=body_parts,
                     ready=True,
                     category=str(row.get("category") or ""),
-                    report_trained=_strict_bool(row.get("report_trained"), "report_trained", False),
+                    report_trained=report_trained,
                     report_training=str(row.get("report_training") or ""),
                     fresh_inference=source != "artifact_reuse",
                     notes=str(row.get("notes") or ""),
                     source_generation_jsonl=_resolved_path_text(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(key),
                     python_bin=str(row.get("python_bin") or "python"),
-                    python_paths=[str(item) for item in row.get("python_paths") or []],
+                    python_paths=_strict_string_list(row.get("python_paths"), "python_paths"),
                     script_path=_resolved_path_text("/data/isbi/gzp/medHarness/scripts/run_report_generation.py"),
                     config_path=str(path),
                     generation_parameters={
