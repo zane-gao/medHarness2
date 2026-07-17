@@ -356,6 +356,11 @@ def _cache_is_compatible(
         return False
     if cached_verifier_configured != expected_verifier_configured:
         return False
+    if not expected_verifier_configured and any(
+        str(cached_verifier.get(field) or "")
+        for field in ("provider", "model", "role")
+    ):
+        return False
     if expected_verifier_configured and (
         str(cached_verifier.get("provider") or "").lower() != expected_verifier["provider"]
         or str(cached_verifier.get("model") or "") != expected_verifier["model"]
@@ -414,6 +419,8 @@ def _cache_metadata_valid(meta: dict[str, Any]) -> bool:
         not isinstance(status, str)
         or status not in {"passed", "review_required", "blocked"}
     ):
+        return False
+    if not _cache_quality_status_consistent(status, audit):
         return False
     if "pages" in meta:
         pages = meta["pages"]
@@ -503,6 +510,35 @@ def _cache_audit_page_valid(page: dict[str, Any]) -> bool:
             "invalid_verifier_response",
         }:
             return False
+    return True
+
+
+def _cache_quality_status_consistent(
+    quality_status: Any, quality_audit: dict[str, Any] | None
+) -> bool:
+    """Reject sidecars whose summary quality contradicts verifier pages."""
+    if quality_status is None or not isinstance(quality_audit, dict):
+        return True
+    pages = quality_audit.get("pages")
+    if isinstance(pages, list):
+        statuses = [
+            page.get("status")
+            for page in pages
+            if isinstance(page, dict) and isinstance(page.get("status"), str)
+        ]
+    else:
+        status = quality_audit.get("status")
+        statuses = [status] if isinstance(status, str) else []
+    if quality_status == "passed":
+        return not any(
+            status in {"disagreement", "verifier_failed", "invalid_verifier_response"}
+            for status in statuses
+        )
+    if quality_status == "review_required":
+        return any(
+            status in {"disagreement", "verifier_failed", "invalid_verifier_response"}
+            for status in statuses
+        )
     return True
 
 
