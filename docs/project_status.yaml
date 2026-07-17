@@ -9,9 +9,9 @@ baseline:
   ledger_commit: 7f58e47
   evidence_baseline_sha: 07a2c97
   dirty_worktree: false
-  pytest_passed: 1828
+  pytest_passed: 1830
   pytest_warnings: 20
-  latest_pytest_passed: 1828
+  latest_pytest_passed: 1830
   latest_pytest_warnings: 20
   latest_regression_sha: 7f58e47
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
@@ -92,7 +92,7 @@ workstreams:
       - outputs/ocr_quality_audit_qwen3vl4b_20260711/summary.json
       - outputs/ocr_quality_audit_qwen3vl4b_20260711/ocr_completeness_audit.png
     implementation_update: "新增 research run-ocr：按冻结 10 例双重复写入可审计 sidecar，并在执行后回写两次 benchmark、实际 route provenance 与 audit-only 状态；缺凭据、源 PDF 缺失、provider/runtime 异常或质量失败均 fail-closed。Doubao 是 primary 候选，Qwen 仅 audit-only，不进入 winner；PaddleOCR-VL-1.6 adapter 已接入为可选本地 baseline，并兼容官方 Result iterable 与 save_to_markdown 导出；只有真实逐页 Qwen audit 全部 agree 才能通过。"
-    next_gate: 提供 DMX_API_KEY 并安装可用 PaddleOCR 运行时后执行 `research run-ocr`；Qwen 只输出 disagreement audit artifact，不能直接成为 winner。
+    next_gate: 获取可确认的真实 OCR provider/model（DMX 或其他）并安装可用 PaddleOCR 运行时后执行 `research run-ocr`；Qwen 只输出 disagreement audit artifact，不能直接成为 winner。
   routing:
     status: validated
     summary: "路由器已改为三种主要模态（cxr/ct/mri）硬约束；body_part 不再阻塞兼容模型，只作为候选排序信号。配置中的 default_models wildcard 现在会按模态展开全部兼容候选，不再把 wildcard 当作普通模型名；当前挂载路径上的完整 52 例 dmx_strong preflight 已实测通过：cxr/ct/mri=20/25/7、52/52 有本地候选、0 fallback，另有 494 个 fresh 和 175 个 artifact 本地候选。preflight 对存在但空病例目录现在 fail-closed 返回 no_cases_discovered，不会把 cases=0 误报为通过。VLM 模态识别补充 MRI/CT/X-ray 常见句式归一化，并覆盖 DICOM、图片扩展名和 unknown 路径测试。"

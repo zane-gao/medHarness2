@@ -506,7 +506,7 @@ def test_pairwise_limits_alignment_audit_chunk_size_for_bounded_json_models(monk
     cfg = AppConfig(
         model_roles={
             "alignment_auditor": ModelRoleConfig(
-                provider="chat_completions", model="gpt-5.6-sol", max_retries=1
+                provider="chat_completions", model="qwen3-vl-plus", max_retries=1
             )
         }
     )
@@ -519,7 +519,80 @@ def test_pairwise_limits_alignment_audit_chunk_size_for_bounded_json_models(monk
         llm_client=build_mock_client(),
     )
 
-    assert captured["max_errors_per_call"] == 2
+    assert captured["max_errors_per_call"] == 1
+
+
+def test_pairwise_checkpoint_input_records_alignment_audit_chunk_size(monkeypatch, tmp_path: Path):
+    captured = {}
+
+    def fake_audit(*args, **kwargs):
+        captured["max_errors_per_call"] = kwargs["max_errors_per_call"]
+        return {
+            "verdict": "pass",
+            "confidence": 0.97,
+            "summary": "ok",
+            "issues": [],
+            "error_judgements": [],
+            "primary_preserved": True,
+            "requires_adjudication": False,
+            "adjudicated_error_candidates": [],
+            "adjudication_summary": {
+                "deterministic_error_count": 0,
+                "retained_error_count": 0,
+                "rejected_error_count": 0,
+                "modified_error_count": 0,
+                "abstained_error_count": 0,
+                "complete": True,
+            },
+            "auditor_provenance": {
+                "implementation_type": "llm_audit",
+                "provider": "chat_completions",
+                "model": "qwen3-vl-plus",
+                "role": "alignment_auditor",
+                "fallback_used": False,
+                "metadata": {},
+            },
+            "alignment_sha256": "",
+        }
+
+    class RecordingStore(StageCheckpointStore):
+        def get_or_compute(self, stage, inputs, producer, *, validator):
+            if stage.endswith("tool5_alignment_audit"):
+                captured["checkpoint_inputs"] = inputs
+            return super().get_or_compute(stage, inputs, producer, validator=validator)
+
+    monkeypatch.setattr("medharness2.modules.pairwise_report.audit_alignment", fake_audit)
+    cfg = AppConfig(
+        model_roles={
+            "alignment_auditor": ModelRoleConfig(
+                provider="chat_completions", model="qwen3-vl-plus", max_retries=1
+            )
+        }
+    )
+
+    # The validator binds this artifact to the alignment produced by the run.
+    from medharness2.checkpoints import stable_sha256
+    original_audit = fake_audit
+
+    def bound_audit(*args, **kwargs):
+        result = original_audit(*args, **kwargs)
+        result["alignment_sha256"] = stable_sha256(args[2])
+        return result
+
+    monkeypatch.setattr("medharness2.modules.pairwise_report.audit_alignment", bound_audit)
+
+    evaluate_pairwise(
+        "FINDINGS: Clear lungs.",
+        "FINDINGS: Clear lungs.",
+        modality="cxr",
+        config=cfg,
+        llm_client=build_mock_client(),
+        checkpoint_store=RecordingStore(tmp_path / "checkpoints"),
+    )
+
+    assert captured["max_errors_per_call"] == 1
+    assert captured["checkpoint_inputs"]["alignment_audit_chunk_size"] == 1
+    assert captured["checkpoint_inputs"]["stage_version"] == "tool5-alignment-audit-v3"
 
 
 def test_pairwise_hazard_judge_uses_t5_adjudicated_error_candidates():

@@ -49,6 +49,7 @@ class _LLMFinding(BaseModel):
     severity: str | None
     measurements: list[Measurement]
     evidence: str = Field(min_length=1)
+    evidence_span_id: StrictInt | None = Field(default=None, ge=0)
     attributes: dict[str, Any]
 
 
@@ -164,6 +165,7 @@ def _extraction_prompt(
                 "severity": "stated severity or null",
                 "measurements": [{"value": 6.0, "unit": "mm"}],
                 "evidence": "verbatim contiguous quote from report_text",
+                "evidence_span_id": "integer ID from evidence_spans, or null",
                 "attributes": {},
             }
         ],
@@ -182,7 +184,7 @@ def _extraction_prompt(
         else ""
     )
     bounded_report = _bound_report_text(report_text)
-    evidence_spans = _evidence_spans(bounded_report)
+    evidence_spans = _evidence_span_records(bounded_report)
     candidate_graph = {
         "backend": candidate.get("backend"),
         "findings": [
@@ -220,6 +222,8 @@ def _extraction_prompt(
         "Keep correct candidates, correct wrong attributes, add omitted findings, and remove unsupported findings.\n"
         "Include clinically meaningful positive, negative, and uncertain findings. Never infer facts not stated in the report. "
         "Every finding must contain a verbatim contiguous evidence quote from report_text. "
+        "Prefer evidence_span_id when available; the server will recover the exact source text for that ID. "
+        "Do not invent or reuse an ID outside evidence_spans. "
         "Every measurement must occur in that finding's evidence. Relations use zero-based final finding indices.\n"
         "Use an abnormality-oriented concept code: normal/negative statements use the corresponding abnormality code with certainty=absent. "
         "Use other_finding only when no listed controlled concept applies.\n"
@@ -263,17 +267,52 @@ def _evidence_spans(
     report and the returned source span remains authoritative.
     """
 
-    spans = [part for part in re.split(r"(?<=[。！？；;.!?])", report_text) if part]
-    result: list[str] = []
+    return [
+        record["text"]
+        for record in _evidence_span_records(
+            report_text,
+            max_total_chars=max_total_chars,
+            max_span_chars=max_span_chars,
+        )
+    ]
+
+
+def _evidence_span_records(
+    report_text: str,
+    *,
+    max_total_chars: int = 3_000,
+    max_span_chars: int = 600,
+) -> list[dict[str, Any]]:
+    """Return source-ordered spans with stable offsets for provenance binding."""
+
+    text = str(report_text or "")
+    boundaries = [match.end() for match in re.finditer(r"(?<=[。！？；;.!?])", text)]
+    spans: list[tuple[int, int]] = []
+    start = 0
+    for end in boundaries + [len(text)]:
+        if end > start:
+            spans.append((start, end))
+        start = end
+
+    result: list[dict[str, Any]] = []
     total = 0
-    for span in spans:
+    for start, end in spans:
+        span = text[start:end]
         if not span.strip() or total >= max_total_chars:
             continue
         remaining = max_total_chars - total
-        bounded = span[: min(max_span_chars, remaining)]
+        bounded_length = min(max_span_chars, remaining, len(span))
+        bounded = span[:bounded_length]
         if bounded.strip():
-            result.append(bounded)
-            total += len(bounded)
+            result.append(
+                {
+                    "span_id": len(result),
+                    "text": bounded,
+                    "start": start,
+                    "end": start + bounded_length,
+                }
+            )
+            total += bounded_length
     return result
 
 
@@ -294,6 +333,7 @@ def _candidate_response(candidate: dict[str, Any], report_text: str) -> dict[str
                 "severity": finding.get("severity"),
                 "measurements": finding.get("measurements") or [],
                 "evidence": evidence,
+                "evidence_span_id": None,
                 "attributes": finding.get("attributes") or {},
             }
         )
@@ -314,8 +354,18 @@ def _build_graph(
     errors: list[str],
 ) -> dict[str, Any]:
     findings: list[dict[str, Any]] = []
+    source_spans = _evidence_span_records(report_text)
     for index, extracted in enumerate(extraction.findings, start=1):
-        start, end, evidence = _locate_evidence(report_text, extracted.evidence)
+        if extracted.evidence_span_id is not None:
+            span_id = extracted.evidence_span_id
+            if span_id >= len(source_spans):
+                raise ValueError("Tool 2 evidence_span_id is outside evidence_spans")
+            span = source_spans[span_id]
+            start = int(span["start"])
+            end = int(span["end"])
+            evidence = report_text[start:end]
+        else:
+            start, end, evidence = _locate_evidence(report_text, extracted.evidence)
         _validate_finding_semantics(extracted, evidence)
         normalized = _normalize_extracted_finding(
             extracted,

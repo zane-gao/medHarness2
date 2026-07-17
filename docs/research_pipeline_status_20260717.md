@@ -30,21 +30,21 @@
 - 新增 `research paper-gate`：统一检查临床双读/OCR winner/正式实验三类证据；任一缺失都返回 `blocked`，只有三类均 validated 才允许 `formal_claim_allowed=true`。
 - 新增 `research freeze-ocr-winner`：真实 OCR 两次 benchmark 完成后，要求全量运行质量通过、两次 winner 一致、覆盖完整，再把冻结模型和证据 hash 写回 OCR manifest；当前因 manifest 仍为 `blocked` 而按预期拒绝。
 - PaddleOCR baseline 现要求 `PaddleOCRVL` 和 Paddle runtime 同时可导入；sidecar 结构、空页、空文本、源 PDF hash 读取失败均 fail-closed，不会把“部分页面成功”升级为 OCR 通过。
-- 2026-07-17 已用 Yunwu `qwen3-vl-plus` 完成 1 例真实视觉链路探索（MR2605270001）：Tool 2 finding extraction、Tool 5 alignment audit、Tool 4 hazard 及报告生成均实际调用非 mock provider 且 `fallback_used=false`。产物位于 `/tmp/single_yunwu_vl_mr2605270001_retry5`，但整体仍标记为 exploratory，且该单例出现 `no_generated_reports` 级联错误，不能作为正式评测结果。
+- 2026-07-17 已多次用 Yunwu `qwen3-vl-plus` 对 MR2605270001 做真实视觉链路探索：Tool 2、Tool 5、Tool 4 均曾成功越过，生成 fallback 也能返回非空 exploratory 文本。最新一次产物 `/tmp/single_yunwu_vl_mr2605270001_finalcheck` 完整生成 `generated_reports=1`、`generated_evaluations=1`、`rankings=1`、`pairwise=1`，无 errors 且质量门禁通过；但证据等级仍为 `exploratory_fresh`，fallback provenance 仍保留，且此前重复运行出现过 evidence 重排、枚举违规和 JSON 截断，因此尚未达到稳定小批次标准，不能作为正式评测结果。
 - 2026-07-17 修复了单病例空生成占位符级联：空报告不再进入 Tool 1–6、ranking 或 pairwise。真实外部 `llm_fallback` 若返回非空文本，会标记为 `exploratory_fresh`，先过内容质量门禁后可用于探索性评估/排序；mock/debug fallback 仍 fail-closed，所有 exploratory 结果仍不能进入 formal gate。
-- Tool 2 现在向视觉模型提供 source-ordered evidence spans，并继续以原文 span 做最终 grounding；Tool 5 在 pairwise 中按每块最多 2 个错误请求，降低多模态 JSON 截断概率。真实 Qwen 单例仍需多次重试观察稳定性，不能把单次成功升级为 winner。
+- Tool 2 现在向视觉模型提供带 `span_id` 和源偏移的 source-ordered evidence spans，并由服务端按偏移恢复原文 grounding；Tool 5 在 pairwise 中对 Qwen/VL 模型按每块 1 个错误、其他模型按每块 5 个错误请求，并把分块策略写入 checkpoint 指纹，降低多模态 JSON 截断和旧缓存复用风险。真实 Qwen 单例仍需多次重试观察稳定性，不能把单次成功升级为 winner。
 
 | 工作线 | 状态 | 原因 |
 | --- | --- | --- |
 | 真实医生标注 | `not_started` | 尚未有真实 reader 输入 |
 | OCR winner | `blocked` | 已有可执行的双次运行器、benchmark 回写和 PaddleOCR adapter，但当前 Yunwu 未暴露可确认的 Doubao OCR 模型，DMX 凭据 401，PaddleOCR-VL runtime 也未就绪 |
-| 论文 formal claim | `pending` | 只有实验设计，尚无 validated gate |
+| 论文 formal claim | `blocked`（`formal_claim_allowed=false`） | 只有实验设计，尚无 validated gate |
 
 ## 下一步
 
 1. 将 10 例标注包交给真实 `reader_a` 与 `reader_b` 独立完成；
 2. 完成 adjudication，运行 `annotation validate` 和 `annotation analyze`，再进入正式一致性与 hazard 统计；
-3. 继续用 Yunwu Qwen VL 做 1–3 例可恢复的小批次真实链路，先修复 `no_generated_reports` 级联错误；OCR winner 仍需可用 Doubao OCR 凭据/模型或其他完整候选后再执行双次比较；
+3. 继续用 Yunwu Qwen VL 做 1–3 例可恢复的小批次真实链路，先达到 Tool 2/Tool 5 的稳定小批次成功率并修复剩余 schema/截断问题；OCR winner 仍需可用 Doubao OCR 凭据/模型或其他完整候选后再执行双次比较；
 4. 运行 `research paper-gate` 汇总三类证据；只有所有 evidence gate 通过后，才允许生成 OCR winner 或论文正式结果。
 
 合成草稿、模型输出和自动规则结果不会被标记为真实医生标注；北川参考报告是当前文本 benchmark gold，不等同于 reader adjudication。

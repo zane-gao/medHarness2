@@ -762,7 +762,7 @@ const TOOLS = [
     <div class="snip">报告原文（节选）："${esc(EX.report_snippet)}…"</div>
     <table><tr><th>抽出的发现</th><th>位置</th><th>阴/阳</th><th>测量</th><th>对应原文</th></tr>${(EX.human_findings||[]).map(fmtFinding).join("")}</table>
     <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 本例规则版抽出 ${EX.human_finding_total} 条、覆盖率 ${pct(EX.coverage||0)}（全场平均 ${pct(H.coverage_mean)}、每份 ${H.findings_mean} 条）——比上一版有进步，但仔细看仍有张冠李戴：把「未见胸腔积液」的位置标成了「bone」、把甲状腺结节标到了「liver」。规则能数出条目，<b>常常搞错归属</b>。${DATA.smoke && DATA.smoke.t2 ? `<a href="#fresh">最新进展：规则+LLM 校正后端已在 ${DATA.smoke.eval_count} 例上全量运行，且要求每条 LLM 发现给出原文证据，见 ⑥.5 节 →</a>` : ''}</div>`,
-  how:`<p><b>当前最好的实现（两级混合）：</b>第一级是三套按模态定制的<b>词表+正则规则</b>（CXR / CT / MRI）：按句切分、双语病灶词表匹配、附近找位置/侧别/测量（统一换算 mm）/否定词。第二级是<b>LLM 校正</b>（新上线，代号 tool2-hybrid-v1）：把规则的粗抽结果连同原文一起交给大模型，让它补漏、纠错、重新归属位置，输出经过 pydantic 严格校验的 JSON，校验不过自动重试，彻底失败才退回规则结果。本次 52 例 run 只用了第一级（后端分布：${esc(JSON.stringify(H.extract_backends))}），第二级已在冒烟中验证。</p>
+  how:`<p><b>当前最好的实现（两级混合）：</b>第一级是三套按模态定制的<b>词表+正则规则</b>（CXR / CT / MRI）：按句切分、双语病灶词表匹配、附近找位置/侧别/测量（统一换算 mm）/否定词。第二级是<b>LLM 校正</b>（新上线，代号 tool2-hybrid-v3）：把规则的粗抽结果连同原文一起交给大模型，让它补漏、纠错、重新归属位置，输出经过 pydantic 严格校验的 JSON，校验不过自动重试，彻底失败才退回规则结果。本次 52 例 run 只用了第一级（后端分布：${esc(JSON.stringify(H.extract_backends))}），第二级已在冒烟中验证。</p>
     <p><b>意义与短板：</b>这是全系统<b>信息量最大的瓶颈</b>——T5 对齐、漏诊统计、危害清单全部吃它的输出。规则覆盖不住或归属错误的发现，后面一切对比都在失真。混合后端铺开后，这个瓶颈有望解除。</p>` },
 
 { id:"tool3", no:"T3", name:"结构检查", impl:IMPL.rule, honesty:honestyBadge("good"),
@@ -817,7 +817,7 @@ const TOOLS = [
   example:`<div class="lab">真实例子 · ${esc(EX.case_id)} 由 ${esc(gen0.model)} 生成（来源 ${esc(gen0.source)}，证据等级 ${esc(gen0.evidence_tier)}）</div>
     <div class="snip">"${esc(gen0.snippet)}…"</div>
     <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 本次 ${K.generated_report_count} 份候选的来源：专科模型 CLI 生成 ${SOURCE_COUNTS.medharness_cli||0} 份 / 通用 VLM 顶班 ${SOURCE_COUNTS.local_vlm_fallback||0} 份 / 复用旧产物 ${SOURCE_COUNTS.artifact_reuse||0} 份。<b>更扎心的是：连那 ${SOURCE_COUNTS.medharness_cli||0} 份专科模型报告都被打上了 <code>${WARNING_COUNTS.legacy_reference_assisted_generation_assumed||0}</code> 个「疑似参考辅助生成」警告</b>（担心生成时偷看了医生报告答案），证据等级因此降到 debug_fallback。所以本次<b>没有一份候选是干净的 formal_fresh</b>；因此这些候选只能用于工程检查或探索性分析，不能进入正式模型比较。</div>`,
-  how:`<p><b>怎么实现的：</b>一个「模型花名册」（Registry）登记每个本地模型支持的模态。病例先按 CXR / CT / MRI 展开兼容候选，部位仅作为排序信号；没有可用专科模型时才落到通用 VLM 兜底，并在产物上打警告标签。所有模型权重在本地 8×A40 上推理，不出网。</p>
+  how:`<p><b>怎么实现的：</b>一个「模型花名册」（Registry）登记每个本地模型支持的模态。病例先按 CXR / CT / MRI 展开兼容候选，部位仅作为排序信号；没有可用专科模型时才落到通用 VLM 兜底，并在产物上打警告标签。本地专科模型路径在 8×A40 上推理；真实视觉探索和评委链路也支持 Yunwu/DMX 等外部 provider，外部调用会在 provenance 中明确记录，不能与本地路径混为一谈。</p>
     <p><b>意义：</b>陪练团的专业度直接决定「对答案」有没有意义——拿实习生的报告、或偷看过答案的报告当参照，对齐结果都说明不了医生的真实水平。补齐空缺路由 + 确保「盲写」（不喂医生报告）是数据可信度的关键。</p>` },
 
 { id:"tool9", no:"T9", name:"排名（Top-K 选优）", impl:IMPL.rule, honesty:honestyBadge("good"),
@@ -883,7 +883,7 @@ const KPIS = [
   [K.reader_count, "位医生", "真实报告作者"],
   [K.generated_report_count, "份 AI 候选报告", `${Object.keys(MODEL_COUNTS).length} 个模型参与`],
   [K.quality_passed, "份过质检", `另有 ${K.quality_failed} 份被门禁拦下`],
-  [K.real_ocr_count, "例真实 OCR", "报告文字非人工转录"],
+  [K.real_ocr_count, "例已有 OCR 文本", "历史产物；当前 OCR winner 仍 blocked"],
 ];
 document.getElementById("kpi-grid").innerHTML = KPIS.map(([v,l,s]) =>
   `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div><div class="s">${s}</div></div>`).join("");

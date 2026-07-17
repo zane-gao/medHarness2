@@ -343,6 +343,7 @@ def _audit_prompt(
     target_error_indices: list[int] | None = None,
 ) -> str:
     allowed_error_types = "|".join(_ERROR_TYPE_VALUES)
+    allowed_issue_types = "missed_match|incorrect_match|incorrect_error_type|unsupported_error|missing_error|other"
     schema = {
         "verdict": "pass|issues_found|abstain",
         "confidence": "number 0-1",
@@ -393,6 +394,7 @@ def _audit_prompt(
         "\nFix every error and return only valid JSON. For issues with issue_type=incorrect_match "
         "or missed_match, candidate_id and reference_id are both mandatory and must be copied "
         "exactly from the structured audit bundle; do not omit either field. "
+        f"issue_type must be exactly one of [{allowed_issue_types}] and never an input error_type. "
         f"suggested_error_type may be only one of exactly [{allowed_error_types}] or null; "
         "never use a description, synonym, or free-form explanation in that field."
         if previous_errors
@@ -404,8 +406,11 @@ def _audit_prompt(
         "Judge every error listed in target_error_indices exactly once in error_judgements and do not judge other indices. "
         "Mark semantically equivalent false-finding/omission "
         "pairs as unsupported, and use incorrect_error_type only with a valid replacement type. Use abstain when evidence is insufficient. "
+        f"The only allowed issue_type values are {allowed_issue_types}; never use an input error_type in issue_type. "
         f"The only allowed suggested_error_type values are {allowed_error_types}, or null. "
-        "The issues list is for broader pairing or missing-error concerns. Do not rewrite the alignment and do not invent IDs. "
+        "For this audit, always return issues as an empty list and use error_judgements only. "
+        "Do not rewrite the alignment and do not invent IDs. "
+        "Set suggested_error_type to null unless disposition=incorrect_error_type and you can copy one exact allowed value. "
         "Use pass only when issues is empty and every error is valid; use issues_found when an issue or non-valid error judgement exists; "
         "use abstain when the overall evidence is insufficient.\n"
         f"Required JSON shape: {json.dumps(schema, ensure_ascii=False)}\n"

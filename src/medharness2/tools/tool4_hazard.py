@@ -620,7 +620,9 @@ def _judge_prompt(error_candidates: list[dict[str, Any]], previous_errors: list[
     retry_note = (
         f"\nPrevious invalid responses: {previous_errors}\n"
         "For each output errors[i], copy error_type exactly from the corresponding input item at the same index; "
-        "do not rename, paraphrase, reorder, merge, or omit error types. Return only valid JSON."
+        "do not rename, paraphrase, reorder, merge, or omit error types. "
+        "recommended_action must be exactly one of: no_action, review_if_relevant, radiologist_review, urgent_review; "
+        "never use free-form action text. Keep explanation to one short sentence and return only valid JSON."
         if previous_errors
         else ""
     )
@@ -630,6 +632,8 @@ def _judge_prompt(error_candidates: list[dict[str, Any]], previous_errors: list[
         "The template_hazard_level is a deterministic prior, not a conclusion; revise it when clinical context warrants.\n"
         "Preserve each error_type and cite the matching evidence_id. Include a concise explanation, "
         "recommended_action, confidence, and abstain flag.\n"
+        "recommended_action is an enum, not prose: use exactly no_action, review_if_relevant, "
+        "radiologist_review, or urgent_review. Keep every explanation concise so the complete errors list fits the output budget.\n"
         f"Required JSON schema example: {json.dumps(schema, ensure_ascii=False)}\n"
         f"Errors to judge: {json.dumps(error_candidates, ensure_ascii=False)}"
         f"{retry_note}"

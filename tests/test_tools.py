@@ -362,6 +362,75 @@ def test_tool2_prompt_exposes_source_ordered_evidence_spans():
     assert "<evidence_spans>" in prompt
     assert "source-ordered excerpts" in prompt
     assert "never concatenate, reorder" in prompt
+    assert '"span_id": 0' in prompt
+
+
+def test_tool2_uses_server_resolved_evidence_span_id():
+    report = "脑室系统未见扩张，脑沟、裂、池稍增宽。中线结构居中。"
+    response = {
+        "findings": [
+            {
+                "observation_code": "ventricular_dilation",
+                "observation_text": "no ventricular dilation",
+                "anatomy_code": "ventricles",
+                "location_text": "ventricular system",
+                "laterality": "unknown",
+                "certainty": "absent",
+                "severity": None,
+                "measurements": [],
+                "evidence": "模型改写的证据，不应直接落库",
+                "evidence_span_id": 0,
+                "attributes": {},
+            }
+        ],
+        "relations": [],
+    }
+
+    graph = extract_findings(
+        report,
+        modality="mri",
+        backend="auto",
+        llm_client=_RecordingClient(response),
+        extractor_options={"provider": "chat_completions", "model": "qwen3-vl-plus"},
+        require_llm=True,
+        allow_fallback=False,
+    )
+
+    assert graph["findings"][0]["source_text"] == "脑室系统未见扩张，脑沟、裂、池稍增宽。"
+
+
+def test_tool2_evidence_span_id_preserves_duplicate_span_offset():
+    report = "同一句。其他内容。同一句。"
+    response = {
+        "findings": [
+            {
+                "observation_code": "reported_finding",
+                "observation_text": "same statement",
+                "anatomy_code": None,
+                "location_text": None,
+                "laterality": "unknown",
+                "certainty": "present",
+                "severity": None,
+                "measurements": [],
+                "evidence": "同一句。",
+                "evidence_span_id": 2,
+                "attributes": {},
+            }
+        ],
+        "relations": [],
+    }
+
+    graph = extract_findings(
+        report,
+        modality="mri",
+        backend="auto",
+        llm_client=_RecordingClient(response),
+        extractor_options={"provider": "chat_completions", "model": "qwen3-vl-plus"},
+        require_llm=True,
+        allow_fallback=False,
+    )
+
+    assert graph["findings"][0]["source_span"]["start"] == report.rfind("同一句。")
 
 
 def test_tool5_retry_prompt_requires_pair_ids_for_match_issues():
@@ -374,6 +443,21 @@ def test_tool5_retry_prompt_requires_pair_ids_for_match_issues():
     assert "candidate_id and reference_id are both mandatory" in prompt
     assert "copied exactly from the structured audit bundle" in prompt
     assert "never use a description, synonym, or free-form explanation" in prompt
+    assert "never use an input error_type" in prompt
+
+
+def test_tool5_prompt_allows_empty_issues_when_pair_ids_are_unavailable():
+    from medharness2.alignment.audit import _audit_prompt
+
+    prompt = _audit_prompt(
+        {"error_candidates": [], "candidate_findings": [], "reference_findings": []},
+        [],
+        target_error_indices=[],
+    )
+
+    assert "always return issues as an empty list" in prompt
+    assert "use error_judgements only" in prompt
+    assert "Set suggested_error_type to null" in prompt
 
 
 def test_tool4_retry_prompt_requires_error_type_alignment():
@@ -386,6 +470,8 @@ def test_tool4_retry_prompt_requires_error_type_alignment():
 
     assert "copy error_type exactly" in prompt
     assert "do not rename, paraphrase, reorder" in prompt
+    assert "recommended_action must be exactly one of" in prompt
+    assert "Keep every explanation concise" in prompt
 
 
 @pytest.mark.parametrize("field,bad", [("findings", "bad"), ("metadata", []), ("warnings", "bad")])

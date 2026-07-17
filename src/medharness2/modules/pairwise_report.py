@@ -71,6 +71,8 @@ def evaluate_pairwise(
             default=cfg.llm.max_retries
         )
         alignment_auditor_options = alignment_auditor_role.as_call_options()
+        audit_model = str(alignment_auditor_options.get("model") or "").lower()
+        alignment_audit_chunk_size = 1 if ("qwen" in audit_model or "vl" in audit_model) else 5
 
         def compute_alignment_audit() -> dict[str, Any]:
             return audit_alignment(
@@ -83,18 +85,18 @@ def evaluate_pairwise(
                 auditor_options=alignment_auditor_options,
                 require_llm=True,
                 allow_fallback=False,
-                # Keep each audit response small enough for multimodal
+                # Keep each audit response very small for multimodal
                 # providers with bounded JSON output budgets. The bundle is
                 # still complete across chunks; this only limits per-call
                 # error judgements and avoids truncated JSON responses.
-                max_errors_per_call=2,
+                max_errors_per_call=alignment_audit_chunk_size,
             )
 
         alignment_audit = _checkpointed(
             checkpoint_store,
             f"{checkpoint_namespace}.tool5_alignment_audit",
             {
-                "stage_version": "tool5-alignment-audit-v2",
+                "stage_version": "tool5-alignment-audit-v3",
                 "candidate_graph": graph_b,
                 "reference_graph": graph_a,
                 "alignment": alignment,
@@ -102,6 +104,7 @@ def evaluate_pairwise(
                 "model_role": "alignment_auditor",
                 "require_llm": True,
                 "allow_fallback": False,
+                "alignment_audit_chunk_size": alignment_audit_chunk_size,
                 "route": llm_route_fingerprint(client, alignment_auditor_options),
             },
             compute_alignment_audit,
