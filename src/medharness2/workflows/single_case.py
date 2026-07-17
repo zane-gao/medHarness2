@@ -103,7 +103,10 @@ def run_single_case(
             tolerance_mm=cfg.alignment.tolerance_mm,
         )
         evaluation["finding_alignment"] = alignment
-        composite = dict(evaluation.get("composite_inputs") or {})
+        composite = _strict_object(
+            evaluation.get("composite_inputs"),
+            "generated_evaluation.composite_inputs",
+        )
         composite["finding_coverage"] = float((alignment.get("metrics") or {}).get("recall", 0.0))
         evaluation["composite_inputs"] = composite
         generated_evaluations.append(evaluation)
@@ -188,3 +191,11 @@ def _strict_prepared_assets(value: Any) -> dict[str, str]:
             raise ValueError(f"prepared_assets.{key} must be a string")
         result[key] = item
     return result
+
+
+def _strict_object(value: Any, label: str) -> dict[str, Any]:
+    if value in (None, ""):
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value

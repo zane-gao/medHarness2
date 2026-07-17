@@ -157,6 +157,33 @@ def test_single_case_rejects_malformed_prepared_assets(tmp_path: Path, bad):
         )
 
 
+def test_single_case_rejects_malformed_generated_composite_inputs(tmp_path: Path, monkeypatch):
+    report = tmp_path / "report.txt"
+    image = tmp_path / "image.png"
+    report.write_text("FINDINGS: clear. IMPRESSION: normal.", encoding="utf-8")
+    image.write_bytes(b"png")
+
+    original = evaluate_single_report
+    calls = 0
+
+    def malformed(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        result = original(*args, **kwargs)
+        if calls > 1:
+            result["composite_inputs"] = "bad"
+        return result
+
+    monkeypatch.setattr("medharness2.workflows.single_case.evaluate_single_report", malformed)
+    with pytest.raises(ValueError, match="generated_evaluation.composite_inputs"):
+        run_single_case(
+            report_path=report,
+            image_path=image,
+            output_path=tmp_path / "case.json",
+            config=AppConfig(llm=LLMConfig(provider="mock")),
+        )
+
+
 def test_single_report_routes_likert_through_general_judge_role():
     response = {
         metric: {"score": 4, "explanation": "Evidence-based score."}

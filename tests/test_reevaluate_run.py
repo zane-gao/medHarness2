@@ -326,6 +326,19 @@ def test_reevaluate_run_rejects_malformed_source_ocr_policy(tmp_path: Path):
         _source_validation_options(source)
 
 
+@pytest.mark.parametrize("bad", [True, 1, ["case"], "bad"])
+def test_reevaluate_run_rejects_malformed_workflow2_cases(tmp_path: Path, bad: object):
+    source = tmp_path / "source_run"
+    source.mkdir()
+    _write_json(source / "workflow2.json", {"cases": bad})
+    with pytest.raises(ValueError, match="workflow2.cases"):
+        reevaluate_run(
+            source,
+            tmp_path / "reeval_run",
+            config=AppConfig(llm=LLMConfig(provider="mock")),
+        )
+
+
 def test_reevaluate_run_marks_reconstructed_report_as_fallback(tmp_path: Path):
     source = tmp_path / "source_run"
     source_cases = source / "workflow2_cases"
