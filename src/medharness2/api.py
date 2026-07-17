@@ -893,6 +893,17 @@ def education(request: EducationRequest) -> dict[str, Any]:
             output_path=request.output_path,
             config=cfg,
         )
+        result = _result_mapping(result, "education.result")
+        mode = result.get("mode")
+        if not isinstance(mode, str):
+            raise ValueError("education.mode must be a string")
+        suggestions = result.get("suggestions") or []
+        general_suggestions = result.get("general_suggestions") or []
+        if not isinstance(suggestions, list):
+            raise ValueError("education.suggestions must be a list")
+        if not isinstance(general_suggestions, list):
+            raise ValueError("education.general_suggestions must be a list")
+        education_errors = _result_string_list(result.get("errors"), "education.errors")
     except Exception as exc:
         _record_registry(
             Path(request.output_path).parent,
@@ -916,21 +927,21 @@ def education(request: EducationRequest) -> dict[str, Any]:
         },
         outputs={"education": request.output_path},
         metrics={
-            "suggestion_count": len(result.get("suggestions") or []),
-            "general_suggestion_count": len(result.get("general_suggestions") or []),
-            "error_count": len(result.get("errors") or []),
+            "suggestion_count": len(suggestions),
+            "general_suggestion_count": len(general_suggestions),
+            "error_count": len(education_errors),
         },
         status="failed" if result.get("status") in {"blocked", "blocked_insufficient_data"} else "passed",
-        warnings=list(result.get("errors") or []),
+        warnings=education_errors,
     )
     return {
         "output_path": request.output_path,
         "summary": {
-            "mode": result["mode"],
-            "suggestions": len(result.get("suggestions") or []),
-            "general_suggestions": len(result.get("general_suggestions") or []),
+            "mode": mode,
+            "suggestions": len(suggestions),
+            "general_suggestions": len(general_suggestions),
             "status": result.get("status"),
-            "errors": list(result.get("errors") or []),
+            "errors": education_errors,
         },
         "result": result,
     }

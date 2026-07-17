@@ -121,6 +121,23 @@ def test_api_experiments_run_rejects_malformed_result(tmp_path: Path, monkeypatc
     assert registry["entries"][-1]["status"] == "failed"
 
 
+def test_api_education_rejects_malformed_result(tmp_path: Path, monkeypatch):
+    output_path = tmp_path / "education.json"
+    monkeypatch.setattr(
+        api_module,
+        "run_education_suggestions",
+        lambda *args, **kwargs: {"mode": "bad", "suggestions": "bad", "general_suggestions": [], "errors": []},
+    )
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/workflow/education",
+        json={"eval_report_path": str(tmp_path / "eval.json"), "output_path": str(output_path)},
+    )
+    assert response.status_code == 500
+    assert response.json()["detail"] == "education_failed:ValueError"
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 @pytest.mark.parametrize(
     ("route", "payload", "function_name", "malformed", "detail_prefix", "registry_dir_key"),
     [
