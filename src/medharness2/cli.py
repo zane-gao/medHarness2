@@ -6,7 +6,11 @@ import sys
 from pathlib import Path
 
 from medharness2.catalog import build_capability_catalog
-from medharness2.annotation import build_pilot_annotation_package, validate_pilot_annotation_package
+from medharness2.annotation import (
+    build_pilot_annotation_package,
+    export_reader_annotation_package,
+    validate_pilot_annotation_package,
+)
 from medharness2.research_prep import prepare_research_manifests
 from medharness2.config import load_config
 from medharness2.contracts import export_json_schemas, migrate_run_case_artifacts
@@ -89,6 +93,10 @@ def build_parser() -> argparse.ArgumentParser:
     annotation_pilot.add_argument("--limit", type=int, default=10)
     annotation_validate = annotation_sub.add_parser("validate")
     annotation_validate.add_argument("--package-dir", required=True)
+    annotation_export = annotation_sub.add_parser("export-reader")
+    annotation_export.add_argument("--package-dir", required=True)
+    annotation_export.add_argument("--output-dir", required=True)
+    annotation_export.add_argument("--reader", choices=["reader_a", "reader_b"], required=True)
     research = subparsers.add_parser("research")
     research_sub = research.add_subparsers(dest="research_command", required=True)
     research_prepare = research_sub.add_parser("prepare-manifests")
@@ -262,6 +270,14 @@ def main(argv: list[str] | None = None) -> int:
         if result["status"] == "blocked":
             return 2
         return 1
+    if args.command == "annotation" and args.annotation_command == "export-reader":
+        try:
+            result = export_reader_annotation_package(args.package_dir, args.output_dir, reader_slot=args.reader)
+        except Exception as exc:
+            print(f"medHarness2 annotation export-reader failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
     if args.command == "research" and args.research_command == "prepare-manifests":
         try:
             result = prepare_research_manifests(args.pilot_dir, args.output_dir)

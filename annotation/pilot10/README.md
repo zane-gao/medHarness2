@@ -16,6 +16,20 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
   --limit 10
 ```
 
+给真实 reader 交付隔离副本（只保留指定 reader 的槽位，不包含内部模型映射）：
+
+```bash
+PYTHONPATH=src .venv/bin/python -m medharness2.cli \
+  annotation export-reader \
+  --package-dir annotation/pilot10 \
+  --output-dir /path/to/reader_a_package \
+  --reader reader_a
+```
+
+`reader_b` 使用同一命令替换 `--reader`。导出的副本完成后，直接对该副本运行
+`annotation validate`；管理员回收时再将对应 `cases/` 合并回主包，不能把两个 reader
+的副本直接互相覆盖。
+
 - Cases: 10
 - Blinding: model identities and source case identifiers are not included.
 - Readers: reader_a and reader_b annotate independently; adjudication is completed only after both readers finish.

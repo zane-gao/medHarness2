@@ -417,6 +417,28 @@ def test_validate_pilot_annotation_package_blocks_duplicate_candidate_ids(tmp_pa
     assert "case:pilot-001:duplicate_blinded_model_id" in result["errors"]
 
 
+def test_validate_pilot_annotation_package_rejects_non_contract_manifest_metadata(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    output_dir = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, output_dir, limit=1)
+    manifest = json.loads((output_dir / "manifest.jsonl").read_text(encoding="utf-8"))
+    manifest["modality"] = True
+    manifest["body_part"] = []
+    manifest.pop("candidate_count")
+    manifest["status"] = "finished"
+    (output_dir / "manifest.jsonl").write_text(
+        json.dumps(manifest, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+    result = validate_pilot_annotation_package(output_dir)
+
+    assert result["status"] == "blocked"
+    assert "manifest:pilot-001:modality_must_be_string" in result["errors"]
+    assert "manifest:pilot-001:body_part_must_be_string" in result["errors"]
+    assert "manifest:pilot-001:missing_candidate_count" in result["errors"]
+    assert "manifest:pilot-001:invalid_status:finished" in result["errors"]
+
+
 def test_pilot_source_hash_binds_case_content_not_only_case_id(tmp_path: Path):
     run_dir = _write_run(tmp_path / "run")
     first_output = tmp_path / "pilot-first"

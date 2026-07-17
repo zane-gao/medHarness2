@@ -21,8 +21,19 @@ annotation/pilot10/
 
 ## 标注流程
 
-1. 将整个 `annotation/pilot10/` 复制到 reader A 和 reader B 各自隔离的工作目录；
-2. 两位 reader 独立填写各自槽位，不查看另一位 reader 的文件，不修改候选顺序；
+1. 使用 `annotation export-reader` 分别生成只含一个 reader 槽位的隔离副本：
+
+   ```bash
+   PYTHONPATH=src .venv/bin/python -m medharness2.cli \
+     annotation export-reader \
+     --package-dir annotation/pilot10 \
+     --output-dir /path/to/reader_a_package \
+     --reader reader_a
+   ```
+
+   `reader_b` 使用同一命令替换 `--reader`。导出命令不会复制 `internal/model_blinding_map.json`，
+   也会清空另一个 reader 和 adjudication 槽位，避免交叉泄漏。
+2. 两位 reader 独立填写各自副本，不查看另一位 reader 的文件，不修改候选顺序；
 3. 两位 reader 都完成后，项目管理员合并到 adjudication 工作目录；
 4. 只有两位 reader 都是 `complete` 后，才允许填写 `adjudication`；
 5. 完成后运行：
@@ -34,6 +45,9 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
 ```
 
 当前预期结果是 `status=not_started`、`case_count=10`；完成真实标注后才会变为 `in_progress` 或 `complete`。
+
+导出副本回收前也必须单独运行 `annotation validate --package-dir <reader_package>`；管理员合并后，
+再对主包运行一次 validate，确保病例数、候选顺序和三个槽位均未漂移。
 
 ## 证据边界
 

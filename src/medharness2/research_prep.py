@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from medharness2.modality import normalize_modality
+from medharness2.annotation import validate_pilot_annotation_package
 from medharness2.annotation.models import AnnotationCase
 from medharness2.utils.io import read_json
 
@@ -40,6 +41,10 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
     if any(not isinstance(row, dict) for row in rows):
         raise ValueError("pilot_manifest_malformed_row")
     _validate_pilot_rows(rows, pilot)
+    package_validation = validate_pilot_annotation_package(pilot)
+    if package_validation["status"] == "blocked":
+        first_error = (package_validation.get("errors") or ["invalid_package"])[0]
+        raise ValueError(f"pilot_manifest_invalid_package:{first_error}")
     modalities = {normalize_modality(row.get("modality")) for row in rows}
     required = {"cxr", "ct", "mri"}
     coverage_ok = required.issubset(modalities)
@@ -115,7 +120,7 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
             "modalities": sorted(modalities),
             "gold_source": CURRENT_GOLD_SOURCE,
             "gold_status": CURRENT_GOLD_STATUS,
-            "clinical_reader_status": "not_started",
+            "clinical_reader_status": package_validation["status"],
         },
         "experiments": [
             {"id": "ocr_comparison", "status": "blocked", "required_evidence": [CURRENT_GOLD_SOURCE, "real_provider_runs"]},

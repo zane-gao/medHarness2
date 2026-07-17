@@ -8,6 +8,7 @@
 - 模型身份映射隔离于 `internal/model_blinding_map.json`，不进入读者包。
 - 当前 OCR/文本 benchmark 使用北川参考报告作为工程金标准（`gold_source=beichuan_reference_report`）；真实 reader 标注单独用于临床校准。
 - 生成 OCR/论文实验 manifest：`outputs/research/20260717/`（本地 outputs/ 产物，被忽略规则排除；可用命令重建）。
+- 已增加 reader 隔离导出命令，真实标注可以从 `annotation/pilot10/` 生成不泄漏另一 reader 槽位的交付副本。
 
 ## 当前证据状态
 

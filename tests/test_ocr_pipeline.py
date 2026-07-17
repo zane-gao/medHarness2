@@ -379,6 +379,38 @@ def test_pdf_text_cache_is_not_reused_when_verifier_is_configured_but_missing(
     assert sidecar["quality_status"] == "review_required"
 
 
+def test_pdf_text_cache_ignores_vlm_route_changes(tmp_path: Path):
+    """Changing the VLM route must not invalidate deterministic text extraction."""
+    pdf = tmp_path / "text-layer-route.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=200)
+    page.insert_text((30, 60), "FINDINGS: Clear lungs. IMPRESSION: Normal.")
+    doc.save(pdf)
+
+    output_dir = tmp_path / "ocr"
+    extract_report_text(
+        pdf,
+        case_id="text-layer-route",
+        output_dir=output_dir,
+        config=AppConfig(llm=LLMConfig(provider="mock", model="old-model")),
+        force=True,
+    )
+
+    class FailingClient:
+        def call(self, *args, **kwargs):
+            raise AssertionError("text-layer cache should be reused")
+
+    result = extract_report_text(
+        pdf,
+        case_id="text-layer-route",
+        output_dir=output_dir,
+        config=AppConfig(llm=LLMConfig(provider="openai", model="new-model")),
+        llm_client=FailingClient(),
+    )
+
+    assert result.method == "cache"
+
+
 def test_scanned_pdf_ocr_skips_deterministic_blank_pages(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()

@@ -38,8 +38,15 @@ def _pilot(tmp_path: Path, rows: list[dict]) -> Path:
             },
         )
         (root / relative).write_text(case.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    manifest_rows = []
+    for row in rows:
+        normalized = dict(row)
+        normalized.setdefault("body_part", "unknown")
+        normalized.setdefault("candidate_count", 1)
+        normalized.setdefault("status", "not_started")
+        manifest_rows.append(normalized)
     (root / "manifest.jsonl").write_text(
-        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+        "".join(json.dumps(row) + "\n" for row in manifest_rows), encoding="utf-8"
     )
     return root
 
@@ -148,3 +155,23 @@ def test_prepare_research_manifests_rejects_annotation_case_identity_mismatch(tm
     case_path.write_text(json.dumps(raw), encoding="utf-8")
     with pytest.raises(ValueError, match="annotation_case"):
         prepare_research_manifests(pilot, tmp_path / "research")
+
+
+def test_prepare_research_manifests_propagates_valid_reader_progress(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    case_path = pilot / "cases" / "pilot-001.json"
+    payload = json.loads(case_path.read_text(encoding="utf-8"))
+    payload["annotations"]["reader_a"]["status"] = "in_progress"
+    case_path.write_text(json.dumps(payload), encoding="utf-8")
+    row = json.loads((pilot / "manifest.jsonl").read_text(encoding="utf-8"))
+    row["status"] = "in_progress"
+    (pilot / "manifest.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    result = prepare_research_manifests(pilot, tmp_path / "research")
+
+    paper = json.loads((tmp_path / "research" / "paper_experiment_manifest.json").read_text())
+    assert result["status"] == "blocked"
+    assert paper["data"]["clinical_reader_status"] == "in_progress"

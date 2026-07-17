@@ -341,27 +341,26 @@ def _cache_is_compatible(
     method = str(meta.get("method") or "").lower()
     if method not in {"pdf_text_layer", "vlm_ocr"}:
         return False
-    # A blocked OCR result is evidence that the previous transcription is not
-    # safe to consume.  Do not keep returning it forever from the cache:
-    # callers must get a fresh provider attempt (or an explicit failure).
-    if meta.get("quality_status") == "blocked":
-        return False
-    if meta.get("quality_status") is None and _cache_quality_is_blocked(meta):
-        return False
-    if require_real and not _is_real_ocr_meta(meta):
-        return False
-    if str(meta.get("provider") or "").lower() != provider:
-        return False
-    cached_model = str(meta.get("model") or "")
-    cached_role = str(meta.get("role") or "")
-    if cached_role != role:
-        return False
-    # OCR sidecars are route-bound: a model change must force recomputation.
-    # Same-model legacy caches remain compatible for backwards compatibility.
-    if cached_model != model:
-        return False
-    if str(meta.get("prompt_version") or "") != "ocr-page-v2":
-        return False
+    if method == "vlm_ocr":
+        # A blocked OCR result is evidence that the previous transcription is
+        # not safe to consume.  Do not keep returning it forever from cache.
+        if meta.get("quality_status") == "blocked":
+            return False
+        if meta.get("quality_status") is None and _cache_quality_is_blocked(meta):
+            return False
+        if require_real and not _is_real_ocr_meta(meta):
+            return False
+        if str(meta.get("provider") or "").lower() != provider:
+            return False
+        cached_model = str(meta.get("model") or "")
+        cached_role = str(meta.get("role") or "")
+        if cached_role != role:
+            return False
+        # OCR sidecars are route-bound: a model change must force recomputation.
+        if cached_model != model:
+            return False
+        if str(meta.get("prompt_version") or "") != "ocr-page-v2":
+            return False
     expected_verifier = {
         "provider": str(verifier_options.get("provider") or "").lower(),
         "model": str(verifier_options.get("model") or ""),
@@ -384,9 +383,11 @@ def _cache_is_compatible(
         or str(cached_verifier.get("role") or "") != "ocr_verifier"
     ):
         return False
-    # Text-layer caches still carry verifier provenance.  Check it before
+    # Text-layer caches still carry verifier provenance. Check it before
     # accepting the fast path so enabling an audit cannot reuse an older
-    # primary-only artifact as if it had been reviewed.
+    # primary-only artifact as if it had been reviewed. Text extraction is
+    # independent of the configured VLM route, so do not compare provider,
+    # model, or role for this method.
     if method == "pdf_text_layer":
         return meta.get("provider") == "local_pdf_text"
     return True

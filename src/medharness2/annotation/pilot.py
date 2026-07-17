@@ -218,6 +218,12 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
             )
         else:
             seen_case_ids[pilot_case_id] = row_index
+        raw_modality = row.get("modality")
+        if not isinstance(raw_modality, str) or not raw_modality.strip():
+            errors.append(f"manifest:{pilot_case_id}:modality_must_be_string")
+        raw_body_part = row.get("body_part")
+        if not isinstance(raw_body_part, str) or not raw_body_part.strip():
+            errors.append(f"manifest:{pilot_case_id}:body_part_must_be_string")
         if not relative:
             errors.append(f"manifest:{pilot_case_id}:missing_annotation_path")
             continue
@@ -252,18 +258,20 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
             continue
         if case.pilot_case_id != pilot_case_id:
             errors.append(f"case:{pilot_case_id}:id_mismatch")
-        if case.modality != str(row.get("modality") or "unknown"):
+        if isinstance(raw_modality, str) and normalize_modality(case.modality) != normalize_modality(raw_modality):
             errors.append(f"case:{pilot_case_id}:modality_mismatch")
-        if case.body_part != str(row.get("body_part") or "unknown"):
+        if isinstance(raw_body_part, str) and case.body_part != _body_part(raw_body_part):
             errors.append(f"case:{pilot_case_id}:body_part_mismatch")
         if not case.reference_report.strip():
             errors.append(f"case:{pilot_case_id}:empty_reference_report")
         candidate_count = row.get("candidate_count")
-        if candidate_count is not None and (
+        if candidate_count is None:
+            errors.append(f"manifest:{pilot_case_id}:missing_candidate_count")
+        elif (
             isinstance(candidate_count, bool) or not isinstance(candidate_count, int) or candidate_count < 0
         ):
             errors.append(f"case:{pilot_case_id}:invalid_candidate_count")
-        elif candidate_count is not None and candidate_count != len(case.candidate_reports):
+        elif candidate_count != len(case.candidate_reports):
             errors.append(f"case:{pilot_case_id}:candidate_count_mismatch:{candidate_count}!={len(case.candidate_reports)}")
         if not case.candidate_reports:
             errors.append(f"case:{pilot_case_id}:no_candidate_reports")
@@ -297,12 +305,17 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
                 errors.append(f"case:{pilot_case_id}:{slot}:content_before_start")
         derived = _annotation_status(statuses)
         declared = row.get("status")
-        if not isinstance(declared, str) or not declared.strip():
+        if not isinstance(declared, str):
+            errors.append(f"manifest:{pilot_case_id}:status_must_be_string")
+            declared = ""
+        elif not declared.strip():
             errors.append(f"case:{pilot_case_id}:missing_status")
             declared = ""
         else:
             declared = declared.strip()
-        if declared != derived:
+        if declared and declared not in {"not_started", "in_progress", "complete"}:
+            errors.append(f"manifest:{pilot_case_id}:invalid_status:{declared}")
+        elif declared != derived:
             errors.append(f"case:{pilot_case_id}:status_mismatch:{declared}!={derived}")
         if derived == "complete":
             complete += 1
@@ -344,6 +357,60 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
         "errors": list(dict.fromkeys(errors)),
         "warnings": warnings,
     }
+
+
+def export_reader_annotation_package(
+    package_dir: str | Path,
+    output_dir: str | Path,
+    *,
+    reader_slot: str,
+) -> dict[str, Any]:
+    """Create an isolated reader-facing copy without leaking other slots.
+
+    The source package may contain private work from either reader.  The
+    exported copy keeps only the requested reader's annotation and resets the
+    other reader plus adjudication to empty ``not_started`` slots.  Internal
+    model-blinding maps are deliberately not copied.
+    """
+    if reader_slot not in {"reader_a", "reader_b"}:
+        raise ValueError("reader_slot must be reader_a or reader_b")
+    source = Path(package_dir)
+    target = Path(output_dir)
+    source_result = validate_pilot_annotation_package(source)
+    if source_result["errors"]:
+        raise ValueError("source_annotation_package_invalid")
+    if target.exists() and any(target.iterdir()):
+        raise ValueError("output_dir_must_be_empty")
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "cases").mkdir(parents=True, exist_ok=True)
+
+    exported_rows: list[dict[str, Any]] = []
+    manifest_path = source / "manifest.jsonl"
+    for line in manifest_path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        source_case_path = source / str(row["annotation_path"])
+        case = AnnotationCase.model_validate_json(source_case_path.read_text(encoding="utf-8"))
+        annotations = {
+            slot: (case.annotations[reader_slot] if slot == reader_slot else ReaderAnnotation(reader_slot=slot))
+            for slot in ("reader_a", "reader_b", "adjudication")
+        }
+        exported_case = case.model_copy(update={"annotations": annotations})
+        output_case_path = target / str(row["annotation_path"])
+        output_case_path.parent.mkdir(parents=True, exist_ok=True)
+        output_case_path.write_text(exported_case.model_dump_json(indent=2) + "\n", encoding="utf-8")
+        statuses = {slot: annotations[slot].status for slot in annotations}
+        exported_rows.append({**row, "status": _annotation_status(statuses), "reader_slot": reader_slot})
+
+    (target / "manifest.jsonl").write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in exported_rows), encoding="utf-8"
+    )
+    (target / "annotation.schema.json").write_text(
+        (source / "annotation.schema.json").read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    (target / "README.md").write_text(_reader_package_readme(len(exported_rows), reader_slot), encoding="utf-8")
+    return {"schema_version": "2.0", "case_count": len(exported_rows), "reader_slot": reader_slot, "output_dir": str(target)}
 
 
 def _annotation_status(statuses: dict[str, str]) -> str:
@@ -484,4 +551,15 @@ def _package_readme(case_count: int) -> str:
         "- Finding guidance: `annotation/guidelines/finding_annotation.md`.\n"
         "- Hazard guidance: `annotation/guidelines/hazard_annotation.md`.\n"
         "- This pilot is for guideline calibration and must not be used as a formal test set.\n"
+    )
+
+
+def _reader_package_readme(case_count: int, reader_slot: str) -> str:
+    return (
+        "# medHarness2 Reader Annotation Package\n\n"
+        f"- Cases: {case_count}\n- Assigned reader: `{reader_slot}`\n"
+        "- This copy contains only the assigned reader's annotation slot; other reader and adjudication slots are empty.\n"
+        "- Do not add model identities, source identifiers, or files outside `cases/`.\n"
+        "- Finding guidance: `annotation/guidelines/finding_annotation.md`.\n"
+        "- Hazard guidance: `annotation/guidelines/hazard_annotation.md`.\n"
     )
