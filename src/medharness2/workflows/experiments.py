@@ -320,8 +320,11 @@ def _education_suggestion_count(paths: list[Path]) -> int:
 
 def _image_to_text_models(run_dir: Path, analysis: dict[str, Any]) -> dict[str, Any]:
     rows = _read_csv(run_dir / "analysis" / "model_source_summary.csv")
-    source_counts = dict(analysis.get("generated_report_source_counts") or {})
-    evidence_tier_counts = dict(analysis.get("generated_report_evidence_tier_counts") or {})
+    source_counts = _count_map(analysis.get("generated_report_source_counts"), "generated_report_source_counts")
+    evidence_tier_counts = _count_map(
+        analysis.get("generated_report_evidence_tier_counts"),
+        "generated_report_evidence_tier_counts",
+    )
     model_count = len(analysis.get("generated_report_model_counts") or {})
     return {
         "id": "image_to_text_models",
@@ -343,11 +346,13 @@ def _image_to_text_models(run_dir: Path, analysis: dict[str, Any]) -> dict[str, 
 def _modality_recognition(run_summary: dict[str, Any], workflow2: dict[str, Any]) -> dict[str, Any]:
     validation = run_summary.get("validation") or {}
     summary = validation.get("summary") or {}
-    modalities = (
-        summary["modality_counts"]
-        if "modality_counts" in summary
-        else Counter(str(case.get("modality") or "unknown") for case in workflow2.get("cases") or [])
-    )
+    if "modality_counts" in summary:
+        modalities = _count_map(summary["modality_counts"], "modality_counts")
+    else:
+        raw_cases = workflow2.get("cases") or []
+        if not isinstance(raw_cases, list) or any(not isinstance(case, dict) for case in raw_cases):
+            raise ValueError("workflow2.cases must be a list of objects")
+        modalities = Counter(str(case.get("modality") or "unknown") for case in raw_cases)
     return {
         "id": "modality_recognition",
         "title": "Validation of Modality Recognition VLM",
@@ -361,6 +366,19 @@ def _modality_recognition(run_summary: dict[str, Any], workflow2: dict[str, Any]
             "unknown_ocr_count": _count_or_zero(validation.get("unknown_ocr_count"), "unknown_ocr_count"),
         },
     }
+
+
+def _count_map(value: Any, label: str) -> dict[str, int]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    result: dict[str, int] = {}
+    for key, count in value.items():
+        if not isinstance(key, str):
+            raise ValueError(f"{label} keys must be strings")
+        result[key] = _nonnegative_count(count, f"{label}.{key}")
+    return result
 
 
 def _case_payloads(root: Path, workflow2: dict[str, Any]) -> list[dict[str, Any]]:

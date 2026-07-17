@@ -39,6 +39,22 @@ def test_run_experiments_rejects_malformed_workflow2_cases(tmp_path: Path, bad: 
         run_experiments(run_dir, tmp_path / "out")
 
 
+@pytest.mark.parametrize("field", ["generated_report_source_counts", "generated_report_evidence_tier_counts"])
+@pytest.mark.parametrize("bad", ["bad", [], ["x"], 7, True])
+def test_image_to_text_models_rejects_malformed_count_maps(tmp_path: Path, field: str, bad: object):
+    with pytest.raises(ValueError, match=field):
+        _image_to_text_models(tmp_path, {field: bad})
+
+
+@pytest.mark.parametrize("bad", ["bad", [], ["cxr"], 7, True])
+def test_modality_recognition_rejects_malformed_modality_counts(tmp_path: Path, bad: object):
+    with pytest.raises(ValueError, match="modality_counts"):
+        _modality_recognition(
+            {"validation": {"summary": {"modality_counts": bad}}},
+            {"cases": []},
+        )
+
+
 def test_radiologist_evaluation_preserves_explicit_zero_counts():
     result = _radiologist_evaluation(
         {"case_count": 0, "reader_count": 0},
