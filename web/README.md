@@ -82,7 +82,7 @@ npm install
 npm run test:web
 ```
 
-当前 A40 宿主的 Chromium 启动仍被缺失的 `libnspr4.so` 阻断；该环境问题不会被记录为页面测试通过。
+当前仓库的 Playwright desktop/mobile 回归已通过（1440x900 与 390x844）。A40 系统尚未永久安装 Chromium 运行依赖；若直接使用系统环境运行，仍需安装 `libnspr4`、`libnss3` 及相关 GTK/X11 库，或设置用户态 `LD_LIBRARY_PATH` 指向等价依赖。
 
 ## 文件
 
