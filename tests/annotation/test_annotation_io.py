@@ -102,6 +102,20 @@ def test_cli_build_pilot_rejects_missing_or_empty_source_run(tmp_path: Path):
     assert code == 1
 
 
+def test_cli_prepare_pilot_alias_builds_package(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    assert main([
+        "annotation",
+        "prepare-pilot",
+        "--run-dir",
+        str(run_dir),
+        "--output-dir",
+        str(tmp_path / "pilot10"),
+        "--limit",
+        "1",
+    ]) == 0
+
+
 def test_pilot_privacy_scan_ignores_cryptographic_provenance_hash(tmp_path: Path, monkeypatch):
     run_dir = _write_run(tmp_path / "run")
     monkeypatch.setattr(

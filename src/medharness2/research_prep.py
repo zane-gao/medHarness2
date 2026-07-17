@@ -21,11 +21,19 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
     manifest_path = pilot / "manifest.jsonl"
     if not manifest_path.is_file():
         raise ValueError("pilot_manifest_not_found")
-    rows = [json.loads(line) for line in manifest_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    try:
+        rows = [
+            json.loads(line)
+            for line in manifest_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"pilot_manifest_invalid_json:{type(exc).__name__}") from exc
     if not rows:
         raise ValueError("pilot_manifest_empty")
     if any(not isinstance(row, dict) for row in rows):
-        raise ValueError("pilot_manifest_malformed")
+        raise ValueError("pilot_manifest_malformed_row")
+    _validate_pilot_rows(rows)
     modalities = {normalize_modality(row.get("modality")) for row in rows}
     required = {"cxr", "ct", "mri"}
     coverage_ok = required.issubset(modalities)
@@ -72,3 +80,27 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
     (output / "ocr_manifest.json").write_text(json.dumps(ocr_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     (output / "paper_experiment_manifest.json").write_text(json.dumps(paper_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return {"status": "blocked", "case_count": len(rows), "modality_coverage": sorted(modalities), "output_dir": str(output)}
+
+
+def _validate_pilot_rows(rows: list[dict[str, Any]]) -> None:
+    """Reject malformed package identity fields before creating research runs."""
+    seen_ids: set[str] = set()
+    seen_paths: set[str] = set()
+    for index, row in enumerate(rows, start=1):
+        case_id = row.get("pilot_case_id")
+        modality = row.get("modality")
+        annotation_path = row.get("annotation_path")
+        if not isinstance(case_id, str) or not case_id.strip():
+            raise ValueError(f"pilot_manifest_row_{index}:pilot_case_id_must_be_string")
+        if not isinstance(modality, str) or not modality.strip():
+            raise ValueError(f"pilot_manifest_row_{index}:modality_must_be_string")
+        if not isinstance(annotation_path, str) or not annotation_path.strip():
+            raise ValueError(f"pilot_manifest_row_{index}:annotation_path_must_be_string")
+        normalized_id = case_id.strip()
+        normalized_path = annotation_path.strip()
+        if normalized_id in seen_ids:
+            raise ValueError(f"pilot_manifest_duplicate_case_id:{normalized_id}")
+        if normalized_path in seen_paths:
+            raise ValueError(f"pilot_manifest_duplicate_annotation_path:{normalized_path}")
+        seen_ids.add(normalized_id)
+        seen_paths.add(normalized_path)

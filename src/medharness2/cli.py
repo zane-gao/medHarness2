@@ -83,7 +83,7 @@ def build_parser() -> argparse.ArgumentParser:
     schemas_migrate.add_argument("--output-dir", required=True)
     annotation = subparsers.add_parser("annotation")
     annotation_sub = annotation.add_subparsers(dest="annotation_command", required=True)
-    annotation_pilot = annotation_sub.add_parser("build-pilot")
+    annotation_pilot = annotation_sub.add_parser("build-pilot", aliases=["prepare-pilot"])
     annotation_pilot.add_argument("--run-dir", required=True)
     annotation_pilot.add_argument("--output-dir", required=True)
     annotation_pilot.add_argument("--limit", type=int, default=10)
@@ -246,7 +246,7 @@ def main(argv: list[str] | None = None) -> int:
         result = migrate_run_case_artifacts(args.source_run_dir, args.output_dir)
         print(f"migrated {result['case_count']} case artifacts; errors={result['error_count']}")
         return 0 if result["error_count"] == 0 else 1
-    if args.command == "annotation" and args.annotation_command == "build-pilot":
+    if args.command == "annotation" and args.annotation_command in {"build-pilot", "prepare-pilot"}:
         try:
             result = build_pilot_annotation_package(args.run_dir, args.output_dir, limit=args.limit)
         except Exception as exc:

@@ -46,3 +46,31 @@ def test_prepare_research_manifests_rejects_malformed_manifest(tmp_path: Path, b
     (pilot / "manifest.jsonl").write_text(json.dumps(bad) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="pilot_manifest"):
         prepare_research_manifests(pilot, tmp_path / "research")
+
+
+@pytest.mark.parametrize(
+    "field,bad",
+    [("pilot_case_id", ""), ("pilot_case_id", 1), ("modality", []), ("annotation_path", True)],
+)
+def test_prepare_research_manifests_rejects_malformed_identity_fields(tmp_path: Path, field: str, bad: object):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    row = {"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}
+    row[field] = bad
+    (pilot / "manifest.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="pilot_manifest"):
+        prepare_research_manifests(pilot, tmp_path / "research")
+
+
+def test_prepare_research_manifests_rejects_duplicate_identity(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [
+            {"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/a.json"},
+            {"pilot_case_id": "pilot-001", "modality": "ct", "annotation_path": "cases/b.json"},
+        ],
+    )
+    with pytest.raises(ValueError, match="duplicate_case_id"):
+        prepare_research_manifests(pilot, tmp_path / "research")

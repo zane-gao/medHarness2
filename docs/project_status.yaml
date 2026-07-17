@@ -7,7 +7,7 @@ baseline:
   branch: main
   git_sha: pending-clinical-ocr-paper-pipeline-preparation
   dirty_worktree: false
-  pytest_passed: 1667
+  pytest_passed: 1673
   pytest_warnings: 20
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
@@ -142,6 +142,7 @@ workstreams:
     evidence_paths:
       - src/medharness2/annotation/pilot.py
       - docs/research_pipeline_status_20260717.md
+      - docs/real_clinician_handoff_20260717.md
       - annotation/pilot10/annotation.schema.json
     next_gate: 由真实 reader_a/reader_b 独立完成 10 例标注，再 adjudication；完成后重新运行 annotation validate 并计算 inter-rater reliability。
   experiments:
