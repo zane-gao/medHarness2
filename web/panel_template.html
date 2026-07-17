@@ -565,7 +565,7 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
     <h2>工程进度地图：九条战线与六道正式关卡</h2>
     <p class="sec-lead">
       项目已从「把流水线跑通」进入「向正式研究结论推进」阶段。这一节回答三个问题：
-      每条战线现在推进到哪了？发表级结论前还有哪些门禁没点亮？临床金标准（一切校准的前提）动了没有？
+      每条战线现在推进到哪了？发表级结论前还有哪些门禁没点亮？北川文本 gold 与临床 reader 校准分别推进到哪一步？
       数据全部来自 <code>docs/project_status.yaml</code> 与实验聚合产物，构建时注入。
     </p>
   </div>
@@ -973,7 +973,7 @@ document.getElementById("gate-table").innerHTML = `
         <p>共 ${Object.values(roles).reduce((a,b)=>a+b,0)} 次角色调用（${Object.entries(roles).map(([k,v])=>`${esc(k)}×${v}`).join("、")}），纯 DMX 单一供应商路由（此前验证的 Yunwu/codex 双供应商是显式备胎，不自动切换）：</p>
         <table class="plain"><tr><th>模型</th><th>接入点</th><th class="num">调用</th></tr>${provRows}</table>
         <p style="margin-top:8px">重要保留：文档明确警示<b>重测稳定性不足</b>——同 9 例新旧两轮评估，T1 五维完全一致率仅 11%、重大错误共识完全一致率仅 22%。单次自动评价还不能当稳定临床结论引用。</p>
-        ${S.formal_statistics ? `<p style="margin-top:8px">正式统计门禁：<b>${esc(S.formal_statistics.status || "blocked")}</b>，方法 ${esc(S.formal_statistics.method || "insufficient_data")}；比较 ${S.formal_statistics.comparisons?.length || 0} 项${S.formal_statistics.blocked_reasons?.length ? `，阻断 ${S.formal_statistics.blocked_reasons.length} 项` : ""}。Holm 校正后的 p 值仅在样本充足的比较中展示，不能替代临床金标准。</p>` : ""}
+        ${S.formal_statistics ? `<p style="margin-top:8px">正式统计门禁：<b>${esc(S.formal_statistics.status || "blocked")}</b>，方法 ${esc(S.formal_statistics.method || "insufficient_data")}；比较 ${S.formal_statistics.comparisons?.length || 0} 项${S.formal_statistics.blocked_reasons?.length ? `，阻断 ${S.formal_statistics.blocked_reasons.length} 项` : ""}。Holm 校正后的 p 值仅在样本充足的比较中展示，仍需结合 pilot10 reader 校准后再升级为临床结论。</p>` : ""}
       </div></details>
     </div>`);
   }
@@ -992,7 +992,7 @@ document.getElementById("gate-table").innerHTML = `
         <div style="margin-top:6px;font-size:12.5px">11 例共识判级分布：${Object.entries(chl).map(([l,c])=>`${l}级×${c}`).join("、")}；其中<b>重大错误（material）${S.consensus_material_error_count} 个</b>，${S.clinical_validation_required_count} 例被标记「需临床医生最终确认」。</div>
       </div>
       <details class="more"><summary>但分歧率本身仍是个大问题</summary><div class="inner">
-        <p>两位 AI 法官的完全一致率、±1 级一致率和行动建议一致率都从真实汇总产物读取：完全一致率 <b>${pct((S.hazard_agreement||{}).exact_agreement_rate)}</b>，±1 级 <b>${pct((S.hazard_agreement||{}).within_one_rate)}</b>，行动建议 <b>${pct((S.hazard_agreement||{}).action_agreement_rate)}</b>。仲裁制度保证了「有答案」，但答案是否正确，只有拿医生金标准来校——这就是为什么每例都标了 clinical_validation_required。制度先行、校准在后，顺序是对的。</p>
+        <p>两位 AI 法官的完全一致率、±1 级一致率和行动建议一致率都从真实汇总产物读取：完全一致率 <b>${pct((S.hazard_agreement||{}).exact_agreement_rate)}</b>，±1 级 <b>${pct((S.hazard_agreement||{}).within_one_rate)}</b>，行动建议 <b>${pct((S.hazard_agreement||{}).action_agreement_rate)}</b>。仲裁制度保证了「有答案」，但答案是否接近临床判断，仍需与 pilot10 reader 校准结果对照；因此每例都标了 clinical_validation_required。制度先行、校准在后，顺序是对的。</p>
       </div></details>
     </div>`);
   }
@@ -1025,7 +1025,7 @@ document.getElementById("gate-table").innerHTML = `
       <p class="meta">同一批卷子请同一位老师隔天再判一遍：客观题分数分毫不差，主观题分数天天不一样——问题出在阅卷人，不在卷子。</p>
       <div class="example"><div class="lab">逐指标完全一致率（越绿越可靠，鼠标悬停看差值）</div>${rows}</div>
       <details class="more"><summary>这对下一步意味着什么</summary><div class="inner">
-        <p>${(ST.limitations||[]).length ? "官方保留意见：" + esc(ST.limitations[0]) + " " : ""}温度已是 0，剩余方差来自模型自身的非确定性。结论：<b>任何单次 LLM 评分都不能直接写进论文</b>——正式实验必须重复调用 + 冻结聚合规则（如多数投票/取中位）+ 报告不确定度，并用医生金标准（见 ⑥.8 节 pilot10）校准哪位法官最接近人类。</p>
+        <p>${(ST.limitations||[]).length ? "官方保留意见：" + esc(ST.limitations[0]) + " " : ""}温度已是 0，剩余方差来自模型自身的非确定性。结论：<b>任何单次 LLM 评分都不能直接写进论文</b>——正式实验必须重复调用 + 冻结聚合规则（如多数投票/取中位）+ 报告不确定度，并用 ⑥.8 节 pilot10 的 reader 结果校准哪位法官最接近临床判断。</p>
       </div></details>
     </div>`);
   }
@@ -1058,7 +1058,7 @@ document.getElementById("gate-table").innerHTML = `
         <table><tr><th>模态</th><th>例数</th><th>明确截断</th><th>疑似截断</th></tr>
         ${Object.entries(mods).map(([m,v])=>`<tr><td>${esc(m)}</td><td>${v.total}</td><td>${v.definite ? `<b style="color:#a32e2e">${v.definite}</b>` : 0}</td><td>${v.suspected||0}</td></tr>`).join("")}
         </table>
-        <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">应对方案已立项（OCR 盲测基准设计稿 2026-07-11）：冻结 10 例 CR/CT/MRI 盲测集，候选包括豆包两个视觉模型、qwen-vl-ocr 和放开 token 上限的本地基线，按临床正文字错率/数字与否定准确率/幻觉率选路由——图像 nonce 探针已确认三个云端候选真的在读图。</div>
+        <div style="margin-top:6px;color:#8a5d00;font-size:12.5px"><b>缓存完整性已补齐：</b>新 OCR sidecar 绑定 case/source/provider/model/role，并校验缓存文本 <code>text_sha256</code> 与质量摘要；文本被替换、sidecar 损坏或 verifier 状态矛盾都会按 cache miss 重做，未接入 verifier client 时降为 <code>review_required</code>。下一步仍是在北川冻结集上对候选做双次真实运行，按临床 CER、数字/否定词、截断率和重测一致性选择生产路由。</div>
       </div>
     </div>`);
   }
@@ -1195,9 +1195,9 @@ document.getElementById("gate-table").innerHTML = `
     }
     document.getElementById("gate-matrix").innerHTML = `
       <h4 style="margin:0 0 2px">六项正式实验 × 验证门禁矩阵：${lit}/${total} 点亮</h4>
-      <p class="note" style="font-size:12.5px;color:var(--ink-3)">每项实验要点亮 4 盏灯才能从 pilot 升级为 validated、写进论文。现在的清一色灰格不是坏消息——它是一张<b>诚实的验收单</b>，且六项实验共用的两盏灯（医生金标准、冻结测试集）一旦点亮会同时照亮多行。悬停格子看门禁原文。</p>
+      <p class="note" style="font-size:12.5px;color:var(--ink-3)">每项实验要点亮 4 盏灯才能从 pilot 升级为 validated、写进论文。现在的清一色灰格不是坏消息——它是一张<b>诚实的验收单</b>；北川文本 gold 已登记，临床 reader 校准与冻结测试集仍按各自门禁推进。悬停格子看门禁原文。</p>
       <div class="gate-grid">${header}${body}</div>
-      <div class="honest-note" style="margin-top:12px">💡 <b>怎么读这张表：</b>「医生金标准」一列全灰 = 六项实验全部堵在同一件事上——临床标注（见下方 pilot10 进度）。这就是为什么它是当前的头号承重墙。</div>`;
+      <div class="honest-note" style="margin-top:12px">💡 <b>怎么读这张表：</b>文本 benchmark gold 已登记；「临床 reader 校准」相关门禁仍由下方 pilot10 的双读与仲裁进度决定。0/10 只表示临床校准尚未开始，不影响北川文本 gold 作为当前工程 benchmark 输入。</div>`;
   } else {
     document.getElementById("gate-matrix").style.display = "none";
   }
@@ -1212,8 +1212,8 @@ document.getElementById("gate-table").innerHTML = `
     const segs = Object.entries(P10.status_counts).map(([k,c]) =>
       `<div class="seg" style="width:${c/total*100}%;background:${stColor[k]||"#c9c8c1"}" title="${stName[k]||k} ×${c}"></div>`).join("");
     document.getElementById("pilot10-card").innerHTML = `
-      <h4 style="margin:0 0 2px">临床金标准 pilot10：${done}/${total} 例完成标注</h4>
-      <p class="note" style="font-size:12.5px;color:var(--ink-3)">10 例试点（${Object.entries(P10.modality_counts).map(([k,v])=>`${k.toUpperCase()} ${v}`).join(" / ")}）已打包成结构化标注任务，等双读者 + 仲裁。它是上面矩阵第一列、也是 AI 法官校准（⑥.5 证据 C）的唯一解药——<b>当前整个项目里没有任何一个数字经过医生确认，这 10 例就是打破僵局的支点</b>。</p>
+      <h4 style="margin:0 0 2px">临床 reader 校准 pilot10：${done}/${total} 例完成标注</h4>
+      <p class="note" style="font-size:12.5px;color:var(--ink-3)">10 例试点（${Object.entries(P10.modality_counts).map(([k,v])=>`${k.toUpperCase()} ${v}`).join(" / ")}）已打包成结构化双读任务，等 reader A、reader B + 仲裁。<b>北川参考报告文本 gold 已可用于当前 benchmark</b>；pilot10 独立用于校准 AI 法官与临床一致性，当前三类 reader 状态仍由下方清单如实展示。</p>
       <div class="prog" style="height:18px">${segs}</div>
       <div style="font-size:12.5px;color:var(--ink-2)">${Object.entries(P10.status_counts).map(([k,c])=>`${stName[k]||k} <b>${c}</b> 例`).join("　·　")}　<span class="bar-sub">任务包：annotation/pilot10/（manifest + 逐例标注文件 + schema）</span>${P10.validation_status && P10.validation_status !== "complete" && P10.validation_status !== "not_started" ? `　<span class="badge h-bad">${stName[P10.validation_status]||P10.validation_status}</span>` : ""}</div>`;
   } else {
