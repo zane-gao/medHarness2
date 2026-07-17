@@ -5,8 +5,8 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: 0b64d47
-  ledger_commit: 0b64d47
+  git_sha: a708372
+  ledger_commit: a708372
   evidence_baseline_sha: 07a2c97
   dirty_worktree: false
   pytest_passed: 1774
