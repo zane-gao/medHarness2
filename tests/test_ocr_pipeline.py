@@ -8,7 +8,7 @@ import fitz
 import pytest
 
 from medharness2.config import AppConfig, LLMConfig, ModelRoleConfig
-from medharness2.ocr import extract_report_text
+from medharness2.ocr import extract_report_text, _looks_truncated, _strip_non_report_commentary
 from medharness2.ocr import _cache_metadata_valid
 from medharness2.ocr_benchmark import _aggregate, evaluate_ocr_candidates
 
@@ -652,6 +652,67 @@ def test_complete_chinese_page_response_is_not_marked_truncated(tmp_path: Path):
 
     assert "ocr_possible_truncation" not in result.warnings
     assert result.metadata["quality_status"] == "passed"
+
+
+def test_ocr_strips_appended_blank_image_commentary():
+    text = (
+        "检查所见：双肺未见异常。\n"
+        "诊断印象：心肺未见明显异常。\n\n"
+        "The image provided appears to be blank or mostly white with no visible text content.\n"
+        "Please re-upload the image."
+    )
+    assert _strip_non_report_commentary(text) == "检查所见：双肺未见异常。\n诊断印象：心肺未见明显异常。"
+
+
+def test_ocr_preserves_same_line_report_text_before_commentary():
+    text = "FINDINGS: clear lungs. The provided image appears to be blank."
+
+    assert _strip_non_report_commentary(text) == "FINDINGS: clear lungs."
+
+
+def test_ocr_treats_report_metadata_ending_in_time_as_complete():
+    text = "报告医生：张三 审核医生：李四\n审核时间：2026-05-29 08:07"
+    assert _looks_truncated(text) is False
+
+
+def test_ocr_detects_truncation_after_metadata_marker():
+    text = "报告医生：张三 审核医生：李四\n审核时间：2026-05-29 08:07 FINDINGS: unfinished"
+
+    assert _looks_truncated(text) is True
+
+
+def test_ocr_drops_non_report_page_after_valid_page(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    for _ in range(2):
+        page = doc.new_page(width=200, height=200)
+        page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+
+    class TwoPageClient:
+        def __init__(self):
+            self.calls = 0
+
+        def call(self, *args, **kwargs):
+            self.calls += 1
+            return (
+                "检查所见：双肺未见异常。\n诊断印象：心肺未见明显异常。"
+                if self.calls == 1
+                else "The provided image is blank except for a small logo."
+            )
+
+    result = extract_report_text(
+        pdf,
+        case_id="case-non-report-page",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai")),
+        llm_client=TwoPageClient(),
+        force=True,
+    )
+    assert result.metadata["quality_status"] == "review_required"
+    assert "ocr_possible_truncation" not in result.warnings
+    assert len(result.metadata["pages"]) == 2
+    assert result.metadata["pages"][1]["skip_reason"] == "non_report_page"
 
 
 def test_ocr_verifier_is_audit_only_and_cannot_change_primary_text(tmp_path: Path):

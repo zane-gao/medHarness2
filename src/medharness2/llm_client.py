@@ -382,7 +382,7 @@ class LLMClient:
     def _render_pdf_pages(self, pdf: Path, tmp: Path, *, max_pages: int | None = None) -> list[str]:
         try:
             import fitz
-        except Exception as exc:
+        except ImportError as exc:
             raise LLMClientError("PyMuPDF is required for local VLM PDF OCR") from exc
         paths: list[str] = []
         page_limit = _strict_call_int(
@@ -432,15 +432,15 @@ class LLMClient:
         try:
             import torch
             from transformers import AutoModelForCausalLM, AutoProcessor
-        except Exception as exc:
+        except ImportError as exc:
             raise LLMClientError("torch, transformers, and Pillow are required for local_hf_vlm") from exc
         try:
             from transformers import AutoModelForImageTextToText  # type: ignore
-        except Exception:
+        except ImportError:
             AutoModelForImageTextToText = None
         try:
             from transformers import AutoModelForVision2Seq  # type: ignore
-        except Exception:
+        except ImportError:
             AutoModelForVision2Seq = None
 
         processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True, local_files_only=True)
@@ -466,7 +466,7 @@ class LLMClient:
     def _load_images(image_paths: list[str]) -> list[Any]:
         try:
             from PIL import Image
-        except Exception as exc:
+        except ImportError as exc:
             raise LLMClientError("Pillow is required for local_hf_vlm image loading") from exc
         images: list[Any] = []
         for path in image_paths:
@@ -539,7 +539,7 @@ def _structured_provider_error(response: Any) -> str:
         return ""
     try:
         payload = response.json()
-    except Exception:
+    except (ValueError, requests.RequestException):
         return "request rejected without a JSON error body"
     if not isinstance(payload, dict):
         return "request rejected with a non-object JSON error body"

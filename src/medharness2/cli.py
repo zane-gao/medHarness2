@@ -370,7 +370,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"medHarness2 research freeze-ocr-winner failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 2
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 0
+        return 0 if result.get("status") == "frozen" else 2
     if args.command == "benchmark" and args.benchmark_command == "plan":
         try:
             cfg = load_config(args.config) if args.config else load_config("config/formal_benchmark.yaml")

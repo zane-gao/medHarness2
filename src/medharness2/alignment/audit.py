@@ -125,6 +125,13 @@ def audit_alignment(
                     payload_classification="deidentified_structured",
                     **options,
                 )
+            except (LLMClientError, TimeoutError, ConnectionError, OSError) as exc:
+                # Retry only failures that can plausibly be transient provider
+                # or transport failures. Programming errors in a custom client
+                # must remain visible to callers instead of becoming fallback data.
+                chunk_errors.append(f"{type(exc).__name__}: {exc}")
+                continue
+            try:
                 parsed = parse_json_object(raw, context="Tool 5 Alignment Audit")
                 candidate_response = _AuditResponse.model_validate(parsed)
                 _validate_response_references(
@@ -137,7 +144,9 @@ def audit_alignment(
                 response = candidate_response
                 chunk_attempt_counts.append(attempt + 1)
                 break
-            except Exception as exc:
+            except ValueError as exc:
+                # JSON parsing, Pydantic validation, and explicit reference
+                # checks all use ValueError and are safe to repair on retry.
                 chunk_errors.append(f"{type(exc).__name__}: {exc}")
         errors.extend(
             f"chunk={chunk_index + 1}: {error}"

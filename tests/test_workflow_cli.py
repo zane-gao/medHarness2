@@ -1773,6 +1773,20 @@ def test_cli_research_run_ocr_returns_blocked_without_real_provider(tmp_path: Pa
     assert code == 2
 
 
+def test_cli_research_freeze_ocr_winner_returns_nonzero_when_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        cli_module,
+        "freeze_ocr_winner",
+        lambda _research_dir: {"status": "blocked", "reason": "missing benchmark evidence"},
+    )
+
+    code = main(["research", "freeze-ocr-winner", "--research-dir", str(tmp_path)])
+
+    assert code == 2
+
+
 def test_cli_prepare_manifests_returns_zero_for_blocked_future_gates(tmp_path: Path):
     pilot = tmp_path / "pilot"
     research = tmp_path / "research"

@@ -122,6 +122,12 @@ def assess_structure_clinical_significance(
                 payload_classification="raw_clinical_text",
                 **options,
             )
+        except (LLMClientError, TimeoutError, ConnectionError, OSError) as exc:
+            # Retry transient provider/transport failures only. Unexpected
+            # client or application exceptions must be surfaced to the caller.
+            errors.append(f"{type(exc).__name__}: {exc}")
+            continue
+        try:
             parsed = parse_json_object(raw, context="Tool 6 Structure Audit")
             response = _StructureAssessmentResponse.model_validate(parsed)
             return _assessment_artifact(
@@ -135,7 +141,8 @@ def assess_structure_clinical_significance(
                 attempt_count=attempt + 1,
                 errors=errors,
             )
-        except Exception as exc:
+        except ValueError as exc:
+            # JSON/schema validation failures are safe to retry with feedback.
             errors.append(f"{type(exc).__name__}: {exc}")
 
     if not allow_fallback:

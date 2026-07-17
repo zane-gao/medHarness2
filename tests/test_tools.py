@@ -1196,6 +1196,32 @@ def test_tool5_llm_audit_strict_mode_rejects_mock_provider():
         )
 
 
+@pytest.mark.parametrize("error", [AttributeError("client wiring bug"), RuntimeError("client invariant bug")])
+def test_tool5_does_not_turn_client_programming_errors_into_fallbacks(error):
+    candidate = {
+        "findings": [
+            {
+                "finding_id": "f1",
+                "observation_code": "nodule",
+                "anatomy_code": "right lung",
+                "laterality": "right",
+            }
+        ]
+    }
+    alignment = align_graphs(candidate, {"findings": []})
+
+    with pytest.raises(type(error), match="client .* bug"):
+        audit_alignment(
+            candidate,
+            {"findings": []},
+            alignment,
+            llm_client=_FailingClient(error),
+            auditor_options={"provider": "chat_completions", "model": "gpt-5.6-sol"},
+            require_llm=True,
+            allow_fallback=True,
+        )
+
+
 def test_tool6_llm_assesses_clinical_significance_without_mutating_structure_diff():
     report_a = "FINDINGS: Clear lungs.\nIMPRESSION: No acute cardiopulmonary disease."
     report_b = "FINDINGS: Clear lungs."
@@ -1298,6 +1324,22 @@ def test_tool6_llm_strict_mode_rejects_mock_provider():
             llm_client=build_mock_client(),
             require_llm=True,
             allow_fallback=False,
+        )
+
+
+@pytest.mark.parametrize("error", [AttributeError("client wiring bug"), RuntimeError("client invariant bug")])
+def test_tool6_does_not_turn_client_programming_errors_into_fallbacks(error):
+    report = "FINDINGS: Clear lungs."
+
+    with pytest.raises(type(error), match="client .* bug"):
+        assess_structure_clinical_significance(
+            report,
+            report,
+            compare_structure(report, report),
+            llm_client=_FailingClient(error),
+            assessor_options={"provider": "chat_completions", "model": "gpt-5.6-sol"},
+            require_llm=True,
+            allow_fallback=True,
         )
 
 
@@ -1904,6 +1946,65 @@ def test_tool4_third_adjudicator_rejects_invalid_max_retries(bad):
             llm_client=build_mock_client(),
             max_retries=bad,
             require_llm=False,
+            allow_fallback=True,
+        )
+
+
+@pytest.mark.parametrize("error", [AttributeError("client wiring bug"), RuntimeError("client invariant bug")])
+def test_tool4_adjudicator_does_not_turn_client_programming_errors_into_fallbacks(error):
+    candidates = [{"error_type": "omission_finding", "observation": "nodule"}]
+    primary = evaluate_hazards(
+        candidates,
+        llm_client=_RecordingClient(
+            {
+                "errors": [
+                    {
+                        "error_type": "omission_finding",
+                        "hazard_level": 4,
+                        "explanation": "High risk.",
+                        "recommended_action": "radiologist_review",
+                        "confidence": 0.8,
+                        "evidence_ids": ["e1"],
+                        "abstain": False,
+                    }
+                ]
+            }
+        ),
+        judge_options={"provider": "chat_completions", "model": "gpt-5.6-sol"},
+        require_llm=True,
+        allow_fallback=False,
+    )
+    review = review_hazards(
+        primary,
+        candidates,
+        llm_client=_RecordingClient(
+            {
+                "errors": [
+                    {
+                        "error_type": "omission_finding",
+                        "hazard_level": 2,
+                        "explanation": "Lower risk.",
+                        "recommended_action": "review_if_relevant",
+                        "confidence": 0.8,
+                        "evidence_ids": ["e1"],
+                        "abstain": False,
+                    }
+                ]
+            }
+        ),
+        judge_options={"provider": "chat_completions", "model": "claude-opus-4-8"},
+        require_llm=True,
+        allow_fallback=False,
+    )
+
+    with pytest.raises(type(error), match="client .* bug"):
+        adjudicate_hazard_disagreements(
+            primary,
+            review,
+            candidates,
+            llm_client=_FailingClient(error),
+            adjudicator_options={"provider": "chat_completions", "model": "gpt-5.6-sol"},
+            require_llm=True,
             allow_fallback=True,
         )
 

@@ -371,13 +371,21 @@ def adjudicate_hazard_disagreements(
                 payload_classification="deidentified_structured",
                 **options,
             )
+        except (LLMClientError, TimeoutError, ConnectionError, OSError) as exc:
+            # Provider/transport failures are retryable; client programming
+            # errors must propagate rather than being mislabeled as LLM output.
+            errors.append(f"{type(exc).__name__}: {exc}")
+            continue
+        try:
             parsed = parse_json_object(raw, context="Tool 4 Hazard Adjudication")
             candidate_response = _HazardAdjudicationResponse.model_validate(parsed)
             _validate_adjudication_response(candidate_response, evidence)
             response = candidate_response
             attempt_count = attempt + 1
             break
-        except Exception as exc:
+        except ValueError as exc:
+            # Invalid JSON/schema or an explicit contract mismatch is safe to
+            # retry with the accumulated validation feedback.
             errors.append(f"{type(exc).__name__}: {exc}")
     if response is None:
         if not allow_fallback:

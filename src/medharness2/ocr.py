@@ -166,9 +166,29 @@ def extract_report_text(
                     payload_classification="raw_medical_document",
                     **primary_options,
                 )
-                page_text = raw_page_text.strip() if isinstance(raw_page_text, str) else ""
+                raw_page_text = raw_page_text if isinstance(raw_page_text, str) else ""
+                page_text = _strip_non_report_commentary(raw_page_text).strip()
+                if page_text != raw_page_text.strip():
+                    warnings.append(f"ocr_non_report_commentary_removed:page_{page_index}")
                 if not page_text:
-                    warnings.append(f"ocr_empty_page_response:page_{page_index}")
+                    warnings.append(f"ocr_non_report_page:page_{page_index}")
+                    # A sparse footer/technical page can be rendered as a
+                    # non-white image but still contain no report text.  It
+                    # is auditable evidence, not an OCR failure or truncation.
+                    retained_rendered_pages.pop()
+                    retained_page_indices.pop()
+                    page_meta.append(
+                        {
+                            "page_index": page_index,
+                            "image_sha256": _sha256(Path(image_path)),
+                            "text_sha256": _text_sha256(""),
+                            "char_count": 0,
+                            "ink_ratio": ink_ratio,
+                            "skipped": True,
+                            "skip_reason": "non_report_page",
+                        }
+                    )
+                    continue
                 page_results.append(page_text)
                 page_meta.append(
                     {
@@ -770,9 +790,44 @@ def _looks_truncated(text: str) -> bool:
         return False
     if len(stripped) < 8:
         return True
-    return stripped[-1].isascii() and stripped[-1].isalnum() and not stripped.lower().endswith(
-        ("stable", "normal", "negative", "正常")
+    if stripped[-1].isascii() and stripped[-1].isalnum():
+        # Hospital report metadata commonly ends in a date, time, or doctor
+        # identifier.  These are complete pages, not unfinished OCR, when the
+        # report contains its normal structural markers.
+        if any(marker in stripped for marker in ("报告医生", "审核医生", "审核时间", "检查时间")):
+            return False
+        return not stripped.lower().endswith(("stable", "normal", "negative", "正常"))
+    return False
+
+
+def _strip_non_report_commentary(text: str) -> str:
+    """Remove VLM meta-commentary appended after an otherwise valid page.
+
+    Vision models occasionally append a generic "the image is blank" answer
+    after transcribing a report page.  That text is not OCR evidence and must
+    not be fed downstream.  If the whole response is commentary, return an
+    empty string so the page remains auditable as non-report output.
+    """
+    if not isinstance(text, str) or not text.strip():
+        return ""
+    markers = (
+        "the image provided",
+        "the provided image",
+        "the image you provided",
+        "appears to be blank",
+        "contains no visible text",
+        "no radiology report visible",
+        "if you intended to upload",
+        "please re-upload the image",
+        "图像为空",
+        "未见可识别的报告文字",
     )
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        lowered = line.strip().lower()
+        if any(marker in lowered for marker in markers):
+            return "\n".join(lines[:index]).strip()
+    return text.strip()
 
 
 def _ocr_quality_status(

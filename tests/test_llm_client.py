@@ -8,7 +8,13 @@ import fitz
 import pytest
 
 from medharness2.config import AppConfig, LLMConfig
-from medharness2.llm_client import LLMClient, LLMClientError, _strict_call_int, build_mock_client
+from medharness2.llm_client import (
+    LLMClient,
+    LLMClientError,
+    _strict_call_int,
+    _structured_provider_error,
+    build_mock_client,
+)
 from medharness2.utils.io import parse_json_object
 
 
@@ -275,6 +281,17 @@ def test_chat_completions_preserves_structured_provider_error_details(monkeypatc
     assert "quota_error" in message
     assert "Insufficient balance" in message
     assert "test-only-secret" not in message
+
+
+def test_structured_provider_error_does_not_hide_response_parser_programming_errors():
+    class _Response:
+        status_code = 400
+
+        def json(self):
+            raise RuntimeError("response parser bug")
+
+    with pytest.raises(RuntimeError, match="response parser bug"):
+        _structured_provider_error(_Response())
 
 
 def test_chat_completions_does_not_retry_non_retryable_http_errors(monkeypatch):
