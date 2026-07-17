@@ -56,7 +56,14 @@ def validate_sample_run(
     if manifest_rows and case_count != len(manifest_rows):
         errors.append(f"manifest_count_mismatch:{len(manifest_rows)}!={case_count}")
 
-    summary_warning_counts = dict(summary.get("warning_counts") or {})
+    raw_summary_warning_counts = summary.get("warning_counts")
+    if raw_summary_warning_counts is None:
+        summary_warning_counts: dict[str, Any] = {}
+    elif isinstance(raw_summary_warning_counts, dict):
+        summary_warning_counts = dict(raw_summary_warning_counts)
+    else:
+        summary_warning_counts = {}
+        errors.append("invalid_warning_counts:object_required")
     manifest_warning_counts = _manifest_warning_counts(manifest_rows)
     warning_count_errors: list[str] = []
     warning_counts = _merge_counts(
@@ -363,21 +370,50 @@ def _read_manifest(path: Path, errors: list[str]) -> list[dict[str, Any]]:
     try:
         for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             if line.strip():
-                row = json.loads(line)
-                if isinstance(row, dict):
-                    rows.append(row)
-                else:
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    errors.append(f"invalid_manifest_jsonl:row_{line_no}:invalid_json")
+                    continue
+                if not isinstance(row, dict):
                     errors.append(f"invalid_manifest_jsonl:row_{line_no}:not_object")
+                    continue
+                _validate_manifest_row_types(row, line_no, errors)
+                rows.append(row)
     except Exception as exc:
         errors.append(f"invalid_manifest_jsonl:{type(exc).__name__}")
     return rows
 
 
+def _validate_manifest_row_types(
+    row: dict[str, Any], line_no: int, errors: list[str]
+) -> None:
+    """Reject malformed external manifest fields before aggregation."""
+    for field in ("case_id", "reader", "modality", "body_part", "report_text", "report_pdf"):
+        if field in row and row[field] is not None and not isinstance(row[field], str):
+            errors.append(f"invalid_manifest_jsonl:row_{line_no}:{field}_must_be_string")
+    if "warnings" in row:
+        warnings = row["warnings"]
+        if not isinstance(warnings, list) or any(not isinstance(item, str) for item in warnings):
+            errors.append(f"invalid_manifest_jsonl:row_{line_no}:warnings_must_be_string_list")
+    if "image_paths" in row:
+        image_paths = row["image_paths"]
+        if not isinstance(image_paths, list) or any(not isinstance(item, str) for item in image_paths):
+            errors.append(f"invalid_manifest_jsonl:row_{line_no}:image_paths_must_be_string_list")
+    for field in ("derived_assets", "metadata"):
+        if field in row and row[field] is not None and not isinstance(row[field], dict):
+            errors.append(f"invalid_manifest_jsonl:row_{line_no}:{field}_must_be_object")
+
+
 def _manifest_warning_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
     counts: Counter[str] = Counter()
     for row in rows:
-        for warning in row.get("warnings") or []:
-            counts[str(warning)] += 1
+        raw_warnings = row.get("warnings")
+        if not isinstance(raw_warnings, list):
+            continue
+        for warning in raw_warnings:
+            if isinstance(warning, str):
+                counts[warning] += 1
     return dict(counts)
 
 
@@ -388,8 +424,8 @@ def _summary_from_manifest(rows: list[dict[str, Any]]) -> dict[str, Any]:
     cases_with_primary_image = 0
     cases_with_volume = 0
     for row in rows:
-        modality = str(row.get("modality") or "")
-        body_part = str(row.get("body_part") or "")
+        modality = row.get("modality") if isinstance(row.get("modality"), str) else ""
+        body_part = row.get("body_part") if isinstance(row.get("body_part"), str) else ""
         if modality:
             modality_counts[modality] += 1
         if body_part:
@@ -430,14 +466,18 @@ def _count_real_ocr_provenance(root: Path, rows: list[dict[str, Any]]) -> tuple[
     mock_count = 0
     missing_text_count = 0
     for row in rows:
-        case_id = str(row.get("case_id") or "")
-        report_text = str(row.get("report_text") or "")
-        report_pdf = str(row.get("report_pdf") or "").strip()
+        case_id = row.get("case_id") if isinstance(row.get("case_id"), str) else ""
+        report_text = row.get("report_text") if isinstance(row.get("report_text"), str) else ""
+        report_pdf = row.get("report_pdf") if isinstance(row.get("report_pdf"), str) else ""
+        report_pdf = report_pdf.strip()
         if not report_text:
             if report_pdf:
                 missing_text_count += 1
             continue
-        row_warnings = {str(warning) for warning in row.get("warnings") or []}
+        raw_warnings = row.get("warnings")
+        row_warnings = set(raw_warnings) if isinstance(raw_warnings, list) and all(
+            isinstance(warning, str) for warning in raw_warnings
+        ) else set()
         if "mock_ocr_used" in row_warnings or "real_ocr_required_but_provider_is_mock" in row_warnings:
             mock_count += 1
             continue

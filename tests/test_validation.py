@@ -140,6 +140,61 @@ def test_validate_sample_run_reports_missing_workflow_outputs(tmp_path: Path):
     assert "missing_workflow3_json" in result["errors"]
 
 
+@pytest.mark.parametrize("field", ["modality", "body_part", "report_text", "report_pdf"])
+@pytest.mark.parametrize("bad", [{"value": "bad"}, ["bad"], 7, True])
+def test_validate_sample_run_rejects_malformed_manifest_fields(
+    tmp_path: Path, field: str, bad,
+):
+    _write_json(tmp_path / "summary.json", {"case_count": 1, "warning_counts": {}})
+    _write_manifest(tmp_path / "manifest.jsonl", 1)
+    row = json.loads((tmp_path / "manifest.jsonl").read_text(encoding="utf-8"))
+    row[field] = bad
+    (tmp_path / "manifest.jsonl").write_text(
+        json.dumps(row) + "\n", encoding="utf-8"
+    )
+
+    result = validate_sample_run(tmp_path, expected_cases=1, require_workflows=False)
+
+    assert result["passed"] is False
+    assert f"invalid_manifest_jsonl:row_1:{field}_must_be" in " ".join(result["errors"])
+
+
+@pytest.mark.parametrize("bad", [{"value": "bad"}, [7], 7, True, "mock_ocr_used"])
+def test_validate_sample_run_rejects_malformed_manifest_warnings(
+    tmp_path: Path, bad,
+):
+    _write_json(tmp_path / "summary.json", {"case_count": 1, "warning_counts": {}})
+    _write_manifest(tmp_path / "manifest.jsonl", 1)
+    row = json.loads((tmp_path / "manifest.jsonl").read_text(encoding="utf-8"))
+    row["warnings"] = bad
+    (tmp_path / "manifest.jsonl").write_text(
+        json.dumps(row) + "\n", encoding="utf-8"
+    )
+
+    result = validate_sample_run(tmp_path, expected_cases=1, require_workflows=False)
+
+    assert result["passed"] is False
+    assert "invalid_manifest_jsonl:row_1:warnings_must_be_string_list" in result["errors"]
+
+
+def test_validate_sample_run_does_not_stringify_malformed_manifest_warnings(
+    tmp_path: Path,
+):
+    _write_json(tmp_path / "summary.json", {"case_count": 1, "warning_counts": {}})
+    _write_manifest(tmp_path / "manifest.jsonl", 1)
+    row = json.loads((tmp_path / "manifest.jsonl").read_text(encoding="utf-8"))
+    row["warnings"] = "mock_ocr_used"
+    (tmp_path / "manifest.jsonl").write_text(
+        json.dumps(row) + "\n", encoding="utf-8"
+    )
+
+    result = validate_sample_run(tmp_path, expected_cases=1, require_workflows=False)
+
+    assert result["passed"] is False
+    assert result["mock_ocr_count"] == 0
+    assert result["warning_counts"] == {}
+
+
 @pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])
 def test_validate_sample_run_rejects_invalid_summary_counts(tmp_path: Path, bad):
     _write_json(tmp_path / "summary.json", {"case_count": bad, "warning_counts": {}})

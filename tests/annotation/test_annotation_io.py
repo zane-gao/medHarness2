@@ -529,3 +529,79 @@ def test_import_reader_package_rejects_other_slot_data(tmp_path: Path):
 
     with pytest.raises(ValueError, match="reader_annotation_package_invalid"):
         import_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+
+
+def test_import_reader_package_rejects_empty_manifest_and_does_not_touch_master(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    master = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, master, limit=1)
+    reader_dir = tmp_path / "reader_a"
+    export_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+    before = (master / "cases" / "pilot-001.json").read_bytes()
+    (reader_dir / "manifest.jsonl").write_text("\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="reader_annotation_package_invalid"):
+        import_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+
+    assert (master / "cases" / "pilot-001.json").read_bytes() == before
+
+
+def test_import_reader_package_rejects_reader_path_traversal(tmp_path: Path):
+    run_dir = _write_run(tmp_path / "run")
+    master = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, master, limit=1)
+    reader_dir = tmp_path / "reader_a"
+    export_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+    row = json.loads((reader_dir / "manifest.jsonl").read_text(encoding="utf-8"))
+    row["annotation_path"] = "../outside.json"
+    (reader_dir / "manifest.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="reader_annotation_package_invalid"):
+        import_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+
+
+def test_import_reader_package_is_all_or_nothing_when_file_replace_fails(tmp_path: Path, monkeypatch):
+    run_dir = _write_run(tmp_path / "run")
+    master = tmp_path / "pilot10"
+    build_pilot_annotation_package(run_dir, master, limit=2)
+    reader_dir = tmp_path / "reader_a"
+    export_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+    for index in (1, 2):
+        reader_case = reader_dir / "cases" / f"pilot-{index:03d}.json"
+        payload = json.loads(reader_case.read_text(encoding="utf-8"))
+        payload["annotations"]["reader_a"]["status"] = "complete"
+        payload["annotations"]["reader_a"]["overall_notes"] = f"reader A case {index}"
+        reader_case.write_text(json.dumps(payload), encoding="utf-8")
+    rows = [json.loads(line) for line in (reader_dir / "manifest.jsonl").read_text().splitlines()]
+    for row in rows:
+        row["status"] = "in_progress"
+    (reader_dir / "manifest.jsonl").write_text(
+        "".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8"
+    )
+    before_cases = {
+        index: (master / "cases" / f"pilot-{index:03d}.json").read_bytes()
+        for index in (1, 2)
+    }
+    before_manifest = (master / "manifest.jsonl").read_bytes()
+
+    original_replace = __import__("os").replace
+    calls = 0
+
+    def fail_once(source, target):
+        nonlocal calls
+        calls += 1
+        if calls == 4:
+            original_replace(source, target)
+            raise OSError("simulated replacement failure")
+        return original_replace(source, target)
+
+    monkeypatch.setattr("medharness2.annotation.pilot.os.replace", fail_once)
+    with pytest.raises(OSError, match="simulated replacement failure"):
+        import_reader_annotation_package(master, reader_dir, reader_slot="reader_a")
+
+    assert {
+        index: (master / "cases" / f"pilot-{index:03d}.json").read_bytes()
+        for index in (1, 2)
+    } == before_cases
+    assert (master / "manifest.jsonl").read_bytes() == before_manifest
+    assert validate_pilot_annotation_package(master)["status"] == "not_started"

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
+import uuid
 from collections import defaultdict, deque
 from pathlib import Path
 from typing import Any
@@ -291,6 +294,9 @@ def validate_pilot_annotation_package(package_dir: str | Path) -> dict[str, Any]
                 errors.append(f"case:{pilot_case_id}:missing_annotation_slot:{slot}")
             continue
         statuses = {slot: case.annotations[slot].status for slot in expected_slots}
+        for slot in expected_slots:
+            if case.annotations[slot].reader_slot != slot:
+                errors.append(f"case:{pilot_case_id}:annotation_slot_mismatch:{slot}")
         if statuses["adjudication"] != "not_started" and not (
             statuses["reader_a"] == "complete" and statuses["reader_b"] == "complete"
         ):
@@ -443,8 +449,11 @@ def import_reader_annotation_package(
     for row in rows:
         if row.get("reader_slot") != reader_slot:
             raise ValueError("reader_slot_mismatch")
-    master_keys = {(str(row.get("pilot_case_id")), str(row.get("annotation_path"))) for row in master_rows}
-    reader_keys = {(str(row.get("pilot_case_id")), str(row.get("annotation_path"))) for row in rows}
+    # ``validate_pilot_annotation_package`` has already established that both
+    # fields are non-empty strings.  Keep them typed here instead of
+    # stringifying malformed values into a seemingly valid identity key.
+    master_keys = {(row["pilot_case_id"], row["annotation_path"]) for row in master_rows}
+    reader_keys = {(row["pilot_case_id"], row["annotation_path"]) for row in rows}
     if reader_keys != master_keys:
         raise ValueError("reader_case_set_mismatch")
 
@@ -453,7 +462,7 @@ def import_reader_annotation_package(
     pending_cases: list[tuple[Path, AnnotationCase]] = []
     updated = 0
     for row in rows:
-        relative = str(row.get("annotation_path") or "")
+        relative = row["annotation_path"]
         master_case_path = (master / relative).resolve()
         reader_case_path = (reader_root / relative).resolve()
         if master_cases_root not in master_case_path.parents or not master_case_path.is_file():
@@ -464,7 +473,7 @@ def import_reader_annotation_package(
         reader_case = AnnotationCase.model_validate_json(reader_case_path.read_text(encoding="utf-8"))
         if reader_case.pilot_case_id != master_case.pilot_case_id:
             raise ValueError("pilot_case_id_mismatch")
-        for field in ("source_case_sha256", "modality", "body_part"):
+        for field in ("source_case_sha256", "modality", "body_part", "reference_report", "instructions_version"):
             if getattr(reader_case, field) != getattr(master_case, field):
                 raise ValueError(field)
         if [candidate.model_dump() for candidate in reader_case.candidate_reports] != [candidate.model_dump() for candidate in master_case.candidate_reports]:
@@ -497,13 +506,103 @@ def import_reader_annotation_package(
         row["status"] = _annotation_status({slot: case.annotations[slot].status for slot in ("reader_a", "reader_b", "adjudication")})
     # All identity and isolation checks happen before any write, avoiding a
     # partially merged package when a later case is malformed.
-    for case_path, case in pending_cases:
-        case_path.write_text(case.model_dump_json(indent=2) + "\n", encoding="utf-8")
-    master_manifest.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in master_rows), encoding="utf-8")
+    updates = [
+        (case_path, case.model_dump_json(indent=2) + "\n")
+        for case_path, case in pending_cases
+    ]
+    updates.append(
+        (
+            master_manifest,
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in master_rows),
+        )
+    )
+    _atomic_write_files(updates)
     final_validation = validate_pilot_annotation_package(master)
     if final_validation["errors"]:
         raise ValueError("master_annotation_package_invalid_after_import")
     return {"schema_version": "2.0", "reader_slot": reader_slot, "updated_case_count": updated, "status": final_validation["status"]}
+
+
+def _atomic_write_files(updates: list[tuple[Path, str]]) -> None:
+    """Commit a group of text files as one recoverable update.
+
+    All content is prepared in same-directory temporary files first.  Existing
+    targets are moved to unique backups before replacement; if any replacement
+    fails, already-installed files are removed and their originals restored.
+    This keeps a reader import from leaving a master package half merged.
+    """
+    staged: list[dict[str, Any]] = []
+    try:
+        for target, content in updates:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            fd, temp_name = tempfile.mkstemp(
+                prefix=f".{target.name}.", suffix=".tmp", dir=str(target.parent)
+            )
+            temp_path = Path(temp_name)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    handle.write(content)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            except BaseException:
+                temp_path.unlink(missing_ok=True)
+                raise
+            staged.append(
+                {
+                    "target": target,
+                    "temp": temp_path,
+                    "backup": None,
+                    "had_original": target.exists() or target.is_symlink(),
+                    "installed": False,
+                }
+            )
+
+        for record in staged:
+            target = record["target"]
+            temp_path = record["temp"]
+            if record["had_original"]:
+                backup = target.with_name(f".{target.name}.backup-{uuid.uuid4().hex}")
+                record["backup"] = backup
+                os.replace(target, backup)
+            try:
+                os.replace(temp_path, target)
+            finally:
+                # The temporary path is consumed on a successful replace;
+                # ``installed`` is only used to distinguish rollback cleanup.
+                record["installed"] = not temp_path.exists()
+    except BaseException:
+        # Restore in reverse order so a failure cannot leave earlier case files
+        # updated while a later case or the manifest is still old.
+        for record in reversed(staged):
+            target = record["target"]
+            temp_path = record["temp"]
+            backup = record["backup"]
+            try:
+                if backup is not None and backup.exists():
+                    # A target may exist if an injected failure occurred after
+                    # the underlying replace succeeded; remove it before
+                    # restoring the original backup.
+                    if target.exists() or target.is_symlink():
+                        target.unlink()
+                    os.replace(backup, target)
+                elif not record["had_original"] and record["installed"] and (
+                    target.exists() or target.is_symlink()
+                ):
+                    target.unlink()
+            except OSError:
+                # Preserve the original write error; callers still fail closed.
+                # Keep an unrestored backup on disk rather than deleting the
+                # only remaining copy of the original package file.
+                continue
+            if backup is not None:
+                backup.unlink(missing_ok=True)
+            temp_path.unlink(missing_ok=True)
+        raise
+    else:
+        for record in staged:
+            backup = record["backup"]
+            if backup is not None:
+                backup.unlink(missing_ok=True)
 
 
 def _annotation_status(statuses: dict[str, str]) -> str:
