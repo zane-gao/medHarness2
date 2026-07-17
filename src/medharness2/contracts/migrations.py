@@ -254,6 +254,16 @@ def _migrate_evaluation(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
 
 
 def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise TypeError("finding_graph payload must be an object")
+    for field in ("modality", "backend"):
+        value = payload.get(field)
+        if value is not None and not isinstance(value, str):
+            raise TypeError(f"finding_graph.{field} must be a string")
+    for field in ("metadata", "template_coverage"):
+        value = payload.get(field)
+        if value is not None and not isinstance(value, dict):
+            raise TypeError(f"finding_graph.{field} must be an object")
     validation_error = ""
     try:
         return FindingGraph.model_validate(payload).model_dump(mode="json")
@@ -324,7 +334,7 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
-    metadata = deepcopy(dict(payload.get("metadata") or {}))
+    metadata = deepcopy(payload.get("metadata") or {})
     graph_legacy_fields = {
         key: deepcopy(value)
         for key, value in payload.items()
@@ -341,14 +351,14 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
     graph = {
         "schema_version": "2.0",
         "artifact_type": "finding_graph",
-        "modality": str(payload.get("modality") or "unknown"),
-        "backend": str(payload.get("backend") or "legacy_unknown"),
+        "modality": payload.get("modality") or "unknown",
+        "backend": payload.get("backend") or "legacy_unknown",
         "findings": findings,
         "relations": [deepcopy(item) for item in payload.get("relations") or [] if isinstance(item, dict)],
         "missing": [str(item) for item in payload.get("missing") or []],
         "coverage": _bounded_float(payload.get("coverage"), default=0.0),
         "nodes": [deepcopy(item) for item in payload.get("nodes") or [] if isinstance(item, dict)],
-        "template_coverage": deepcopy(dict(payload.get("template_coverage") or {})),
+        "template_coverage": deepcopy(payload.get("template_coverage") or {}),
         "warnings": [str(item) for item in payload.get("warnings") or []],
         "metadata": metadata,
     }

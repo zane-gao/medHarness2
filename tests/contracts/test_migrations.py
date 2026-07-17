@@ -174,6 +174,24 @@ def test_migrate_v1_missing_observation_is_explicitly_unparsed_not_reported_find
     assert "legacy_finding_missing_observation" in finding["attributes"]["migration_warnings"]
 
 
+@pytest.mark.parametrize("field", ["modality", "backend"])
+@pytest.mark.parametrize("bad", [{"x": 1}, 7, True, ["cxr"]])
+def test_finding_graph_migration_rejects_non_string_identity_fields(field, bad):
+    from medharness2.contracts.migrations import _migrate_finding_graph
+
+    with pytest.raises((TypeError, ValueError), match=field):
+        _migrate_finding_graph({"modality": "cxr", "backend": "legacy", "findings": [], field: bad})
+
+
+@pytest.mark.parametrize("field", ["metadata", "template_coverage"])
+@pytest.mark.parametrize("bad", ["x", ["x"], 7, True])
+def test_finding_graph_migration_rejects_non_object_fields(field, bad):
+    from medharness2.contracts.migrations import _migrate_finding_graph
+
+    with pytest.raises((TypeError, ValueError), match=field):
+        _migrate_finding_graph({"modality": "cxr", "backend": "legacy", "findings": [], field: bad})
+
+
 def test_migrate_v1_hazard_preserves_unknown_top_level_fields():
     legacy = _legacy_case()
     legacy["pairwise_comparisons"] = [
