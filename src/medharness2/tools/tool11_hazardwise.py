@@ -34,7 +34,13 @@ def hazardwise_weighted(
             continue
         level = str(level_number)
         weight = float(weights.get(error_type, {}).get(level, 1.0))
-        metrics = dict(item.get("metrics") or {})
+        raw_metrics = item.get("metrics")
+        if raw_metrics is None:
+            metrics = {}
+        elif not isinstance(raw_metrics, dict):
+            raise ValueError("metrics must be an object")
+        else:
+            metrics = dict(raw_metrics)
         if metrics:
             item["metrics"] = {
                 key: _weighted_metric_value(value, weight)

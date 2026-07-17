@@ -129,12 +129,21 @@ class StageCheckpointStore:
             raise CheckpointIntegrityError(f"Unsupported checkpoint envelope: {path}")
         if payload.get("stage") != stage:
             raise CheckpointIntegrityError(f"Checkpoint stage mismatch: {path}")
-        if payload.get("input_sha256") != input_sha256:
+        stored_input_sha256 = payload.get("input_sha256")
+        if not isinstance(stored_input_sha256, str):
+            raise CheckpointIntegrityError(
+                f"Checkpoint input_sha256 must be a string: {path}"
+            )
+        if stored_input_sha256 != input_sha256:
             raise CheckpointIntegrityError(f"Checkpoint input SHA-256 mismatch: {path}")
         output = payload.get("output")
         if not isinstance(output, dict):
             raise CheckpointIntegrityError(f"Checkpoint output must be a JSON object: {path}")
-        output_sha256 = str(payload.get("output_sha256") or "")
+        output_sha256 = payload.get("output_sha256")
+        if not isinstance(output_sha256, str):
+            raise CheckpointIntegrityError(
+                f"Checkpoint output_sha256 must be a string: {path}"
+            )
         if output_sha256 != stable_sha256(output):
             raise CheckpointIntegrityError(f"Checkpoint output SHA-256 mismatch: {path}")
         try:

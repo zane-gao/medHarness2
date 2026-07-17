@@ -17,7 +17,7 @@ def modelwise_weighted(rows: list[dict[str, Any]], weights: dict[str, float] | N
         eligible_count += 1
         model = str(row.get("model") or row.get("model_key") or index)
         weight = normalized_weights.get(model, normalized_weights.get(str(index), 1.0))
-        metrics = _numeric_metrics(row.get("metrics") or row.get("composite_inputs") or row)
+        metrics = _numeric_metrics(row)
         for key, value in metrics.items():
             weighted[key] = weighted.get(key, 0.0) + value * weight
             totals[key] = totals.get(key, 0.0) + weight
@@ -30,7 +30,20 @@ def modelwise_weighted(rows: list[dict[str, Any]], weights: dict[str, float] | N
     return result
 
 
-def _numeric_metrics(payload: dict[str, Any]) -> dict[str, float]:
+def _numeric_metrics(row: dict[str, Any]) -> dict[str, float]:
+    if not isinstance(row, dict):
+        raise ValueError("modelwise row must be an object")
+    if "metrics" in row and row["metrics"] is not None:
+        payload = row["metrics"]
+        label = "metrics"
+    elif "composite_inputs" in row and row["composite_inputs"] is not None:
+        payload = row["composite_inputs"]
+        label = "composite_inputs"
+    else:
+        payload = row
+        label = "row"
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be an object")
     result: dict[str, float] = {}
     for key, value in payload.items():
         if key in {"model", "model_key", "source", "warnings", "metadata", "provenance", "evidence_tier"}:

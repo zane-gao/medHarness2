@@ -56,7 +56,19 @@ def percentile_rank(value: float, population: list[float]) -> float:
 
 
 def _numeric_metrics(row: dict[str, Any]) -> dict[str, float]:
-    payload = row.get("metrics") or row.get("composite_inputs") or row
+    if not isinstance(row, dict):
+        raise ValueError("statistics row must be an object")
+    if "metrics" in row and row["metrics"] is not None:
+        payload = row["metrics"]
+        label = "metrics"
+    elif "composite_inputs" in row and row["composite_inputs"] is not None:
+        payload = row["composite_inputs"]
+        label = "composite_inputs"
+    else:
+        payload = row
+        label = "row"
+    if not isinstance(payload, dict):
+        raise ValueError(f"{label} must be an object")
     return {
         key: float(value)
         for key, value in payload.items()

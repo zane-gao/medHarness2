@@ -120,6 +120,29 @@ def test_stage_checkpoint_rejects_tampered_output_before_recompute(tmp_path: Pat
         )
 
 
+@pytest.mark.parametrize("field", ["input_sha256", "output_sha256"])
+def test_stage_checkpoint_rejects_non_string_hash_fields(tmp_path: Path, field: str):
+    store = StageCheckpointStore(tmp_path / "checkpoints")
+    store.get_or_compute(
+        "reference.tool1_likert",
+        {"report": "normal"},
+        lambda: {"value": 1},
+        validator=_validate_value,
+    )
+    checkpoint_path = Path(store.summary()["events"][-1]["path"])
+    envelope = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    envelope[field] = 123
+    checkpoint_path.write_text(json.dumps(envelope), encoding="utf-8")
+
+    with pytest.raises(CheckpointIntegrityError, match=f"{field}.*string"):
+        StageCheckpointStore(tmp_path / "checkpoints").get_or_compute(
+            "reference.tool1_likert",
+            {"report": "normal"},
+            lambda: pytest.fail("malformed checkpoint must not be recomputed silently"),
+            validator=_validate_value,
+        )
+
+
 @pytest.mark.parametrize("failure_mode", ["producer", "validator"])
 def test_stage_checkpoint_does_not_persist_failed_computation(
     tmp_path: Path,

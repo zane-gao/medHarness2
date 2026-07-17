@@ -49,6 +49,34 @@ def test_tool10_rejects_non_strict_weights_instead_of_coercing_them():
         modelwise_weighted(rows, weights={"a": True})
 
 
+@pytest.mark.parametrize("field", ["metrics", "composite_inputs"])
+@pytest.mark.parametrize("bad", ["not-an-object", [], ["x"], 7, True])
+def test_tool10_rejects_malformed_metric_objects(field, bad):
+    with pytest.raises(ValueError, match=field):
+        modelwise_weighted([{"model": "a", field: bad}])
+
+
+@pytest.mark.parametrize("field", ["metrics", "composite_inputs"])
+@pytest.mark.parametrize("bad", ["not-an-object", [], ["x"], 7, True])
+def test_tool12_rejects_malformed_metric_objects(field, bad):
+    with pytest.raises(ValueError, match=field):
+        calculate_statistics([{"model": "a", field: bad}])
+
+
+@pytest.mark.parametrize("bad", ["not-an-object", [], ["x"], 7, True])
+def test_tool9_rejects_malformed_composite_inputs(bad):
+    with pytest.raises(ValueError, match="composite_inputs"):
+        select_top_k([{"model": "a", "composite_inputs": bad}])
+
+
+@pytest.mark.parametrize("bad", ["not-an-object", [], ["x"], 7, True])
+def test_tool11_rejects_malformed_metrics(bad):
+    with pytest.raises(ValueError, match="metrics"):
+        hazardwise_weighted(
+            [{"error_type": "false_finding", "hazard_level": 3, "metrics": bad}]
+        )
+
+
 def test_tool10_excludes_fallback_rows_from_weighted_metrics():
     rows = [
         {"model": "real", "metrics": {"precision": 1.0}, "metadata": {"fallback_used": False}},

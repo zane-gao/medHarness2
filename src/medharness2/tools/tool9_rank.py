@@ -164,8 +164,16 @@ def _intervals_overlap(left: tuple[float, float], right: tuple[float, float]) ->
 
 
 def _numeric_metrics(evaluation: dict[str, Any]) -> dict[str, float]:
+    if not isinstance(evaluation, dict):
+        raise ValueError("ranking evaluation must be an object")
     if "composite_inputs" in evaluation:
-        values = dict(evaluation.get("composite_inputs") or {})
+        raw_values = evaluation.get("composite_inputs")
+        if raw_values is None:
+            values = {}
+        elif not isinstance(raw_values, dict):
+            raise ValueError("composite_inputs must be an object")
+        else:
+            values = dict(raw_values)
     else:
         values = dict(evaluation)
     metrics: dict[str, float] = {}
