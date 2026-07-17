@@ -60,6 +60,22 @@ def test_ocr_cache_sidecar_rejects_malformed_metadata(field, bad):
     assert _cache_metadata_valid(payload) is False
 
 
+@pytest.mark.parametrize(
+    "field",
+    ["case_id", "source_pdf_sha256", "method", "provider", "model", "role", "prompt_version"],
+)
+@pytest.mark.parametrize("bad", [1, True, [], {}])
+def test_ocr_cache_sidecar_rejects_malformed_provenance_types(field: str, bad: object):
+    payload = {
+        "warnings": [],
+        "verifier": {"configured": False},
+        "quality_audit": None,
+        "quality_status": "passed",
+        field: bad,
+    }
+    assert _cache_metadata_valid(payload) is False
+
+
 def test_scanned_pdf_ocr_is_page_ordered_and_records_provenance(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()

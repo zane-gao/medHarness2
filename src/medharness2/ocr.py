@@ -349,6 +349,19 @@ def _cache_is_compatible(
 
 
 def _cache_metadata_valid(meta: dict[str, Any]) -> bool:
+    if not isinstance(meta, dict):
+        return False
+    for field in (
+        "case_id",
+        "source_pdf_sha256",
+        "method",
+        "provider",
+        "model",
+        "role",
+        "prompt_version",
+    ):
+        if field in meta and meta[field] is not None and not isinstance(meta[field], str):
+            return False
     warnings = meta.get("warnings", [])
     if not isinstance(warnings, list) or any(not isinstance(item, str) for item in warnings):
         return False
@@ -357,6 +370,9 @@ def _cache_metadata_valid(meta: dict[str, Any]) -> bool:
         return False
     if "configured" in verifier and not isinstance(verifier["configured"], bool):
         return False
+    for field in ("provider", "model", "role"):
+        if field in verifier and verifier[field] is not None and not isinstance(verifier[field], str):
+            return False
     audit = meta.get("quality_audit")
     if audit is not None and not isinstance(audit, dict):
         return False
