@@ -54,7 +54,7 @@ def reevaluate_run(
             workflow1 = _read_workflow1(source, str(case.get("workflow1_output") or ""))
             generated = _generated_reports(workflow1)
             reused_generated_report_count += len(generated)
-            input_payload = dict(workflow1.get("input") or {})
+            input_payload = _strict_object(workflow1.get("input"), "workflow1.input")
             report_path = _resolve_existing(source, input_payload.get("report_path"))
             reconstructed_report = not (report_path and report_path.exists())
             report_text = read_text(report_path) if not reconstructed_report else _fallback_report_text(workflow1)
@@ -70,7 +70,10 @@ def reevaluate_run(
                 image_path=image_path,
                 output_path=case_output,
                 case_id=case_id,
-                prepared_assets=dict(input_payload.get("prepared_assets") or {}),
+                prepared_assets=_strict_object(
+                    input_payload.get("prepared_assets"),
+                    "workflow1.input.prepared_assets",
+                ),
                 modality=modality if modality != "unknown" else _case_string(input_payload, "modality", "unknown"),
                 body_part=body_part if body_part != "unknown" else _case_string(input_payload, "body_part", "unknown"),
                 top_n=cfg.ranking.top_n,
@@ -92,7 +95,10 @@ def reevaluate_run(
             continue
 
         human_evaluation = reevaluated.get("human_evaluation") or {}
-        human_metrics = dict(human_evaluation.get("composite_inputs") or {})
+        human_metrics = _strict_object(
+            human_evaluation.get("composite_inputs"),
+            "human_evaluation.composite_inputs",
+        )
         human_provenance = _evaluation_metadata(human_evaluation)
         human_provenance["report_text_source"] = (
             "reconstructed_from_finding_graph" if reconstructed_report else "original_report"
@@ -296,6 +302,14 @@ def _optional_int(value: Any) -> int | None:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         return None
     return value
+
+
+def _strict_object(value: Any, label: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return dict(value)
 
 
 def _mean_score(rows: list[dict[str, Any]]) -> float | None:

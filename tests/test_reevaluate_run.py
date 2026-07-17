@@ -60,6 +60,40 @@ def test_reevaluate_rejects_non_string_case_identity_fields(tmp_path: Path, fiel
     assert field in workflow2["failed_cases"][0]["error"]
 
 
+@pytest.mark.parametrize("field,bad", [("input", [["report_path", "report.txt"]]), ("prepared_assets", [["primary_image", "image.png"]])])
+def test_reevaluate_rejects_non_object_workflow1_inputs(tmp_path: Path, field, bad):
+    source = tmp_path / "source"
+    cases = source / "workflow2_cases"
+    cases.mkdir(parents=True)
+    report = source / "report.txt"
+    image = source / "image.png"
+    report.write_text("检查所见：未见急性异常。", encoding="utf-8")
+    image.write_bytes(b"png")
+    workflow1 = {
+        "schema_version": "2.0",
+        "generated_reports": [],
+        "input": (
+            bad
+            if field == "input"
+            else {
+                "report_path": str(report),
+                "image_path": str(image),
+                "prepared_assets": bad,
+            }
+        ),
+    }
+    (cases / "case1.json").write_text(json.dumps(workflow1), encoding="utf-8")
+    (source / "workflow2.json").write_text(
+        json.dumps({
+            "cases": [{"case_id": "case1", "reader": "r", "modality": "cxr", "body_part": "chest", "workflow1_output": str(cases / "case1.json")}]
+        }),
+        encoding="utf-8",
+    )
+    result = reevaluate_run(source, tmp_path / "out", config=AppConfig())
+    assert result["workflow2"]["failed_case_count"] == 1
+    assert field in result["workflow2"]["failed_cases"][0]["error"]
+
+
 def test_reevaluate_run_reuses_generated_reports_without_generation(tmp_path: Path):
     source = tmp_path / "source_run"
     source_cases = source / "workflow2_cases"
