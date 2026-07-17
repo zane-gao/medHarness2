@@ -28,6 +28,16 @@ def test_project_status_has_current_release_evidence():
     }
     assert payload["workstreams"]["control_panel"]["status"] == "validated"
 
+    # The ledger points at the evidence baseline, which must be a real ancestor
+    # of the published commit rather than an unrelated/stale history entry.
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    baseline = payload["baseline"]["git_sha"]
+    assert len(baseline) in {7, 40}
+    assert subprocess.run(
+        ["git", "merge-base", "--is-ancestor", baseline, head], check=False
+    ).returncode == 0
+    assert payload["baseline"]["ledger_commit"] == baseline
+
     allowed = {"not_started", "in_progress", "validated", "deferred"}
     for workstream in payload["workstreams"].values():
         assert workstream["status"] in allowed
