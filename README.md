@@ -81,6 +81,8 @@ PYTHONPATH=src medharness2 workflow sample-data \
 如只需低成本检查数据结构，可保留默认的 `llm.provider: mock`，或添加 `--skip-ocr`。
 真实 OCR 可使用 OpenAI Responses、`chat_completions` 或本地 VLM；研究 OCR manifest 另提供可选
 PaddleOCR-VL baseline adapter。云端凭据必须由环境变量提供。
+Yunwu 的真实视觉探索可使用 `config/yunwu_qwen_ocr_exploratory.yaml`；该配置固定
+`qwen3-vl-plus`/`qwen-vl-max`，仅用于逐页链路调试，不属于正式 OCR winner benchmark。
 PaddleOCR-VL 需要额外安装项目的 `ocr-paddle` extra，并按硬件安装匹配的 PaddlePaddle runtime：
 
 ```bash
