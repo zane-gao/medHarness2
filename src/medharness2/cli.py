@@ -48,6 +48,14 @@ def _result_mapping(value: object, label: str) -> dict:
     return value
 
 
+def _result_mapping_list(value: object, label: str) -> list[dict]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"{label} must be a list of objects")
+    return value
+
+
 def _result_string_list(value: object, label: str) -> list[str]:
     if value is None:
         return []
@@ -546,11 +554,32 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"medHarness2 single-case failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
+        try:
+            result = _result_mapping(result, "single_case.result")
+            generated_reports = _result_mapping_list(result.get("generated_reports"), "single_case.generated_reports")
+            rankings = _result_mapping_list(result.get("rankings"), "single_case.rankings")
+            pairwise_comparisons = _result_mapping_list(
+                result.get("pairwise_comparisons"), "single_case.pairwise_comparisons"
+            )
+            errors = _result_string_list(result.get("errors"), "single_case.errors")
+        except Exception as exc:
+            _record_registry(
+                Path(args.output).parent,
+                command=command,
+                stage="workflow.single-case",
+                status="failed",
+                inputs={"report": args.report, "image": args.image},
+                outputs={"result": args.output},
+                metrics={"error_count": 1, "exception_type": type(exc).__name__},
+                warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 single-case failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         _record_registry(
             Path(args.output).parent,
             command=command,
             stage="workflow.single-case",
-            status="failed" if result.get("errors") else "passed",
+            status="failed" if errors else "passed",
             inputs={
                 "report": args.report,
                 "image": args.image,
@@ -563,14 +592,14 @@ def main(argv: list[str] | None = None) -> int:
             },
             outputs={"result": args.output},
             metrics={
-                "generated_report_count": len(result.get("generated_reports") or []),
-                "ranking_count": len(result.get("rankings") or []),
-                "pairwise_count": len(result.get("pairwise_comparisons") or []),
+                "generated_report_count": len(generated_reports),
+                "ranking_count": len(rankings),
+                "pairwise_count": len(pairwise_comparisons),
             },
         )
         print(f"wrote medHarness2 single-case output to {args.output}")
-        print(f"generated_reports={len(result['generated_reports'])} pairwise={len(result['pairwise_comparisons'])}")
-        return 1 if result.get("errors") else 0
+        print(f"generated_reports={len(generated_reports)} pairwise={len(pairwise_comparisons)}")
+        return 1 if errors else 0
     if args.command == "workflow" and args.workflow == "sample-data":
         try:
             config = load_config(args.config) if args.config else load_config()
@@ -861,32 +890,58 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"medHarness2 analyze-run failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
+        try:
+            result = _result_mapping(result, "analyze_run.result")
+            analysis_dir = result.get("analysis_dir")
+            if not isinstance(analysis_dir, str):
+                raise ValueError("analyze_run.analysis_dir must be a string")
+            counts = {
+                name: _count_or_zero(result.get(name), name)
+                for name in (
+                    "case_count",
+                    "failed_case_count",
+                    "reader_count",
+                    "generated_report_count",
+                    "ranking_count",
+                    "pairwise_count",
+                    "quality_gate_failed_count",
+                )
+            }
+            errors = _result_string_list(result.get("errors"), "analyze_run.errors")
+            artifacts = _result_mapping(result.get("artifacts"), "analyze_run.artifacts")
+        except Exception as exc:
+            _record_registry(
+                args.output_dir,
+                command=command,
+                stage="workflow.analyze-run",
+                status="failed",
+                inputs={"output_dir": args.output_dir, "analysis_dir": args.analysis_dir or ""},
+                outputs={"analysis_dir": args.analysis_dir or str(Path(args.output_dir) / "analysis")},
+                metrics={"exception_type": type(exc).__name__},
+                warnings=[_exception_warning(exc)],
+            )
+            print(f"medHarness2 analyze-run failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
         _record_registry(
             args.output_dir,
             command=command,
             stage="workflow.analyze-run",
-            status="failed" if result.get("errors") else "passed",
+            status="failed" if errors else "passed",
             inputs={"output_dir": args.output_dir, "analysis_dir": args.analysis_dir or ""},
-            outputs={"analysis_dir": result.get("analysis_dir", ""), **dict(result.get("artifacts") or {})},
+            outputs={"analysis_dir": analysis_dir, **artifacts},
             metrics={
-                "case_count": _count_or_zero(result.get("case_count"), "case_count"),
-                "failed_case_count": _count_or_zero(result.get("failed_case_count"), "failed_case_count"),
-                "reader_count": _count_or_zero(result.get("reader_count"), "reader_count"),
-                "generated_report_count": _count_or_zero(result.get("generated_report_count"), "generated_report_count"),
-                "ranking_count": _count_or_zero(result.get("ranking_count"), "ranking_count"),
-                "pairwise_count": _count_or_zero(result.get("pairwise_count"), "pairwise_count"),
-                "quality_gate_failed_count": _count_or_zero(result.get("quality_gate_failed_count"), "quality_gate_failed_count"),
-                "error_count": len(result.get("errors") or []),
+                **counts,
+                "error_count": len(errors),
             },
         )
-        print(f"wrote medHarness2 run analysis to {result['analysis_dir']}")
+        print(f"wrote medHarness2 run analysis to {analysis_dir}")
         print(
             "cases="
-            f"{result['case_count']} "
-            f"generated_reports={result['generated_report_count']} "
-            f"quality_failed={result['quality_gate_failed_count']}"
+            f"{counts['case_count']} "
+            f"generated_reports={counts['generated_report_count']} "
+            f"quality_failed={counts['quality_gate_failed_count']}"
         )
-        return 1 if result.get("errors") else 0
+        return 1 if errors else 0
     if args.command == "workflow" and args.workflow == "reevaluate-run":
         try:
             config = load_config(args.config) if args.config else load_config()

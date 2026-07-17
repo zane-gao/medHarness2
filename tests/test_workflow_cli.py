@@ -50,6 +50,35 @@ def test_cli_preflight_rejects_malformed_result(tmp_path: Path, monkeypatch):
     assert registry["entries"][-1]["status"] == "failed"
 
 
+def test_cli_single_case_rejects_malformed_result(tmp_path: Path, monkeypatch):
+    report = tmp_path / "report.txt"
+    image = tmp_path / "image.dcm"
+    output = tmp_path / "single.json"
+    report.write_text("report", encoding="utf-8")
+    image.write_text("image", encoding="utf-8")
+    monkeypatch.setattr(
+        cli_module,
+        "run_single_case",
+        lambda *args, **kwargs: {"generated_reports": "bad", "rankings": [], "pairwise_comparisons": [], "errors": []},
+    )
+    code = main(["workflow", "single-case", "--report", str(report), "--image", str(image), "--output", str(output)])
+    assert code == 1
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
+def test_cli_analyze_run_rejects_malformed_result(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(
+        cli_module,
+        "analyze_run",
+        lambda *args, **kwargs: {"analysis_dir": "bad", "case_count": 1, "errors": "bad"},
+    )
+    code = main(["workflow", "analyze-run", "--output-dir", str(tmp_path)])
+    assert code == 1
+    registry = json.loads((tmp_path / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
+
+
 def test_reference_report_coverage_is_self_recall_not_template_size():
     result = evaluate_single_report(
         "FINDINGS: Mild right lung opacity. IMPRESSION: Mild opacity.",
