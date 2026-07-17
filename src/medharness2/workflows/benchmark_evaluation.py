@@ -159,15 +159,10 @@ def evaluate_generation_benchmark(
                 was_resumed = True
                 checkpointing = _checkpointing_disabled("whole_case_artifact_reused")
             else:
-                generated_payload = dict(generation_result.get("generated_report") or {})
-                generated = GeneratedReport(
-                    model=str(generated_payload.get("model") or model),
-                    source=str(generated_payload.get("source") or "unknown"),
-                    report=str(generated_payload.get("report") or ""),
-                    modality=str(generated_payload.get("modality") or case.modality),
-                    evidence_tier=str(generated_payload.get("evidence_tier") or "artifact"),
-                    warnings=list(generated_payload.get("warnings") or []),
-                    metadata=dict(generated_payload.get("metadata") or {}),
+                generated = _generated_report_from_payload(
+                    generation_result.get("generated_report"),
+                    default_model=model,
+                    default_modality=case.modality,
                 )
                 if resume:
                     checkpoint_store = StageCheckpointStore(
@@ -606,6 +601,40 @@ def _validate_source_isolation(generation_result: dict[str, Any]) -> None:
     metadata = dict((generation_result.get("generated_report") or {}).get("metadata") or {})
     if metadata.get("reference_report_used") is not False:
         raise ValueError("Generated report metadata reference_report_used must be false")
+
+
+def _generated_report_from_payload(
+    payload: Any,
+    *,
+    default_model: str,
+    default_modality: str,
+) -> GeneratedReport:
+    if not isinstance(payload, dict):
+        raise ValueError("generated_report must be an object")
+
+    def _optional_string(name: str, default: str) -> str:
+        value = payload.get(name)
+        if value is None or value == "":
+            return default
+        if not isinstance(value, str):
+            raise ValueError(f"generated_report.{name} must be a string")
+        return value
+
+    warnings = payload.get("warnings", [])
+    if not isinstance(warnings, list) or any(not isinstance(item, str) for item in warnings):
+        raise ValueError("generated_report.warnings must be a string list")
+    metadata = payload.get("metadata", {})
+    if not isinstance(metadata, dict):
+        raise ValueError("generated_report.metadata must be an object")
+    return GeneratedReport(
+        model=_optional_string("model", default_model),
+        source=_optional_string("source", "unknown"),
+        report=_optional_string("report", ""),
+        modality=_optional_string("modality", default_modality),
+        evidence_tier=_optional_string("evidence_tier", "artifact"),
+        warnings=list(warnings),
+        metadata=dict(metadata),
+    )
 
 
 def _validate_role_routes(

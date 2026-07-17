@@ -30,6 +30,8 @@ def plan_sample_full_routes(
     model_sources: list[str] | None = None,
 ) -> dict[str, Any]:
     cfg = config or load_config()
+    if limit is not None:
+        _strict_nonnegative_int(limit, "limit")
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     raw_manifest_path = out_dir / "route_plan.manifest.raw.jsonl"
@@ -108,6 +110,8 @@ def run_sample_full(
     expected_cases: int | None = None,
 ) -> dict[str, Any]:
     cfg = config or load_config()
+    if limit is not None:
+        _strict_nonnegative_int(limit, "limit")
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = prepare_sample_dataset(

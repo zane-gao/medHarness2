@@ -19,7 +19,25 @@ from medharness2.workflows.benchmark_evaluation import (
     verify_real_llm_case_evaluation,
     _evaluation_config_snapshot,
     _validate_role_routes,
+    _generated_report_from_payload,
 )
+
+
+def test_generated_report_payload_rejects_non_string_and_non_object_fields():
+    with pytest.raises(ValueError, match="generated_report.warnings"):
+        _generated_report_from_payload(
+            {
+                "model": 7,
+                "source": "artifact",
+                "report": "text",
+                "modality": "cxr",
+                "evidence_tier": "formal_fresh",
+                "warnings": 0,
+                "metadata": [],
+            },
+            default_model="model-a",
+            default_modality="cxr",
+        )
 
 
 def test_verified_provenance_rejects_non_boolean_fallback_flag():

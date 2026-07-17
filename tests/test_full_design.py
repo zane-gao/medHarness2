@@ -823,6 +823,12 @@ def test_sample_full_dry_run_plans_all_compatible_local_models_without_outputs(t
     assert not (output_dir / "workflow2.json").exists()
 
 
+@pytest.mark.parametrize("bad", [True, -1, 1.5, "1"])
+def test_sample_full_route_limit_rejects_invalid_values(tmp_path: Path, bad):
+    with pytest.raises(ValueError, match="limit must be a non-negative integer"):
+        plan_sample_full_routes(tmp_path / "sample", tmp_path / "run", limit=bad)
+
+
 def test_sample_full_dry_run_filters_local_models_by_source(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
