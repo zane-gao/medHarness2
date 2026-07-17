@@ -97,6 +97,33 @@ def test_artifact_generator_selects_requested_case_from_multi_case_jsonl(tmp_pat
     assert reports[0].report == "FINDINGS: Case B finding."
 
 
+def test_artifact_generator_rejects_non_string_identity_and_report_fields(tmp_path: Path):
+    artifact = tmp_path / "generation.jsonl"
+    artifact.write_text(
+        json.dumps({"case_id": {"wrong": 1}, "generated_report": ["not text"], "modality": 7}) + "\n",
+        encoding="utf-8",
+    )
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["artifact"],
+            local_models=[
+                {
+                    "key": "artifact",
+                    "source": "artifact_reuse",
+                    "supported_modalities": ["xray", "cxr"],
+                    "source_generation_jsonl": str(artifact),
+                }
+            ],
+        )
+    )
+    registry = ReportGeneratorRegistry(cfg)
+    entry = registry.entries["artifact"]
+    report = registry.generate(entry, "image.png", "cxr", case_id="case-a")
+    assert report.report == ""
+    assert "artifact_invalid_case_id" in report.warnings
+
+
 def test_fallback_records_failed_local_generation_attempt(tmp_path: Path):
     missing_artifact = tmp_path / "missing.jsonl"
     cfg = AppConfig(

@@ -278,9 +278,26 @@ class ReportGeneratorRegistry:
                 if not line.strip():
                     continue
                 row = json.loads(line)
+                if not isinstance(row, dict):
+                    return GeneratedReport(
+                        model=entry.key,
+                        source=entry.source,
+                        report="",
+                        modality=modality,
+                        warnings=["artifact_invalid_row"],
+                    )
                 if fallback_row is None:
                     fallback_row = row
-                row_case_id = str(row.get("case_id") or row.get("sample_id") or "")
+                raw_case_id = row.get("case_id") if "case_id" in row else row.get("sample_id")
+                if raw_case_id is not None and not isinstance(raw_case_id, str):
+                    return GeneratedReport(
+                        model=entry.key,
+                        source=entry.source,
+                        report="",
+                        modality=modality,
+                        warnings=["artifact_invalid_case_id"],
+                    )
+                row_case_id = raw_case_id or ""
                 if case_id and row_case_id and row_case_id != str(case_id):
                     continue
                 if case_id and not row_case_id:
@@ -296,12 +313,29 @@ class ReportGeneratorRegistry:
                             warnings=["artifact_case_id_missing_for_multi_case_artifact"],
                             metadata={"source_generation_jsonl": str(source), "image_path": image_path},
                         )
-                report = row.get("generated_text") or row.get("generated_report") or row.get("prediction_text") or row.get("Pred") or ""
+                raw_report = row.get("generated_text") or row.get("generated_report") or row.get("prediction_text") or row.get("Pred") or ""
+                if not isinstance(raw_report, str):
+                    return GeneratedReport(
+                        model=entry.key,
+                        source=entry.source,
+                        report="",
+                        modality=modality,
+                        warnings=["artifact_invalid_report_text"],
+                    )
+                raw_modality = row.get("modality")
+                if raw_modality is not None and not isinstance(raw_modality, str):
+                    return GeneratedReport(
+                        model=entry.key,
+                        source=entry.source,
+                        report="",
+                        modality=modality,
+                        warnings=["artifact_invalid_modality"],
+                    )
                 return GeneratedReport(
                     model=entry.key,
                     source=entry.source,
-                    report=str(report),
-                    modality=str(row.get("modality") or modality),
+                    report=raw_report,
+                    modality=raw_modality or modality,
                     warnings=["artifact_reuse_not_fresh_inference"],
                     metadata={
                         "case_id": row.get("case_id") or row.get("sample_id"),
@@ -320,12 +354,17 @@ class ReportGeneratorRegistry:
             )
         if fallback_row is not None:
             row = fallback_row
-            report = row.get("generated_text") or row.get("generated_report") or row.get("prediction_text") or row.get("Pred") or ""
+            raw_report = row.get("generated_text") or row.get("generated_report") or row.get("prediction_text") or row.get("Pred") or ""
+            if not isinstance(raw_report, str):
+                return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["artifact_invalid_report_text"])
+            raw_modality = row.get("modality")
+            if raw_modality is not None and not isinstance(raw_modality, str):
+                return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["artifact_invalid_modality"])
             return GeneratedReport(
                 model=entry.key,
                 source=entry.source,
-                report=str(report),
-                modality=str(row.get("modality") or modality),
+                report=raw_report,
+                modality=raw_modality or modality,
                 warnings=["artifact_reuse_not_fresh_inference"],
                 metadata={
                     "case_id": row.get("case_id") or row.get("sample_id"),
