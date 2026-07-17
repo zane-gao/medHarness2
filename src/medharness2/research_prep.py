@@ -471,7 +471,9 @@ def _audit_quality_status(audit: Any) -> str:
     statuses: list[str] = []
     pages = audit.get("pages")
     if isinstance(pages, list):
-        statuses = [str(item.get("status") or "").strip().lower() for item in pages if isinstance(item, dict)]
+        if not pages or any(not isinstance(item, dict) for item in pages):
+            return "blocked"
+        statuses = [str(item.get("status") or "").strip().lower() for item in pages]
     else:
         statuses = [str(audit.get("status") or "").strip().lower()]
     if statuses and all(status == "agree" for status in statuses):
@@ -736,10 +738,11 @@ def _paddle_audit_passed(audit: Any) -> bool:
         return False
     pages = audit.get("pages")
     if isinstance(pages, list):
+        if not pages or any(not isinstance(item, dict) for item in pages):
+            return False
         statuses = [
             str(item.get("status") or "").strip().lower()
             for item in pages
-            if isinstance(item, dict)
         ]
         return bool(statuses) and all(status == "agree" for status in statuses)
     return str(audit.get("status") or "").strip().lower() == "agree"

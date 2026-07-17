@@ -467,6 +467,12 @@ def test_paddleocr_result_empty_text_is_not_accepted():
         )
 
 
+@pytest.mark.parametrize("audit", [{"pages": [{"status": "agree"}, "garbage"]}, {"pages": []}])
+def test_malformed_paddle_audit_pages_never_pass(audit: dict[str, object]):
+    assert research_prep._paddle_audit_passed(audit) is False
+    assert research_prep._audit_quality_status(audit) == "blocked"
+
+
 def test_paddleocr_empty_page_prevents_quality_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     source_pdf = tmp_path / "report.pdf"
     source_pdf.write_bytes(b"placeholder")
