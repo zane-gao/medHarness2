@@ -971,8 +971,22 @@ def _ocr_candidate_readiness(config: AppConfig) -> dict[str, dict[str, Any]]:
             continue
         route = config.model_roles.get(candidate["role"])
         provider = str(route.provider if route and route.provider else "").lower()
+        actual_model = str(route.model if route and route.model else "")
         api_env = str(route.api_key_env if route else "")
-        ready = provider == candidate["provider"] and bool(api_env and str(os.environ.get(api_env) or "").strip())
+        if provider != candidate["provider"]:
+            result[candidate["candidate_id"]] = {
+                "ready": False,
+                "reason": f"provider_mismatch:expected={candidate['provider']}:actual={provider or 'missing'}",
+            }
+            continue
+        expected_model = str(candidate.get("model") or "")
+        if actual_model != expected_model:
+            result[candidate["candidate_id"]] = {
+                "ready": False,
+                "reason": f"model_mismatch:expected={expected_model}:actual={actual_model or 'missing'}",
+            }
+            continue
+        ready = bool(api_env and str(os.environ.get(api_env) or "").strip())
         result[candidate["candidate_id"]] = {"ready": ready, "reason": "missing_api_key" if not ready else ""}
     return result
 

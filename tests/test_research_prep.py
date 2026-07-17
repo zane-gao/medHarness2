@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from medharness2.annotation.models import AnnotationCase, CandidateReportForAnnotation, ReaderAnnotation
+from medharness2.config import ModelRoleConfig
 from medharness2.ocr_benchmark import evaluate_ocr_candidates
 from medharness2.research_prep import (
     evaluate_paper_evidence_gate,
@@ -995,6 +996,22 @@ def test_paddleocr_readiness_reports_runtime_missing(monkeypatch: pytest.MonkeyP
     assert readiness["ocr_baseline_paddle"] == {
         "ready": False,
         "reason": "paddle_runtime_unavailable",
+    }
+
+
+def test_ocr_readiness_rejects_candidate_model_identity_mismatch(monkeypatch: pytest.MonkeyPatch):
+    cfg = research_prep.load_config()
+    cfg.model_roles["ocr_primary"] = cfg.model_roles.get("ocr_primary") or ModelRoleConfig()
+    cfg.model_roles["ocr_primary"].provider = "chat_completions"
+    cfg.model_roles["ocr_primary"].model = "qwen3-vl-plus"
+    cfg.model_roles["ocr_primary"].api_key_env = "TEST_OCR_KEY"
+    monkeypatch.setenv("TEST_OCR_KEY", "present")
+
+    readiness = research_prep._ocr_candidate_readiness(cfg)
+
+    assert readiness["ocr_primary_doubao"] == {
+        "ready": False,
+        "reason": "model_mismatch:expected=doubao-seed-2-1-pro-260628:actual=qwen3-vl-plus",
     }
 
 

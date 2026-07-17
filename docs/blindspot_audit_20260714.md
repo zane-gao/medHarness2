@@ -10,6 +10,8 @@
 
 > **2026-07-17 OCR 重复稳定性复核**：同一未注册 pilot10 的第二次独立 Qwen 重复仅 `2/10` 直接通过，`4/10` 为探索脚本未接 verifier 导致的 `review_required`，`4/10` 为正文页疑似截断 `blocked`。这证明首轮结果不能升级为稳定结论；当前仍必须保留双重复、独立 verifier 和候选一致性门禁。
 
+> **2026-07-17 OCR 候选身份门禁**：研究运行器现在同时核对候选声明的 provider 和精确 model ID；把 `qwen3-vl-plus` 放入 Doubao primary role 会明确返回 `model_mismatch` 并阻断，不再污染 `ocr_primary_doubao` provenance。
+
 > **2026-07-17 PaddleOCR 边界收口**：PaddleOCR readiness 现在同时检查 `PaddleOCRVL` 与 Paddle runtime；OCR sidecar 对文本、warnings、metadata、quality audit 结构执行 fail-closed 校验；源 PDF hash 不可读、对象式 `parsing_res_list`、空文本和空页均有明确阻断/复核语义。新增研究专项回归后全量为 `1783 passed, 20 warnings`。
 
 > **2026-07-17 审计页列表边界收口**：verifier audit 的 `pages` 为空或混入非对象时统一判为 `blocked`，不会因过滤非法项后恰好剩余 `agree` 而误通过；全量回归曾为 `1785/1801/1835/1836/1847 passed, 20 warnings`，当前基线为 `1850 passed, 20 warnings`。
