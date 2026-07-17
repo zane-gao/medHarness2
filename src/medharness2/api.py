@@ -612,6 +612,11 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
             limit=request.limit,
             config=cfg,
         )
+        result = _result_mapping(result, "batch_readers.result")
+        case_count = _count_or_zero(result.get("case_count"), "case_count")
+        failed_case_count = _count_or_zero(result.get("failed_case_count"), "failed_case_count")
+        per_reader = _result_mapping(result.get("per_reader"), "batch_readers.per_reader")
+        errors = _result_string_list(result.get("errors"), "batch_readers.errors")
     except Exception as exc:
         _record_registry(
             Path(request.output_path).parent,
@@ -623,19 +628,18 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
             warnings=[f"{type(exc).__name__}: {exc}"],
         )
         raise HTTPException(status_code=500, detail=f"batch_readers_failed:{type(exc).__name__}") from exc
-    errors = list(result.get("errors") or [])
     _record_registry(
         Path(request.output_path).parent,
         stage="workflow.batch-readers",
-        status="failed" if errors or _count_or_zero(result.get("failed_case_count"), "failed_case_count") else "passed",
+        status="failed" if errors or failed_case_count else "passed",
         inputs={"manifest": request.manifest_path},
         outputs={"workflow2": request.output_path},
-        metrics={"case_count": _count_or_zero(result.get("case_count"), "case_count"), "failed_case_count": _count_or_zero(result.get("failed_case_count"), "failed_case_count"), "reader_count": len(result.get("per_reader") or {})},
+        metrics={"case_count": case_count, "failed_case_count": failed_case_count, "reader_count": len(per_reader)},
         warnings=errors,
     )
     return {
         "output_path": request.output_path,
-        "summary": {"cases": result["case_count"], "readers": len(result["per_reader"]), "errors": list(result.get("errors") or [])},
+        "summary": {"cases": case_count, "readers": len(per_reader), "errors": errors},
         "result": result,
     }
 
@@ -644,6 +648,11 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
 def department(request: DepartmentRequest) -> dict[str, Any]:
     try:
         result = run_department_comparison(request.batch_result_path, request.output_path)
+        result = _result_mapping(result, "department.result")
+        case_count = _count_or_zero(result.get("case_count"), "case_count")
+        reader_count = _count_or_zero(result.get("reader_count"), "reader_count")
+        reader_total_count = _count_or_zero(result.get("reader_total_count"), "reader_total_count") if result.get("reader_total_count") is not None else reader_count
+        errors = _result_string_list(result.get("errors"), "department.errors")
     except Exception as exc:
         _record_registry(
             Path(request.output_path).parent,
@@ -655,14 +664,13 @@ def department(request: DepartmentRequest) -> dict[str, Any]:
             warnings=[f"{type(exc).__name__}: {exc}"],
         )
         raise HTTPException(status_code=500, detail=f"department_failed:{type(exc).__name__}") from exc
-    errors = list(result.get("errors") or [])
     _record_registry(
         Path(request.output_path).parent,
         stage="workflow.department",
         status="failed" if errors else "passed",
         inputs={"batch_result": request.batch_result_path},
         outputs={"workflow3": request.output_path},
-        metrics={"case_count": _count_or_zero(result.get("case_count"), "case_count"), "reader_count": _count_or_zero(result.get("reader_count"), "reader_count")},
+        metrics={"case_count": case_count, "reader_count": reader_count},
         warnings=errors,
     )
     # ``summary.readers`` reports readers present in the completed batch.  The
@@ -671,9 +679,9 @@ def department(request: DepartmentRequest) -> dict[str, Any]:
     return {
         "output_path": request.output_path,
         "summary": {
-            "cases": result["case_count"],
-            "readers": result.get("reader_total_count", result["reader_count"]),
-            "errors": list(result.get("errors") or []),
+            "cases": case_count,
+            "readers": reader_total_count,
+            "errors": errors,
         },
         "result": result,
     }
@@ -733,6 +741,14 @@ def merge_batches(request: MergeBatchesRequest) -> dict[str, Any]:
 def analyze_run_endpoint(request: AnalyzeRunRequest) -> dict[str, Any]:
     try:
         result = analyze_run(request.output_dir, request.analysis_dir)
+        result = _result_mapping(result, "analyze_run.result")
+        analysis_dir = result.get("analysis_dir")
+        if not isinstance(analysis_dir, str):
+            raise ValueError("analyze_run.analysis_dir must be a string")
+        case_count = _count_or_zero(result.get("case_count"), "case_count")
+        generated_report_count = _count_or_zero(result.get("generated_report_count"), "generated_report_count")
+        quality_gate_failed_count = _count_or_zero(result.get("quality_gate_failed_count"), "quality_gate_failed_count")
+        errors = _result_string_list(result.get("errors"), "analyze_run.errors")
     except Exception as exc:
         _record_registry(
             request.output_dir,
@@ -744,23 +760,22 @@ def analyze_run_endpoint(request: AnalyzeRunRequest) -> dict[str, Any]:
             warnings=[f"{type(exc).__name__}: {exc}"],
         )
         raise HTTPException(status_code=500, detail=f"analyze_run_failed:{type(exc).__name__}") from exc
-    errors = list(result.get("errors") or [])
     _record_registry(
         request.output_dir,
         stage="workflow.analyze-run",
         status="failed" if errors else "passed",
         inputs={"output_dir": request.output_dir},
-        outputs={"analysis_dir": result.get("analysis_dir", "")},
-        metrics={"case_count": _count_or_zero(result.get("case_count"), "case_count"), "error_count": len(errors)},
+        outputs={"analysis_dir": analysis_dir},
+        metrics={"case_count": case_count, "error_count": len(errors)},
         warnings=errors,
     )
     return {
-        "analysis_dir": result["analysis_dir"],
+        "analysis_dir": analysis_dir,
         "summary": {
-            "cases": result["case_count"],
-            "generated_reports": result["generated_report_count"],
-            "quality_failed": result["quality_gate_failed_count"],
-            "errors": list(result.get("errors") or []),
+            "cases": case_count,
+            "generated_reports": generated_report_count,
+            "quality_failed": quality_gate_failed_count,
+            "errors": errors,
         },
         "result": result,
     }
