@@ -125,6 +125,44 @@ def test_ocr_cache_compatibility_rejects_non_passed_quality_status(quality_statu
     ) is False
 
 
+def test_ocr_cache_compatibility_rejects_stale_unconfigured_verifier_identity():
+    from medharness2.ocr import _cache_is_compatible
+
+    assert _cache_is_compatible(
+        {
+            "source_pdf_sha256": "hash",
+            "case_id": "case",
+            "method": "vlm_ocr",
+            "provider": "openai",
+            "model": "model",
+            "role": "ocr",
+            "prompt_version": "ocr-page-v2",
+            "quality_status": "passed",
+            "verifier": {"configured": False, "provider": "old", "model": "old", "role": "ocr_verifier"},
+        },
+        case_id="case",
+        source_pdf_sha256="hash",
+        provider="openai",
+        model="model",
+        role="ocr",
+        verifier_options={},
+        require_real=False,
+    ) is False
+
+
+@pytest.mark.parametrize("quality_status", ["passed", "review_required"])
+def test_ocr_cache_sidecar_rejects_inconsistent_verifier_quality_status(quality_status: str):
+    payload = {
+        "warnings": [],
+        "verifier": {"configured": True, "provider": "chat_completions", "model": "v", "role": "ocr_verifier"},
+        "quality_audit": {"status": "disagreement"},
+        "quality_status": quality_status,
+    }
+    from medharness2.ocr import _cache_metadata_valid
+
+    assert _cache_metadata_valid(payload) is (quality_status == "review_required")
+
+
 @pytest.mark.parametrize(
     "field",
     ["case_id", "source_pdf_sha256", "method", "provider", "model", "role", "prompt_version"],
