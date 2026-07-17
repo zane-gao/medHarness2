@@ -16,7 +16,7 @@
 
 > **2026-07-17 审计页列表边界收口**：verifier audit 的 `pages` 为空或混入非对象时统一判为 `blocked`，不会因过滤非法项后恰好剩余 `agree` 而误通过；全量回归曾为 `1785/1801/1835/1836/1847/1850/1851 passed, 20 warnings`，当前基线为 `1857 passed, 20 warnings`。
 
-> **2026-07-17 Tool 7 路由误判修复**：任意 PNG/JPG/JPEG 不再自动判为 CXR；CT/MRI 预处理生成的 `contact_sheet.png` 现在在缺少可信文件名提示时交给 VLM，无法调用 VLM 时明确返回 `unknown`。DICOM header、显式病例 modality 和三模态 body_part 软排序不变；路由回归覆盖通用 raster、可信 CXR 文件名和 contact sheet→CT，当前全量回归为 `1857 passed, 20 warnings`。
+> **2026-07-17 Tool 7 路由误判修复**：任意 PNG/JPG/JPEG 不再自动判为 CXR；CT/MRI 预处理生成的 `contact_sheet.png` 现在在缺少可信文件名提示时交给 VLM，无法调用 VLM 时明确返回 `unknown`。DICOM header、显式病例 modality 和三模态 body_part 软排序不变；路由回归覆盖通用 raster、可信 CXR 文件名和 contact sheet→CT，当前全量回归为 `1857 passed, 20 warnings`。真实 preflight 仍以 `cxr/ct/mri=20/25/7`、52/52 有本地候选、0 fallback 为证据，OCR provider 门禁独立保持 blocked。
 
 > **2026-07-17 多模态 exploratory 收口**：Tool 2 已改为 source span ID + 完整报告原文回填；Tool 5 对 Qwen/VL 使用单错误块并裁剪无关上下文。MRI `MR2605270001`、CXR `CR2605290003`、CT `CT2605300030` 三例真实 Yunwu exploratory 链路均已完整通过，但仍不具备 formal 或 winner 资格。
 
@@ -276,7 +276,7 @@ primary=gpt-5.6-terra@temp0，reviewer=claude-opus 走默认 ~1.0。`review_haza
 ### —— 测试覆盖（1 条，confirmed）——
 
 **H16.（当前已补行为回归测试）Tool7 模态识别曾缺少真实行为测试** `tools/tool7_modality.py:10-27`
-现已覆盖 DICOM header 优先、常见图像后缀、VLM MRI/空回复归一化，并继续保留未知模态为 `unknown` 的显式行为。
+现已覆盖 DICOM header 优先、可信 CXR 文件名提示、CT/MRI contact sheet 交给 VLM、VLM MRI/空回复归一化，并继续保留未知模态为 `unknown` 的显式行为。
 
 ### —— 数据/schema 一致性（1 条，confirmed，第一版整个维度漏了）——
 
