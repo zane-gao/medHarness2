@@ -28,9 +28,6 @@ OCR_CANDIDATES = (
 OCR_BENCHMARK_CANDIDATES = tuple(
     candidate for candidate in OCR_CANDIDATES if candidate["role"] != "ocr_verifier"
 )
-OCR_BENCHMARK_CANDIDATES = tuple(
-    candidate for candidate in OCR_CANDIDATES if candidate["role"] != "ocr_verifier"
-)
 
 # The Beichuan reference reports are the current engineering benchmark gold.
 # Clinical reader labels remain a separate calibration layer.
@@ -111,9 +108,7 @@ def run_ocr_research(
                         )
                         if not reasons and audit is not None:
                             audit_status = _audit_quality_status(audit)
-                            payload["status"] = (
-                                "audit_succeeded" if audit_status == "passed" else "audit_review_required"
-                            )
+                            payload["status"] = "succeeded" if audit_status == "passed" else "review_required"
                             payload["quality_status"] = audit_status
                             payload["blocked_reasons"] = (
                                 [] if audit_status == "passed" else ["verifier_audit_review_required"]
@@ -446,7 +441,12 @@ def _persist_ocr_run_state(
             for repeat, result in benchmark_results.items()
         }
     )
-    manifest["route_readiness"] = {
+    manifest["route_readiness"] = _route_snapshot(config)
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def _route_snapshot(config: AppConfig) -> dict[str, dict[str, str]]:
+    return {
         candidate["candidate_id"]: {
             "provider": candidate["provider"],
             "model": _candidate_model_name(config, candidate),
@@ -454,11 +454,17 @@ def _persist_ocr_run_state(
         }
         for candidate in OCR_CANDIDATES
     }
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    # Keep benchmark provenance synchronized with the route actually used for
-    # this run; a custom model config must not be compared against the frozen
-    # default model name.
-    route_snapshot = manifest["route_readiness"]
+
+
+def _synchronize_benchmark_routes(research: Path, config: AppConfig) -> None:
+    """Refresh benchmark route provenance before scoring candidate sidecars."""
+    manifest_path = research / "ocr_manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ValueError("ocr_manifest_invalid_before_benchmark") from exc
+    routes = _route_snapshot(config)
+    benchmark_ids = {item["candidate_id"] for item in OCR_BENCHMARK_CANDIDATES}
     for benchmark_name in manifest.get("benchmark_manifests") or []:
         benchmark_path = research / str(benchmark_name)
         try:
@@ -471,8 +477,7 @@ def _persist_ocr_run_state(
             if not isinstance(case, dict):
                 raise ValueError(f"ocr_benchmark_manifest_invalid_case:{benchmark_name}")
             case["candidate_routes"] = {
-                candidate_id: dict(route_snapshot[candidate_id])
-                for candidate_id in route_snapshot
+                candidate_id: dict(routes[candidate_id]) for candidate_id in benchmark_ids
             }
         benchmark_path.write_text(json.dumps(benchmark, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
@@ -561,7 +566,7 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
                                 f"{candidate['candidate_id']}.json"
                             ),
                         }
-                        for candidate in OCR_BENCHMARK_CANDIDATES
+                        for candidate in OCR_CANDIDATES
                         if candidate["role"] == "ocr_verifier"
                     },
                 }
