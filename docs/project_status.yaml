@@ -5,7 +5,7 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: pending-dashboard-render-item-hardening
+  git_sha: 9aeb836bf4ec32a36b057f83348056a562401c9a
   dirty_worktree: false
   pytest_passed: 1409
   pytest_warnings: 20
