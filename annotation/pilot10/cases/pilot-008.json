@@ -2,20 +2,25 @@
   "schema_version": "2.0",
   "artifact_type": "clinical_annotation_case",
   "pilot_case_id": "pilot-008",
-  "source_case_sha256": "c9af007afcf943827fbb930a815dc0bf725dc05b4f6ccb6bc2eb1e61389e8147",
-  "modality": "ct",
+  "source_case_sha256": "4a876d8468e234b8011d2a05b483245998e877256e1427e6fa24fe0c2f212d7c",
+  "modality": "cxr",
   "body_part": "chest",
-  "reference_report": "检查所见：\n骨性胸廓双侧对称，气管、纵隔居中。双肺见少许索条影及线条样软组织密度影。右肺上叶后段（SE202，IM64）可见磨玻璃结节，大小约10mm×8mm。各叶段支气管通畅，未见狭窄受压征象。纵隔内未见肿大淋巴影。心脏形态自然，各房室不大。主动脉壁见点结状致密影。双侧胸腔未见胸膜增厚及胸腔积液征象。胸椎椎体边缘骨质密度增高。右侧第7肋局部骨质不规则。\n诊断印象：\n双肺少许间质性改变及不张。右肺上叶后段磨玻璃结节，多系炎性，请结合临床随诊。主动脉壁钙化灶。胸椎退行性变。",
+  "reference_report": "检查所见：\n骨性胸廓双侧对称，气管及纵隔居中。双肺透光度尚可，纹理清晰，走行自然，未见异常密度影。双侧肺门未见增大、增浓。心影形态、大小未见异常，主动脉未见异常。双侧膈肌光整，肋膈角锐利。\n诊断印象:\n心肺未见明显异常。",
   "candidate_reports": [
     {
       "candidate_id": "candidate-01",
       "blinded_model_id": "model-01",
-      "report_text": "Findings: Trachea and both main bronchi are open. No occlusive pathology was detected in the trachea and both main bronchi. There are millimetric nonspecific nodules in both lungs. No mass or infiltrative lesion was detected in both lungs. Mediastinal structures cannot be evaluated optimally because contrast material is not given. As far as can be observed: Heart contour and size are normal. No pleural or pericardial effusion was detected. The widths of the mediastinal main vascular structures are normal. No pathologically enlarged lymph nodes were detected in the mediastinum and hilar regions. No pathological wall thickness increase was observed in the esophagus within the sections. No upper abdominal free fluid-collection was detected in the sections. No enlarged lymph nodes in pathological dimensions were detected. In the upper abdominal organs within the sections, there is no mass with distinguishable borders as far as it can be observed within the borders of non-enhanced CT. Thoracic vertebral corpus heights, alignments and densities are normal. Intervertebral disc distances are"
+      "report_text": "Findings: Frontal and lateral chest radiographs demonstrate a normal cardiomediastinal silhouette and well-aerated lungs which are clear. There is no pleural effusion or pneumothorax."
     },
     {
       "candidate_id": "candidate-02",
       "blinded_model_id": "model-02",
-      "report_text": "Bilateral cerebral hemispheres are symmetrical. Multiple small low density shadows can be seen in the basal ganglia on both sides and near the lateral ventricles on both sides. Some are located inside the sulcus and cistern, with unclear boundaries. Some ventricles and gyri are enlarged, and the midline structure is in the middle. Thorax is symmetrical, no abnormality is found in rib and chest wall soft tissue. Bilateral lung markings increase significantly, and the light transmission is good. The lung field has multiple flocculent and strip like high-density shadows, and bilateral pulmonary hili are not large. The shape of heart shadow and large vessels is normal, and there are many small lymph nodes in the mediastinum. Bilateral pleural thickening and adhesion. Multiple nodular high-density shadows can be seen in the spleen."
+      "report_text": "FINDINGS:\nLungs and Airways:\n- No focal consolidation.\n- No pneumothorax.\nPleura:\n- No pleural effusion.\nCardiovascular:\n- Normal cardiomediastinal silhouette.\nMusculoskeletal and Chest Wall:\n- No acute osseous abnormalities."
+    },
+    {
+      "candidate_id": "candidate-03",
+      "blinded_model_id": "model-03",
+      "report_text": "Findings: Lungs and Airways:\n- No evidence of consolidation or acute airspace disease.\nPleura:\n- No pleural effusion or pneumothorax identified.\nCardiovascular:\n- Normal cardiomediastinal silhouette.\nHila and Mediastinum:\n- Hilar structures appear normal.\nMusculoskeletal and Chest Wall:\n- No acute osseous abnormalities detected."
     }
   ],
   "annotations": {

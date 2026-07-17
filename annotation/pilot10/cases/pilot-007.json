@@ -2,15 +2,15 @@
   "schema_version": "2.0",
   "artifact_type": "clinical_annotation_case",
   "pilot_case_id": "pilot-007",
-  "source_case_sha256": "30d11888c4d3d6a26e1b0f31d4b99c0f0109adfded11a2bc7c88b59a3c53bf88",
-  "modality": "ct",
+  "source_case_sha256": "68fd2853444cfd82dbd1c3605356e6fe85ba6060d865e6a060f8334ebe6626fc",
+  "modality": "cxr",
   "body_part": "abdomen",
-  "reference_report": "检查所见：\n肝脏表面光滑，左右叶比例协调，肝裂不宽，肝右前叶上段见一大约4mmX4mm无强化稍低密度影。肝内外胆管未见明显扩张。胆囊不大，胆囊壁未见明显增厚，囊内未见异常密度影及异常强化灶。胰腺、脾脏、双肾上腺及所示双肾形态及密度未见异常，增强后未见异常强化灶。胃腔充盈可，胃壁未见明显增厚，增强后未见异常强化灶。所示肠管未见梗阻及肿块征象。膀胱充盈良好，膀胱壁未见明显增厚。前列腺形态、大小及密度未见明显异常；膀胱精囊三角显示清晰，未见明显异常。阑尾增粗，管径约9mm,管壁稍增厚，增强后呈较明显强化，管腔内见多枚结节状稍高密度影，大者约5mmX4mm，其周围脂肪间隙内少许絮状影。盆壁未见明显肿大淋巴结。腹膜后及腹腔未见明显肿大淋巴结。盆腔内少许液性密度影。所见骨质未见破坏",
+  "reference_report": "检查所见：\n双侧膈下未见游离气体；中下腹部见气液平面，肠管稍扩张，宽处约2.5cm。结肠未见明显扩张，其内散在气粪影。腰大肌及腹脂线尚清。腰椎居中，未见侧弯。\n诊断印象：\n小肠机械不全性肠梗阻可能，请结合临床随诊。",
   "candidate_reports": [
     {
       "candidate_id": "candidate-01",
       "blinded_model_id": "model-01",
-      "report_text": "liver: liver and biliary tree: normal. kidneys: kidneys and ureters: normal. spleen: spleen: normal."
+      "report_text": "**影像所见：**\n- 腹部立位片显示中下腹部存在气液平面，肠管轻度扩张，最宽处约2.5cm。\n- 结肠未见明显扩张，内可见散在气-粪影。\n- 腰大肌及腹脂线清晰，腰椎排列居中，无侧弯或明显畸形。\n- 双侧膈下未见游离气体，提示无急性穿孔或消化道破裂。\n- 腹部气体分布符合肠蠕动及肠内容物分布，无明显腹腔积液或巨大肿块影。\n---\n**诊断印象：**\n**小肠机械性不全性肠梗阻可能**，建议结合临床症状、实验室检查及必要时进一步影像学检查（如腹部超声或CT）进行综合评估与随诊。\n---"
     }
   ],
   "annotations": {

@@ -2,15 +2,15 @@
   "schema_version": "2.0",
   "artifact_type": "clinical_annotation_case",
   "pilot_case_id": "pilot-001",
-  "source_case_sha256": "724e6a27c0f07d0cae3091bc2bac834b48e15a05378d0d96f6d07c62271fa4e6",
-  "modality": "ct",
+  "source_case_sha256": "acb9e1b20a394735c132b1e33d89a0f44c4dfbfd409faafb47685b908f5d0cee",
+  "modality": "cxr",
   "body_part": "abdomen",
-  "reference_report": "检查所见：\n受患者金属植入物影响，部分层面伪影较重，大致观察如下：肝脏表面光滑，左右叶比例协调，肝裂不宽，见数枚类圆形稍低密度影，较大者大小约2.1cm×1.5cm；肝左叶见片状稍低密度影，增强后呈均匀性强化。肝内外胆管未见明显扩张。胆囊体积稍大，胆囊壁未见明显增厚，囊内未见异常密度影及异常强化灶。胰腺、脾脏、双侧肾上腺及双肾形态、密度未见明显异常，增强后未见异常强化灶。胃腔充盈欠佳，胃壁未见明显增厚，增强后未见异常强化灶；所示直肠及乙状结肠内见粪便影，其近段结肠及小肠肠管见广泛扩张，部分肠管内见长气液平，部分小肠肠管横径达3cm。膀胱充盈欠佳，膀胱壁增厚，增强后未见异常强化灶，膀胱内见一类圆形高密度影，大小约2.1cm×1.8cm；",
+  "reference_report": "检查所见：\n双侧膈下未见游离气体影。腹部结肠内见散在气粪影，未见肠管扩张及胀气征象，内未见气液平面。腰大肌及腹脂线尚清。腰椎居中，未见侧弯。\n诊断印象:\n腹部目前未见明显异常，未见明显肠梗阻及穿孔征象。请结合临床，必要时进一步CT检查。",
   "candidate_reports": [
     {
       "candidate_id": "candidate-01",
       "blinded_model_id": "model-01",
-      "report_text": "liver: liver and biliary tree: normal. kidneys: kidneys and ureters: normal. spleen: spleen: normal."
+      "report_text": "**Findings:**\n- **Diaphragm:** No free air under the diaphragm bilaterally — excludes perforation or acute perforative pathology.\n- **Colon:** Scattered gas and fecal shadows present in the colon; no evidence of bowel distension or pneumatosis.\n- **No air-fluid levels** observed — consistent with absence of obstruction or ileus.\n- **Lumbar spine:** Normal alignment, no scoliosis or vertebral anomalies.\n- **Abdominal fat planes and psoas muscles:** Preserved and well-defined.\n- **Pelvic bones:** Normal contour and alignment.\n---\n**Impression:**\n- **No acute abdominal pathology** identified on standing abdominal CXR.\n- **No signs of bowel obstruction, perforation, or acute ileus.**\n- **No significant abnormalities** detected in the abdomen or pelvis.\n- **Recommendation:** Clinical correlation advised. Consider further imaging (e.g., CT abdomen) if clinical suspicion persists or symptoms evolve.\n---\n*This report is for clinical reference only.*"
     }
   ],
   "annotations": {

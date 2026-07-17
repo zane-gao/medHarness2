@@ -2,15 +2,15 @@
   "schema_version": "2.0",
   "artifact_type": "clinical_annotation_case",
   "pilot_case_id": "pilot-004",
-  "source_case_sha256": "961e454b07d62746e5dbf289b3d729c7583e9e488b232e8c0912601453d9ec75",
-  "modality": "cxr",
+  "source_case_sha256": "695738735a8cb929e3338580c9e8e3573f820ce4937c4d3d18d24775b2f81d9f",
+  "modality": "ct",
   "body_part": "abdomen",
-  "reference_report": "检查所见：\n双侧膈下未见游离气体影。腹部结肠内见散在气粪影，未见肠管扩张及胀气征象，内未见气液平面。腰大肌及腹脂线尚清。腰椎居中，未见侧弯。\n诊断印象:\n腹部目前未见明显异常，未见明显肠梗阻及穿孔征象。请结合临床，必要时进一步CT检查。",
+  "reference_report": "检查所见：\n肝脏表面光滑，左右叶比例协调，肝裂不宽，肝右前叶上段见一大约4mmX4mm无强化稍低密度影。肝内外胆管未见明显扩张。胆囊不大，胆囊壁未见明显增厚，囊内未见异常密度影及异常强化灶。胰腺、脾脏、双肾上腺及所示双肾形态及密度未见异常，增强后未见异常强化灶。胃腔充盈可，胃壁未见明显增厚，增强后未见异常强化灶。所示肠管未见梗阻及肿块征象。膀胱充盈良好，膀胱壁未见明显增厚。前列腺形态、大小及密度未见明显异常；膀胱精囊三角显示清晰，未见明显异常。阑尾增粗，管径约9mm,管壁稍增厚，增强后呈较明显强化，管腔内见多枚结节状稍高密度影，大者约5mmX4mm，其周围脂肪间隙内少许絮状影。盆壁未见明显肿大淋巴结。腹膜后及腹腔未见明显肿大淋巴结。盆腔内少许液性密度影。所见骨质未见破坏",
   "candidate_reports": [
     {
       "candidate_id": "candidate-01",
       "blinded_model_id": "model-01",
-      "report_text": "**Findings:**\n- **Diaphragm:** No free air under the diaphragm bilaterally — excludes perforation or acute perforative pathology.\n- **Colon:** Scattered gas and fecal shadows present in the colon; no evidence of bowel distension or pneumatosis.\n- **No air-fluid levels** observed — consistent with absence of obstruction or ileus.\n- **Lumbar spine:** Normal alignment, no scoliosis or vertebral anomalies.\n- **Abdominal fat planes and psoas muscles:** Preserved and well-defined.\n- **Pelvic bones:** Normal contour and alignment.\n---\n**Impression:**\n- **No acute abdominal pathology** identified on standing abdominal CXR.\n- **No signs of bowel obstruction, perforation, or acute ileus.**\n- **No significant abnormalities** detected in the abdomen or pelvis.\n- **Recommendation:** Clinical correlation advised. Consider further imaging (e.g., CT abdomen) if clinical suspicion persists or symptoms evolve.\n---\n*This report is for clinical reference only.*"
+      "report_text": "liver: liver and biliary tree: normal. kidneys: kidneys and ureters: normal. spleen: spleen: normal."
     }
   ],
   "annotations": {

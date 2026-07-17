@@ -2,15 +2,15 @@
   "schema_version": "2.0",
   "artifact_type": "clinical_annotation_case",
   "pilot_case_id": "pilot-010",
-  "source_case_sha256": "dd21ba02f72f180a223f5018abc0888be648c4ad92bd33dd78e992dc0fee2e36",
-  "modality": "cxr",
+  "source_case_sha256": "913ecb21ac3f198e5eec11e0ecd6cf0ed269f95ce9fb21acb830204853823098",
+  "modality": "ct",
   "body_part": "abdomen",
-  "reference_report": "检查所见：\n双侧膈下未见游离气体；中下腹部见气液平面，肠管稍扩张，宽处约2.5cm。结肠未见明显扩张，其内散在气粪影。腰大肌及腹脂线尚清。腰椎居中，未见侧弯。\n诊断印象：\n小肠机械不全性肠梗阻可能，请结合临床随诊。",
+  "reference_report": "检查所见：\n肝脏表面光滑，左右叶比例协调，肝裂不宽，肝实质密度均匀，未见局限性异常密度影。肝内外胆管未见明显扩张。胆囊不大，胆囊壁未见明显增厚，囊内未见异常密度影。胰腺形态尚可，胰腺钩突部周围脂肪间隙稍模糊、可见少许絮状影。脾脏、双肾上腺及所示双肾形态及密度未见异常。胃腔未见充盈，胃壁未见明显增厚。所示肠管未见梗阻及肿块征象。腹膜后及腹腔未见明显肿大淋巴结。骨质未见破坏。\n诊断印象:\n胰腺钩突部周围脂肪间隙稍模糊、可见渗出影，考虑急性胰腺炎。请结合临床。",
   "candidate_reports": [
     {
       "candidate_id": "candidate-01",
       "blinded_model_id": "model-01",
-      "report_text": "**影像所见：**\n- 腹部立位片显示中下腹部存在气液平面，肠管轻度扩张，最宽处约2.5cm。\n- 结肠未见明显扩张，内可见散在气-粪影。\n- 腰大肌及腹脂线清晰，腰椎排列居中，无侧弯或明显畸形。\n- 双侧膈下未见游离气体，提示无急性穿孔或消化道破裂。\n- 腹部气体分布符合肠蠕动及肠内容物分布，无明显腹腔积液或巨大肿块影。\n---\n**诊断印象：**\n**小肠机械性不全性肠梗阻可能**，建议结合临床症状、实验室检查及必要时进一步影像学检查（如腹部超声或CT）进行综合评估与随诊。\n---"
+      "report_text": "liver: liver and biliary tree: the liver is normal in size. there are scattered subcentimeter hypodensities throughout both lobes of the liver, which likely represent cysts or hamartomas (series 4/image 102). no intrahepatic or extra hepatic ductal dilatation. kidneys: kidneys and ureters: there is a 1.2 cm hypodense lesion in the interpolar region of the right kidney (series 4, image 90) which demonstrates peripheral nodular enhancement on delayed phase imaging consistent with an angiomyolipoma. no hydronephrosis or nephroureterolithiasis. spleen: spleen: normal."
     }
   ],
   "annotations": {

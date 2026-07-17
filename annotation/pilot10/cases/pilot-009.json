@@ -2,15 +2,15 @@
   "schema_version": "2.0",
   "artifact_type": "clinical_annotation_case",
   "pilot_case_id": "pilot-009",
-  "source_case_sha256": "cb10818b0a48c0b22de8450e5dc3940c37a5b0db72c96ccd81ac8ed690160532",
-  "modality": "ct",
-  "body_part": "head",
-  "reference_report": "检查所见：\n双侧大脑半球对称，灰白质对比正常，脑实质内未见异常密度影及占位性病变；脑室系统形态、大小未见异常；双侧脑沟对称，未见增宽。中线结构居中。双侧鼻骨形态欠自然，骨皮质不连续，边缘变钝。左侧眼眶内侧壁局部骨质缺损，部分眼眶内容物疝入左侧筛窦。双侧筛窦及上颌窦黏膜增厚；鼻中隔稍偏曲。\n诊断印象：\n颅内CT平扫未见明显异常。双侧鼻骨形态欠自然，骨皮质不连续，边缘变钝，多系陈旧性骨折改变，请结合临床病史。扫及左侧眼眶内侧壁脂肪疝。双侧筛窦及上颌窦黏膜增厚；鼻中隔稍偏曲。",
+  "source_case_sha256": "acae9a57f0b5eda27e9fe57df924b68bdc27299dec00f25ad9954b1f431c0dde",
+  "modality": "mri",
+  "body_part": "brain",
+  "reference_report": "检查所见：\n双侧大脑、小脑半球对称，脑灰白质分界清楚，颅内脑质内未见信号改变；中线结构居中，脑室、脑池系统大小、形态未见异常；脑沟、脑裂不宽，脑干未见信号异常改变；蝶鞍不大，内垂体未见形态及信号异常改变；双侧眼球大小及位置亦无特殊，头皮软组织未见形态及信号异常改变。扫及左侧筛窦内层状、结节状T2WI高信号影。\n诊断印象:\n颅脑MRI平扫未见明显异常。扫及左侧筛窦炎。",
   "candidate_reports": [
     {
       "candidate_id": "candidate-01",
       "blinded_model_id": "model-01",
-      "report_text": "**CT检查报告单**\n**姓名**：付小海\n**性别**：男\n**年龄**：56岁\n**影像号**：CT00020232\n**检查时间**：[REDACTED_DATE]\n**检查部位**：颅脑CT平扫、CT薄层扫描\n**检查项目**：颅脑CT平扫、CT薄层扫描\n---\n**检查所见**：\n- **颅脑结构**：双侧大脑半球对称，灰白质对比正常，脑实质内未见异常密度影或占位性病变；脑室系统形态、大小未见异常；双侧脑沟对称，未见增宽；中线结构居中。\n- **鼻部及眼眶**：双侧鼻骨形态欠自然，骨皮质不连续，边缘变钝，提示多系陈旧性骨折改变；左侧眼眶内侧壁局部骨质缺损，伴脂肪疝入左侧筛窦。\n- **鼻窦**：双侧筛窦及上颌窦黏膜增厚；鼻中隔稍偏曲。\n- **颅骨**：颅骨骨质整体未见明显骨折或异常密度影；仅在部分层面可见骨质边缘轻度不规则，与鼻骨改变一致。\n- **特殊影像**：最下排图像显示颅骨内侧结构（如脑实质）呈低密度，符合正常脑组织表现；右下角图像为骨窗或特殊重建图像，显示颅骨结构清晰，未见明显病变。\n---\n**诊断印象**：\n1. **颅脑CT平扫未见明显异常**，脑实质、脑室、脑沟、中线结构均正常。\n2. **双侧鼻骨形态欠自然，骨皮"
+      "report_text": "Findings: The brain MRI shows a large area of edema centered in the right frontal lobe, extending into parts of the parietal and temporal lobes. The white matter is diffusely hypointense with interspersed regions of both increased signal intensity as well as normal appearing tissue within these areas. Edema appears to be primarily concentrated around the junction between the frontal and parietal lobes on the right side. Ventricular compression is evident due to surrounding edematous changes affecting adjacent structures but not yet showing signs of collapse or shift. No focal lesions are identified."
     }
   ],
   "annotations": {

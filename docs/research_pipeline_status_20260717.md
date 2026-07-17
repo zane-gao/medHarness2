@@ -3,10 +3,10 @@
 ## 已完成的准备工作
 
 - 从当前 52 例运行产物确定性筛选出 10 例，覆盖 `cxr`、`ct`、`mri` 三类模态。
-- 生成盲化医生标注包：`outputs/annotation/pilot10_20260717/`。
+- 生成盲化医生标注包：`annotation/pilot10/`。
 - 标注包包含 `reader_a`、`reader_b`、`adjudication` 三个槽位，初始均为 `not_started`。
 - 模型身份映射隔离于 `internal/model_blinding_map.json`，不进入读者包。
-- 生成 OCR/论文实验 manifest：`outputs/research/20260717/`。
+- 生成 OCR/论文实验 manifest：`outputs/research/20260717/`（本地 outputs/ 产物，被忽略规则排除；可用命令重建）。
 
 ## 当前证据状态
 

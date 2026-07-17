@@ -5,7 +5,7 @@
 本轮从 52 例运行产物中确定性筛出 10 例，覆盖 `cxr`、`ct`、`mri`：
 
 ```text
-outputs/annotation/pilot10_20260717/
+annotation/pilot10/
 ```
 
 包内每个病例都包含：
@@ -19,7 +19,7 @@ outputs/annotation/pilot10_20260717/
 
 ## 标注流程
 
-1. 将整个 `outputs/annotation/pilot10_20260717/` 复制到 reader A 和 reader B 各自隔离的工作目录；
+1. 将整个 `annotation/pilot10/` 复制到 reader A 和 reader B 各自隔离的工作目录；
 2. 两位 reader 独立填写各自槽位，不查看另一位 reader 的文件，不修改候选顺序；
 3. 两位 reader 都完成后，项目管理员合并到 adjudication 工作目录；
 4. 只有两位 reader 都是 `complete` 后，才允许填写 `adjudication`；
@@ -28,7 +28,7 @@ outputs/annotation/pilot10_20260717/
 ```bash
 PYTHONPATH=src .venv/bin/python -m medharness2.cli \
   annotation validate \
-  --package-dir outputs/annotation/pilot10_20260717
+  --package-dir annotation/pilot10
 ```
 
 当前预期结果是 `status=not_started`、`case_count=10`；完成真实标注后才会变为 `in_progress` 或 `complete`。
@@ -45,7 +45,7 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
 研究 manifest 位于：
 
 ```text
-outputs/research/20260717/
+outputs/research/20260717/（本地 outputs/ 产物，被忽略规则排除；可用命令重建）
 ```
 
 重新生成命令：
@@ -53,7 +53,7 @@ outputs/research/20260717/
 ```bash
 PYTHONPATH=src .venv/bin/python -m medharness2.cli \
   research prepare-manifests \
-  --pilot-dir outputs/annotation/pilot10_20260717 \
+  --pilot-dir annotation/pilot10 \
   --output-dir outputs/research/20260717
 ```
 

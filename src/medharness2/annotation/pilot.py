@@ -25,6 +25,14 @@ def build_pilot_annotation_package(
     output = Path(output_dir)
     if not root.is_dir():
         raise ValueError("run_dir_not_found")
+
+    # Resolve and validate the source selection before touching an existing
+    # package.  A malformed source run must never delete an older, still
+    # usable annotation package as a side effect of a failed rebuild.
+    selected = _stratified_cases(_load_case_payloads(root), limit=limit)
+    if not selected:
+        raise ValueError("no_cases_discovered")
+
     cases_dir = output / "cases"
     cases_dir.mkdir(parents=True, exist_ok=True)
     for stale in cases_dir.glob("*.json"):
@@ -39,30 +47,53 @@ def build_pilot_annotation_package(
             )
         stale.unlink()
     policy = ExternalPayloadPolicy()
-    selected = _stratified_cases(_load_case_payloads(root), limit=limit)
-    if not selected:
-        raise ValueError("no_cases_discovered")
     manifest_rows = []
     internal_maps: list[dict[str, Any]] = []
     for index, (source_case_id, payload) in enumerate(selected, start=1):
         pilot_case_id = f"pilot-{index:03d}"
-        input_payload = dict(payload.get("input") or {})
+        input_payload = _input_payload(payload, case_id=source_case_id)
         reference_text = _reference_report(root, input_payload, payload, policy, case_id=source_case_id)
+        raw_generated_reports = payload.get("generated_reports")
+        if not isinstance(raw_generated_reports, list):
+            raise ValueError(f"case {source_case_id} generated_reports must be a list of objects")
+        if not raw_generated_reports:
+            raise ValueError(f"case {source_case_id} has no generated_reports for annotation")
+        candidate_items: list[dict[str, Any]] = []
+        for candidate_index, item in enumerate(raw_generated_reports, start=1):
+            if not isinstance(item, dict):
+                raise ValueError(
+                    f"case {source_case_id} generated_reports[{candidate_index - 1}] must be an object"
+                )
+            report = item.get("report")
+            if not isinstance(report, str) or not report.strip():
+                raise ValueError(
+                    f"case {source_case_id} generated_reports[{candidate_index - 1}].report must be a non-empty string"
+                )
+            # Model/source are part of the private blinding map.  Keep their
+            # types strict so malformed JSON cannot be stringified into a
+            # seemingly valid identity.
+            for field in ("model", "source"):
+                value = item.get(field)
+                if value is not None and not isinstance(value, str):
+                    raise ValueError(
+                        f"case {source_case_id} generated_reports[{candidate_index - 1}].{field} must be a string"
+                    )
+            candidate_items.append(item)
         candidates = [
             CandidateReportForAnnotation(
                 candidate_id=f"candidate-{candidate_index:02d}",
                 blinded_model_id=f"model-{candidate_index:02d}",
-                report_text=policy.deidentify_clinical_text(str(item.get("report") or "")),
+                report_text=policy.deidentify_clinical_text(item["report"]),
             )
-            for candidate_index, item in enumerate(payload.get("generated_reports") or [], start=1)
+            for candidate_index, item in enumerate(candidate_items, start=1)
         ]
-        if not candidates:
-            raise ValueError(f"case {source_case_id} has no generated_reports for annotation")
+        modality = normalize_modality(input_payload.get("modality"))
+        body_part = _body_part(input_payload.get("body_part"))
         annotation_case = AnnotationCase(
             pilot_case_id=pilot_case_id,
             source_case_sha256=_source_case_sha256(payload),
-            modality=str(input_payload.get("modality") or "unknown"),
-            body_part=str(input_payload.get("body_part") or "unknown"),
+            modality=modality,
+            body_part=body_part,
             reference_report=reference_text,
             candidate_reports=candidates,
             annotations={
@@ -101,7 +132,7 @@ def build_pilot_annotation_package(
                         "source_model": str(item.get("model") or "unknown"),
                         "source": str(item.get("source") or "unknown"),
                     }
-                    for candidate, item in zip(candidates, payload.get("generated_reports") or [])
+                    for candidate, item in zip(candidates, candidate_items)
                 ],
             }
         )
@@ -321,6 +352,29 @@ def _annotation_status(statuses: dict[str, str]) -> str:
     if any(status != "not_started" for status in statuses.values()):
         return "in_progress"
     return "not_started"
+
+
+def _input_payload(case_payload: dict[str, Any], *, case_id: str) -> dict[str, Any]:
+    """Return a validated shallow copy of the source input block.
+
+    Annotation preparation consumes the input metadata as a routing boundary;
+    silently treating a missing/non-object block as an empty dict would turn a
+    malformed source case into an apparently valid ``unknown`` case.
+    """
+    raw_input = case_payload.get("input")
+    if not isinstance(raw_input, dict):
+        raise ValueError(f"case {case_id} input must be an object")
+    return dict(raw_input)
+
+
+def _body_part(value: Any) -> str:
+    """Normalize the optional body-part label without imposing a hard route."""
+    if value is None:
+        return "unknown"
+    if not isinstance(value, str):
+        value = str(value)
+    normalized = " ".join(value.strip().lower().split())
+    return normalized or "unknown"
 
 
 def _load_case_payloads(root: Path) -> list[tuple[str, dict[str, Any]]]:
