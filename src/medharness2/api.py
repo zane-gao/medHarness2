@@ -41,6 +41,28 @@ def _count_or_zero(value: Any, label: str) -> int:
     return value
 
 
+def _result_mapping(value: Any, label: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
+def _result_string_list(value: Any, label: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{label} must be a list of strings")
+    return value
+
+
+def _result_bool(value: Any, label: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{label} must be a boolean")
+    return value
+
+
 class SingleCaseRequest(BaseModel):
     case_id: str | None = None
     report_text: str | None = None
@@ -500,6 +522,15 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
                 force_ocr=request.force_ocr,
                 expected_cases=request.expected_cases,
             )
+        result = _result_mapping(result, "sample_full.result")
+        result_summary = _result_mapping(result.get("summary"), "sample_full.summary")
+        result_paths = _result_mapping(result.get("paths"), "sample_full.paths")
+        if request.dry_run:
+            _result_string_list(result.get("errors"), "sample_full.errors")
+        else:
+            result_validation = _result_mapping(result.get("validation"), "sample_full.validation")
+            _result_bool(result_validation.get("passed"), "sample_full.validation.passed")
+            _result_string_list(result_validation.get("errors"), "sample_full.validation.errors")
     except Exception as exc:
         stage = "workflow.sample-full.dry-run" if request.dry_run else "workflow.sample-full"
         _record_registry(
@@ -513,13 +544,13 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
         )
         raise HTTPException(status_code=500, detail=f"sample_full_failed:{type(exc).__name__}") from exc
     if request.dry_run:
-        summary = {"dry_run": True, **result["summary"], "errors": list(result.get("errors") or [])}
+        summary = {"dry_run": True, **result_summary, "errors": _result_string_list(result.get("errors"), "sample_full.errors")}
         _record_registry(
             request.output_dir,
             stage="workflow.sample-full.dry-run",
             status="passed" if summary.get("case_count") and not summary.get("errors") else "failed",
             inputs={"sample_root": request.sample_root, "limit": request.limit, "models": model_keys or []},
-            outputs=result.get("paths") or {"route_plan": str(Path(request.output_dir) / "route_plan.json")},
+            outputs=result_paths or {"route_plan": str(Path(request.output_dir) / "route_plan.json")},
             metrics=summary,
             warnings=list(summary.get("errors") or []),
         )
@@ -528,23 +559,23 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
             "summary": summary,
             "result": result,
         }
-    validation = dict(result.get("validation") or {})
+    validation = _result_mapping(result.get("validation"), "sample_full.validation")
     _record_registry(
         request.output_dir,
         stage="workflow.sample-full",
         status="passed" if validation.get("passed") else "failed",
         inputs={"sample_root": request.sample_root, "limit": request.limit, "models": model_keys or []},
-        outputs=dict(result.get("paths") or {}),
-        metrics={**dict(result.get("summary") or {}), "validation_passed": bool(validation.get("passed"))},
-        warnings=list(validation.get("errors") or []),
+        outputs=result_paths,
+        metrics={**result_summary, "validation_passed": _result_bool(validation.get("passed"), "sample_full.validation.passed")},
+        warnings=_result_string_list(validation.get("errors"), "sample_full.validation.errors"),
     )
     return {
         "output_dir": request.output_dir,
         "summary": {
-            **result["summary"],
-            "validation_passed": result["validation"]["passed"],
-            "validation_errors": result["validation"]["errors"],
-            "errors": list(result["validation"].get("errors") or []),
+            **result_summary,
+            "validation_passed": _result_bool(validation.get("passed"), "sample_full.validation.passed"),
+            "validation_errors": _result_string_list(validation.get("errors"), "sample_full.validation.errors"),
+            "errors": _result_string_list(validation.get("errors"), "sample_full.validation.errors"),
         },
         "result": result,
     }
@@ -725,6 +756,9 @@ def validate_run(request: ValidateRunRequest) -> dict[str, Any]:
             require_real_ocr=request.require_real_ocr,
             require_workflows=request.require_workflows,
         )
+        result = _result_mapping(result, "validate_run.result")
+        passed = _result_bool(result.get("passed"), "validate_run.passed")
+        errors = _result_string_list(result.get("errors"), "validate_run.errors")
     except Exception as exc:
         _record_registry(
             request.output_dir,
@@ -739,13 +773,13 @@ def validate_run(request: ValidateRunRequest) -> dict[str, Any]:
     _record_registry(
         request.output_dir,
         stage="workflow.validate-run",
-        status="passed" if result.get("passed") else "failed",
+        status="passed" if passed else "failed",
         inputs={"output_dir": request.output_dir, "expected_cases": request.expected_cases},
         outputs={"validation": str(Path(request.output_dir) / "run_summary.json")},
-        metrics={"passed": bool(result.get("passed")), "error_count": len(result.get("errors") or [])},
-        warnings=list(result.get("errors") or []),
+        metrics={"passed": passed, "error_count": len(errors)},
+        warnings=errors,
     )
-    return {"summary": {"passed": result["passed"], "errors": result["errors"]}, "result": result}
+    return {"summary": {"passed": passed, "errors": errors}, "result": result}
 
 
 @app.post("/workflow/preflight")
@@ -762,6 +796,13 @@ def preflight(request: PreflightRequest) -> dict[str, Any]:
             model_keys=model_keys,
             model_sources=request.model_sources,
         )
+        result = _result_mapping(result, "preflight.result")
+        paths = _result_mapping(result.get("paths"), "preflight.paths")
+        sample = _result_mapping(result.get("sample"), "preflight.sample")
+        passed = _result_bool(result.get("passed"), "preflight.passed")
+        blockers = _result_string_list(result.get("blockers"), "preflight.blockers")
+        warnings = _result_string_list(result.get("warnings"), "preflight.warnings")
+        case_count = _count_or_zero(sample.get("case_count"), "case_count")
     except Exception as exc:
         _record_registry(
             Path(request.output_path).parent,
@@ -776,20 +817,20 @@ def preflight(request: PreflightRequest) -> dict[str, Any]:
     _record_registry(
         Path(request.output_path).parent,
         stage="workflow.preflight",
-        status="passed" if result.get("passed") else "failed",
+        status="passed" if passed else "failed",
         inputs={"sample_root": request.sample_root, "expected_cases": request.limit},
-        outputs={"preflight": request.output_path, "route_plan": str(result.get("paths", {}).get("route_plan") or "")},
-        metrics={"passed": bool(result.get("passed")), "case_count": _count_or_zero(result.get("sample", {}).get("case_count"), "case_count"), "blocker_count": len(result.get("blockers") or [])},
-        warnings=list(result.get("blockers") or []),
+        outputs={"preflight": request.output_path, "route_plan": str(paths.get("route_plan") or "")},
+        metrics={"passed": passed, "case_count": case_count, "blocker_count": len(blockers)},
+        warnings=blockers,
     )
     return {
         "output_path": request.output_path,
         "summary": {
-            "passed": result["passed"],
-            "blockers": result["blockers"],
-            "warnings": result["warnings"],
-            "cases": result["sample"]["case_count"],
-            "errors": list(result.get("blockers") or []),
+            "passed": passed,
+            "blockers": blockers,
+            "warnings": warnings,
+            "cases": case_count,
+            "errors": blockers,
         },
         "result": result,
     }

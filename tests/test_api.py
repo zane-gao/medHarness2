@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import medharness2.api as api_module
-from medharness2.api import _count_or_zero, app
+from medharness2.api import _count_or_zero, _result_bool, _result_mapping, _result_string_list, app
 
 
 def test_api_registry_counts_reject_invalid_values():
@@ -16,6 +16,68 @@ def test_api_registry_counts_reject_invalid_values():
     for bad in (True, 1.5, -1, "2"):
         with pytest.raises(ValueError, match="count"):
             _count_or_zero(bad, "count")
+
+
+@pytest.mark.parametrize("bad", ["bad", [], ["x"], 7, True])
+def test_api_result_mapping_rejects_malformed_values(bad):
+    with pytest.raises(ValueError, match="payload"):
+        _result_mapping(bad, "payload")
+
+
+@pytest.mark.parametrize("bad", ["bad", {}, [1], 7, True])
+def test_api_result_string_list_rejects_malformed_values(bad):
+    with pytest.raises(ValueError, match="warnings"):
+        _result_string_list(bad, "warnings")
+
+
+@pytest.mark.parametrize("bad", ["true", 1, 0, [], {}])
+def test_api_result_bool_rejects_implicit_coercion(bad):
+    with pytest.raises(ValueError, match="passed"):
+        _result_bool(bad, "passed")
+
+
+@pytest.mark.parametrize(
+    ("route", "payload", "function_name", "malformed", "detail_prefix"),
+    [
+        (
+            "/workflow/sample-full",
+            {"sample_root": "samples", "output_dir": "sample-full"},
+            "run_sample_full",
+            {"summary": "bad", "paths": {}, "validation": {}},
+            "sample_full_failed",
+        ),
+        (
+            "/workflow/validate-run",
+            {"output_dir": "validate"},
+            "validate_sample_run",
+            {"passed": "true", "errors": []},
+            "validate_run_failed",
+        ),
+        (
+            "/workflow/preflight",
+            {"sample_root": "samples", "output_path": "preflight.json"},
+            "run_sample_preflight",
+            {"paths": {}, "sample": {}, "passed": 1, "blockers": [], "warnings": []},
+            "preflight_failed",
+        ),
+    ],
+)
+def test_api_rejects_malformed_workflow_results(
+    tmp_path: Path, monkeypatch, route, payload, function_name, malformed, detail_prefix
+):
+    payload = {
+        key: str(tmp_path / value) if key in {"output_dir", "output_path"} else value
+        for key, value in payload.items()
+    }
+    monkeypatch.setattr(api_module, function_name, lambda *args, **kwargs: malformed)
+    response = TestClient(app, raise_server_exceptions=False).post(route, json=payload)
+    assert response.status_code == 500
+    assert response.json()["detail"] == f"{detail_prefix}:ValueError"
+    registry_dir = Path(payload.get("output_dir") or payload["output_path"])
+    if route == "/workflow/preflight":
+        registry_dir = registry_dir.parent
+    registry = json.loads((registry_dir / "run_registry.json").read_text(encoding="utf-8"))
+    assert registry["entries"][-1]["status"] == "failed"
 
 
 def test_api_single_case_accepts_report_text(tmp_path: Path):

@@ -5,9 +5,9 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: pending-education-output-hardening
+  git_sha: pending-api-result-structure-gate
   dirty_worktree: false
-  pytest_passed: 1342
+  pytest_passed: 1360
   pytest_warnings: 20
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
