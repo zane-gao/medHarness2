@@ -365,7 +365,12 @@ def _modality_recognition(run_summary: dict[str, Any], workflow2: dict[str, Any]
 
 def _case_payloads(root: Path, workflow2: dict[str, Any]) -> list[dict[str, Any]]:
     payloads = []
-    for case in workflow2.get("cases") or []:
+    raw_cases = workflow2.get("cases")
+    if raw_cases is None:
+        raw_cases = []
+    if not isinstance(raw_cases, list) or any(not isinstance(case, dict) for case in raw_cases):
+        raise ValueError("workflow2.cases must be a list of objects")
+    for case in raw_cases:
         path = Path(str(case.get("workflow1_output") or ""))
         candidates = [path] if path.is_absolute() else [root / path, path]
         for candidate in candidates:

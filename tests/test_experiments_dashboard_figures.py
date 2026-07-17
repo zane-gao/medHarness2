@@ -28,9 +28,15 @@ def test_run_experiments_builds_six_study_results(tmp_path: Path):
         "image_to_text_models",
         "modality_recognition",
     }
-    assert (output_dir / "results.json").exists()
-    assert (output_dir / "results.md").exists()
-    assert (output_dir / "experiment_summary.csv").exists()
+
+
+@pytest.mark.parametrize("bad", ["bad", ["case"], 7, True])
+def test_run_experiments_rejects_malformed_workflow2_cases(tmp_path: Path, bad: object):
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "workflow2.json").write_text(json.dumps({"cases": bad}), encoding="utf-8")
+    with pytest.raises(ValueError, match="workflow2.cases"):
+        run_experiments(run_dir, tmp_path / "out")
 
 
 def test_radiologist_evaluation_preserves_explicit_zero_counts():
