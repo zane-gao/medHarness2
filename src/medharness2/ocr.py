@@ -54,6 +54,12 @@ def extract_report_text(
     verifier_provider = str(effective_verifier_options.get("provider") or "").lower()
     verifier_model = str(effective_verifier_options.get("model") or "")
     verifier_role = "ocr_verifier" if verifier_route is not None or verifier_options else ""
+    # A configured verifier is an explicit quality-control requirement.  Do
+    # not emit a seemingly passed artifact when the caller forgot to provide
+    # the client that can perform that audit.  This remains opt-in: no route
+    # or options means the historical primary-only OCR path is unchanged.
+    verifier_requested = verifier_route is not None or bool(verifier_options)
+    verifier_missing = verifier_requested and verifier_client is None
     pdf = Path(report_pdf)
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -90,6 +96,8 @@ def extract_report_text(
             )
 
     warnings: list[str] = []
+    if verifier_missing:
+        warnings.append("ocr_verifier_client_missing")
     quality_audit: dict[str, Any] | None = None
     direct_text = _extract_pdf_text(pdf)
     if len(direct_text.strip()) >= min_direct_chars:
@@ -212,7 +220,12 @@ def extract_report_text(
     if method == "pdf_text_layer":
         page_meta = []
         retained_page_count = 0
-    quality_status = _ocr_quality_status(warnings, quality_audit, text)
+    quality_status = _ocr_quality_status(
+        warnings,
+        quality_audit,
+        text,
+        verifier_missing=verifier_missing,
+    )
     if quality_status == "blocked":
         warnings.append("ocr_quality_blocked")
     elif quality_status == "review_required":
@@ -678,7 +691,11 @@ def _looks_truncated(text: str) -> bool:
 
 
 def _ocr_quality_status(
-    warnings: list[str], quality_audit: dict[str, Any] | None, text: str,
+    warnings: list[str],
+    quality_audit: dict[str, Any] | None,
+    text: str,
+    *,
+    verifier_missing: bool = False,
 ) -> str:
     """Classify OCR evidence without silently upgrading weak text to usable input."""
     warning_set = {str(item) for item in warnings}
@@ -686,6 +703,8 @@ def _ocr_quality_status(
         item.startswith("ocr_possible_truncation") for item in warning_set
     ):
         return "blocked"
+    if verifier_missing or "ocr_verifier_client_missing" in warning_set:
+        return "review_required"
     audit_statuses: list[str] = []
     if isinstance(quality_audit, dict):
         pages = quality_audit.get("pages")

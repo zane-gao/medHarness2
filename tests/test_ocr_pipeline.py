@@ -557,6 +557,37 @@ def test_ocr_verifier_failure_does_not_fail_primary_ocr(tmp_path: Path):
     assert meta["quality_audit"]["status"] == "verifier_failed"
 
 
+def test_configured_ocr_verifier_without_client_requires_review(tmp_path: Path):
+    pdf = tmp_path / "report.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+
+    result = extract_report_text(
+        pdf,
+        case_id="case-missing-verifier-client",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(
+            llm=LLMConfig(provider="openai", model="ocr-v1"),
+            model_roles={
+                "ocr_verifier": ModelRoleConfig(
+                    provider="chat_completions", model="verifier-v1"
+                )
+            },
+        ),
+        llm_client=PageOCRClient(),
+        # The route is configured, but no verifier client is wired by caller.
+    )
+
+    assert result.text.startswith("FINDINGS: page 1")
+    assert "ocr_verifier_client_missing" in result.warnings
+    assert result.metadata["quality_status"] == "review_required"
+    meta = json.loads((tmp_path / "ocr" / "case-missing-verifier-client.ocr.json").read_text(encoding="utf-8"))
+    assert meta["quality_status"] == "review_required"
+    assert meta["verifier"]["configured"] is False
+
+
 @pytest.mark.parametrize("response", [None, [], "not-json"])
 def test_ocr_verifier_invalid_response_is_audit_warning(tmp_path: Path, response):
     pdf = tmp_path / "report.pdf"
