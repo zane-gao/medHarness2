@@ -577,6 +577,7 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
   </div>
   <div class="card" id="ws-map" style="margin-bottom:14px"></div>
   <div class="card" id="gate-matrix" style="margin-bottom:14px"></div>
+  <div class="card" id="paper-gate-card" style="margin-bottom:14px"></div>
   <div class="card" id="pilot10-card"></div>
 </section>
 
@@ -1105,8 +1106,8 @@ document.getElementById("gate-table").innerHTML = `
    ============================================================ */
 (function renderMap(){
   const sec = document.getElementById("map");
-  const WS = DATA.workstreams, EG = DATA.experiment_gates, P10 = DATA.pilot10;
-  if (!WS && !EG && !P10) { sec.style.display = "none"; return; }
+  const WS = DATA.workstreams, EG = DATA.experiment_gates, P10 = DATA.pilot10, PG = DATA.paper_evidence_gate;
+  if (!WS && !EG && !P10 && !PG) { sec.style.display = "none"; return; }
 
   /* --- 九条战线 --- */
   if (WS && WS.workstreams) {
@@ -1206,6 +1207,17 @@ document.getElementById("gate-table").innerHTML = `
       <div class="honest-note" style="margin-top:12px">💡 <b>怎么读这张表：</b>文本 benchmark gold 已登记；「临床 reader 校准」相关门禁仍由下方 pilot10 的双读与仲裁进度决定。0/10 只表示临床校准尚未开始，不影响北川文本 gold 作为当前工程 benchmark 输入。</div>`;
   } else {
     document.getElementById("gate-matrix").style.display = "none";
+  }
+
+  if (PG) {
+    const labels = {clinical_reader_annotation:"真实医生双读与仲裁", ocr_winner:"OCR 双重复与 winner 冻结", formal_experiments:"六项正式实验"};
+    const ok = PG.status === "passed";
+    document.getElementById("paper-gate-card").innerHTML = `
+      <h4 style="margin:0 0 4px">论文总证据门禁：<span class="badge ${ok ? "h-good" : "h-bad"}">${ok ? "已通过" : "blocked"}</span></h4>
+      <p class="note" style="font-size:12.5px;color:var(--ink-3)">只有三类独立证据同时通过，才允许写入 formal claim。</p>
+      <div style="font-size:12.5px;color:var(--ink-2)">${(PG.checks || []).map(item => `${item.passed ? "✓" : "✕"} ${labels[item.id] || item.id}：<b>${item.passed ? "通过" : "阻断"}</b>`).join("　·　")}</div>`;
+  } else {
+    document.getElementById("paper-gate-card").style.display = "none";
   }
 
   /* --- pilot10 标注进度 --- */

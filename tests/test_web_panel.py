@@ -35,6 +35,21 @@ def test_extract_git_state_ignores_panel_output_itself(monkeypatch):
     assert state["dirty"] is False
 
 
+def test_extract_paper_gate_is_blocked_when_external_evidence_is_missing(tmp_path):
+    gate = build_panel.extract_paper_evidence_gate(
+        research_dir=tmp_path / "research",
+        annotation_dir=tmp_path / "annotation",
+        experiment_results=tmp_path / "experiments.json",
+    )
+    assert gate["status"] == "blocked"
+    assert gate["formal_claim_allowed"] is False
+    assert {item["id"] for item in gate["checks"]} == {
+        "clinical_reader_annotation",
+        "ocr_winner",
+        "formal_experiments",
+    }
+
+
 def test_dashboard_summary_preserves_explicit_zero_counts():
     summary = summarize_dashboard_payload(
         {

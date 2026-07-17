@@ -519,6 +519,68 @@ def extract_experiment_gates(path: Path) -> dict | None:
     return {"run_dir": d.get("run_dir"), "experiments": experiments}
 
 
+def extract_paper_evidence_gate(
+    research_dir: Path,
+    annotation_dir: Path,
+    experiment_results: Path,
+) -> dict:
+    """Expose the unified paper gate without turning missing files into passes."""
+    checks = []
+    annotation_result = annotation_dir / "pilot_annotation_analysis.json"
+    if annotation_result.exists():
+        try:
+            payload = read_json(annotation_result)
+        except (OSError, UnicodeError, ValueError):
+            payload = {}
+    else:
+        payload = {}
+    case_count = payload.get("case_count")
+    complete_count = payload.get("complete_case_count")
+    reader_passed = (
+        payload.get("status") == "complete"
+        and isinstance(case_count, int)
+        and isinstance(complete_count, int)
+        and case_count > 0
+        and complete_count == case_count
+    )
+    checks.append({"id": "clinical_reader_annotation", "passed": reader_passed,
+                   "reason": "complete_double_read_and_adjudication" if reader_passed else "annotation_analysis_missing_or_incomplete"})
+
+    ocr_path = research_dir / "ocr_manifest.json"
+    try:
+        ocr = read_json(ocr_path)
+    except (OSError, UnicodeError, ValueError):
+        ocr = {}
+    benchmark_results = ocr.get("benchmark_results")
+    ocr_passed = (
+        ocr.get("status") == "succeeded"
+        and ocr.get("winner_status") in {"validated", "frozen"}
+        and isinstance(benchmark_results, dict)
+        and set(benchmark_results) >= {"1", "2"}
+        and all(isinstance(item, dict) and item.get("status") == "succeeded" for item in benchmark_results.values())
+    )
+    checks.append({"id": "ocr_winner", "passed": ocr_passed,
+                   "reason": "validated_two_repeat_winner" if ocr_passed else "ocr_winner_missing_or_not_frozen"})
+
+    try:
+        experiments = read_json(experiment_results)
+    except (OSError, UnicodeError, ValueError):
+        experiments = {}
+    experiment_rows = experiments.get("experiments")
+    experiments_passed = isinstance(experiment_rows, list) and bool(experiment_rows) and all(
+        isinstance(item, dict) and item.get("status") == "validated" for item in experiment_rows
+    )
+    checks.append({"id": "formal_experiments", "passed": experiments_passed,
+                   "reason": "all_protocols_validated" if experiments_passed else "one_or_more_protocols_not_validated"})
+    passed = all(item["passed"] for item in checks)
+    return {
+        "status": "passed" if passed else "blocked",
+        "formal_claim_allowed": passed,
+        "checks": checks,
+        "source": {"research_dir": str(research_dir), "annotation_analysis": str(annotation_result), "experiment_results": str(experiment_results)},
+    }
+
+
 def extract_stability(eval_dir: Path) -> dict | None:
     """重测稳定性：同一批病例新旧两轮 LLM 评估的一致率量化。"""
     path = eval_dir / "analysis_v1" / "stability_summary.json"
@@ -818,6 +880,11 @@ def build_data(run_dir: Path) -> dict:
         "stability": extract_stability(SMOKE_EVAL_DIR),
         "workstreams": extract_workstreams(STATUS_YAML),
         "experiment_gates": extract_experiment_gates(EXPERIMENTS_RESULTS),
+        "paper_evidence_gate": extract_paper_evidence_gate(
+            REPO / "outputs" / "research" / "20260717",
+            REPO / "outputs" / "research" / "20260717",
+            EXPERIMENTS_RESULTS,
+        ),
         "pilot10": extract_pilot10(PILOT10_MANIFEST),
         "blindspot_audit": extract_blindspot_audit(BLINDSPOT_AUDIT),
     }
