@@ -89,12 +89,12 @@ workstreams:
     next_gate: 在北川冻结 10 例（CR4/CT4/MRI2）上接入豆包/PaddleOCR/Qwen 候选并做双次重复调用；按 clinical CER 和 material-error rate 选择 primary，verifier 仅输出 disagreement artifact。
   routing:
     status: validated
-    summary: "路由器已改为三种主要模态（cxr/ct/mri）硬约束；body_part 不再阻塞兼容模型，只作为候选排序信号。配置中的 default_models wildcard 现在会按模态展开全部兼容候选，不再把 wildcard 当作普通模型名；完整 52 例 dmx_strong preflight 已验证 52/52 有本地候选、0 fallback。preflight 对存在但空病例目录现在 fail-closed 返回 no_cases_discovered，不会把 cases=0 误报为通过。VLM 模态识别补充 MRI/CT/X-ray 常见句式归一化，并覆盖 DICOM、图片扩展名和 unknown 路径测试。"
+    summary: "路由器已改为三种主要模态（cxr/ct/mri）硬约束；body_part 不再阻塞兼容模型，只作为候选排序信号。配置中的 default_models wildcard 现在会按模态展开全部兼容候选，不再把 wildcard 当作普通模型名；当前挂载路径上的完整 52 例 dmx_strong preflight 已实测通过：cxr/ct/mri=20/25/7、52/52 有本地候选、0 fallback，另有 494 个 fresh 和 175 个 artifact 本地候选。preflight 对存在但空病例目录现在 fail-closed 返回 no_cases_discovered，不会把 cases=0 误报为通过。VLM 模态识别补充 MRI/CT/X-ray 常见句式归一化，并覆盖 DICOM、图片扩展名和 unknown 路径测试。"
     evidence_paths:
       - src/medharness2/generators/registry.py
       - src/medharness2/tools/tool7_modality.py
       - tests/test_modality_routing.py
-    next_gate: 在冻结三模态清单上跑真实资产路由 smoke，确认每例至少有一个兼容候选且部位缺失不产生空路由。
+    next_gate: 真实资产路由 smoke 已完成；下一步只需在同一 52 例清单上接入真实 OCR provider，确认 OCR 文本质量不改变已验证的三模态路由覆盖。
   scientific_metrics:
     status: in_progress
     summary: 已修复 Likert 归一化、三条 reader 聚合路径的归一化口径漂移、Tool1 mock provenance、统计字段污染、缺失 reader 分数误填 0、fallback/mock 过滤、缺失指标排名、缺失 hazard 字段默认低风险、单样本 CI 伪确定性、教育 provenance、教育反馈缺失统计门禁、教育报告缺失/非法 Likert 不再伪造 0 分、教育 blocked 状态现在以非零 CLI 退出、排名 cutoff 近似并列保留、正式 benchmark 的 Welch+Holm 汇总、并列百分位、小样本 t 区间、散文 JSON、参考图 recall、seed/cache、OCR sidecar case 绑定、非 CXR slug、Retry-After、Tool2 宽泛异常、Tool1/Tool4 评委异常边界、评委 prompt 数据边界、失败病例分母及 analyze_run 成功/失败率汇总、Tool1 重测一致性记录、placeholder provenance、迁移失败原因、hazard canonical 字段优先级、DMX 顶层 mock 路由、生成 fallback 标记、Tool1 解释 grounding 诊断字段、Tool4 重测 provenance 与 fallback 一致性门禁，以及 Tool9/Tool10/Tool11/Tool12 对 NaN、正负无穷和非法 p 值的 fail-closed 过滤；batch-readers、department 和 analyze-run 对空输入现在返回 no_cases_discovered 并以非零 CLI 退出。grounding 仅用于审计，不改变 Likert 分数；仍需真实北川冻结集验证临床 CER 和临床标签一致性。
