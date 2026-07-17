@@ -48,10 +48,12 @@ def run_sample_preflight(
         model_keys=model_keys,
         model_sources=model_sources,
     )
-    cases = list(route.get("cases") or [])
+    cases = _strict_object_list(route.get("cases"), "cases")
+    summary = _strict_object(route.get("summary"), "summary")
+    paths = _strict_object(route.get("paths"), "paths")
     if not cases:
         blockers.append("no_cases_discovered")
-    raw_fallback_count = route.get("summary", {}).get("cases_requiring_fallback")
+    raw_fallback_count = summary.get("cases_requiring_fallback")
     fallback_count = 0 if raw_fallback_count is None else _nonnegative_count(
         raw_fallback_count, "cases_requiring_fallback"
     )
@@ -79,14 +81,14 @@ def run_sample_preflight(
             "modality_counts": dict(sorted(Counter(case.get("modality") for case in cases).items())),
             "body_part_counts": dict(sorted(Counter(case.get("body_part") for case in cases).items())),
         },
-        "routing": dict(route.get("summary") or {}),
+        "routing": summary,
         "ocr": ocr,
         "require_real_ocr": require_real_ocr,
         "blockers": list(dict.fromkeys(blockers)),
         "warnings": list(dict.fromkeys(warnings)),
         "paths": {
             "preflight": str(out),
-            "route_plan": str(route.get("paths", {}).get("route_plan") or route_dir / "route_plan.json"),
+            "route_plan": str(paths.get("route_plan") or route_dir / "route_plan.json"),
         },
     }
     write_json(out, result)
@@ -154,6 +156,22 @@ def _check_ocr_provider(config: AppConfig) -> dict[str, Any]:
         "blocker": "unsupported_llm_provider_for_ocr",
         "real_ocr_capable": False,
     }
+
+
+def _strict_object(value: Any, label: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return dict(value)
+
+
+def _strict_object_list(value: Any, label: str) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"{label} must be a list of objects")
+    return list(value)
 
 
 def _run_local_vlm_dry_run(config: AppConfig, *, model: str | None = None) -> dict[str, Any]:

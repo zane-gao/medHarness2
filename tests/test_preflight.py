@@ -29,6 +29,24 @@ def test_preflight_rejects_invalid_fallback_count(monkeypatch, tmp_path: Path):
         )
 
 
+@pytest.mark.parametrize("field,bad", [("cases", "bad"), ("summary", []), ("paths", [])])
+def test_preflight_rejects_malformed_route_plan(monkeypatch, tmp_path: Path, field, bad):
+    sample_root = _write_minimal_sample(tmp_path)
+
+    def fake_plan(*args, **kwargs):
+        payload = {
+            "cases": [{"case_id": "case-1", "modality": "cxr", "body_part": "chest"}],
+            "summary": {"cases_requiring_fallback": 0},
+            "paths": {"route_plan": "route.json"},
+        }
+        payload[field] = bad
+        return payload
+
+    monkeypatch.setattr("medharness2.workflows.sample_full.plan_sample_full_routes", fake_plan)
+    with pytest.raises(ValueError, match=field):
+        run_sample_preflight(sample_root, tmp_path / "preflight.json", config=AppConfig())
+
+
 def test_preflight_blocks_mock_ocr_when_real_ocr_required(tmp_path: Path):
     sample_root = _write_minimal_sample(tmp_path)
     output = tmp_path / "preflight.json"
