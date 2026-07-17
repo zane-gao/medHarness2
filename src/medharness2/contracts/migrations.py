@@ -275,8 +275,12 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
     for index, raw in enumerate(payload.get("findings") or [], start=1):
         if not isinstance(raw, dict):
             raise TypeError(f"finding_graph.findings[{index - 1}] must be an object")
+        for field in ("finding_id", "id", "observation_text", "observation", "observation_code", "source_text", "text"):
+            value = raw.get(field)
+            if value is not None and not isinstance(value, str):
+                raise TypeError(f"finding_graph.findings[{index - 1}].{field} must be a string")
         finding_id = _unique_finding_id(
-            str(raw.get("finding_id") or raw.get("id") or f"f{index}"),
+            (raw.get("finding_id") or raw.get("id") or f"f{index}"),
             seen_ids,
         )
         observation_value = (
@@ -286,7 +290,7 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
             or raw.get("source_text")
             or raw.get("text")
         )
-        observation_text = str(observation_value or "unparsed_legacy_finding").strip()
+        observation_text = (observation_value or "unparsed_legacy_finding").strip()
         location_text = _optional_text(raw.get("location_text") or raw.get("location"))
         measurements, unparsed_measurement = _migrate_measurements(raw)
         attributes = deepcopy(dict(raw.get("attributes") or {}))
@@ -325,7 +329,7 @@ def _migrate_finding_graph(payload: dict[str, Any]) -> dict[str, Any]:
                 "severity": _optional_text(raw.get("severity")),
                 "measurements": measurements,
                 "source_span": _valid_source_span(raw.get("source_span")),
-                "source_text": str(raw.get("source_text") or raw.get("text") or ""),
+                "source_text": raw.get("source_text") or raw.get("text") or "",
                 "extractor": _legacy_provenance(
                     role="finding_extractor",
                     model=str(payload.get("backend") or "legacy_finding_extractor"),

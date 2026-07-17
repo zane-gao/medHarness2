@@ -192,6 +192,19 @@ def test_finding_graph_migration_rejects_non_object_fields(field, bad):
         _migrate_finding_graph({"modality": "cxr", "backend": "legacy", "findings": [], field: bad})
 
 
+@pytest.mark.parametrize("field", ["id", "finding_id", "observation", "observation_text", "source_text", "text"])
+@pytest.mark.parametrize("bad", [{"x": 1}, 7, True, ["x"]])
+def test_finding_graph_migration_rejects_non_string_finding_text_fields(field, bad):
+    from medharness2.contracts.migrations import _migrate_finding_graph
+
+    with pytest.raises((TypeError, ValueError), match=field):
+        _migrate_finding_graph({
+            "modality": "cxr",
+            "backend": "legacy",
+            "findings": [{"id": "f1", "observation": "opacity", field: bad}],
+        })
+
+
 def test_migrate_v1_hazard_preserves_unknown_top_level_fields():
     legacy = _legacy_case()
     legacy["pairwise_comparisons"] = [
