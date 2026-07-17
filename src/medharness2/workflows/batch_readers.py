@@ -26,6 +26,10 @@ def run_batch_readers(
     config: AppConfig | None = None,
     llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
+    if limit is not None and (
+        not isinstance(limit, int) or isinstance(limit, bool) or limit < 0
+    ):
+        raise ValueError("limit must be a non-negative integer")
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
     rows = load_manifest(manifest_path)

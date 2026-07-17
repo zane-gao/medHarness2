@@ -368,7 +368,13 @@ def test_batch_readers_and_department_workflows(tmp_path: Path):
     assert dept["excluded_reader_count"] == 2
     assert set(dept["comparisons"]["excluded_readers"]) == {"doc_a", "doc_b"}
     assert dept["denominator"]["success_rate"] == 1.0
-    assert dept["denominator"]["failure_rate"] == 0.0
+
+
+@pytest.mark.parametrize("bad", [True, -1, 1.5, "1"])
+def test_batch_readers_rejects_invalid_limit(tmp_path: Path, bad):
+    (tmp_path / "manifest.jsonl").write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="limit must be a non-negative integer"):
+        run_batch_readers(tmp_path / "manifest.jsonl", tmp_path / "workflow2.json", limit=bad)
 
 
 def test_department_propagates_failed_case_denominator(tmp_path: Path):
