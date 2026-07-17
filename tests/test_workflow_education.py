@@ -9,6 +9,7 @@ from medharness2.cli import main
 from medharness2.config import AppConfig, GeneratorConfig
 from medharness2.workflows.education import run_education_suggestions
 from medharness2.workflows.education import _peer_means, _stat_mean
+from medharness2.workflows.education import _report_suggestions
 
 
 def test_education_peer_means_reject_boolean_and_nonfinite_values():
@@ -42,6 +43,13 @@ def test_education_rejects_invalid_reader_case_count(tmp_path: Path):
             output_path=tmp_path / "education.json",
             config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
         )
+
+
+def test_education_rejects_non_object_finding_and_hazard_lists():
+    payload = _workflow1_payload()
+    payload["human_evaluation"]["finding_graph"]["findings"] = "not-a-list"
+    with pytest.raises(ValueError, match="findings"):
+        _report_suggestions(payload, None)  # type: ignore[arg-type]
 
 
 def test_run_education_suggestions_from_workflow1(tmp_path: Path):

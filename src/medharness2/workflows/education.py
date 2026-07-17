@@ -49,7 +49,7 @@ def _report_suggestions(payload: dict[str, Any], client: LLMClient) -> dict[str,
     human = payload.get("human_evaluation") or {}
     likert = human.get("likert") or {}
     graph = human.get("finding_graph") or {}
-    findings = list(graph.get("findings") or [])
+    findings = _object_list(graph.get("findings"), "human_evaluation.finding_graph.findings")
     if not findings:
         raise ValueError("Workflow 1 result must contain human_evaluation.finding_graph.findings.")
     weakest_metric, weakest_score = _weakest_likert(likert)
@@ -243,13 +243,27 @@ def _blocked_report_result(reason: str) -> dict[str, Any]:
 
 def _hazards(payload: dict[str, Any]) -> list[dict[str, Any]]:
     hazards: list[dict[str, Any]] = []
-    for item in payload.get("pairwise_comparisons") or []:
+    for item in _object_list(payload.get("pairwise_comparisons"), "pairwise_comparisons"):
         comparison = item.get("comparison") or {}
+        if not isinstance(comparison, dict):
+            raise ValueError("pairwise_comparisons.comparison must be an object")
         hazard_payload = comparison.get("hazards") or {}
-        hazards.extend(list(hazard_payload.get("errors") or []))
+        if not isinstance(hazard_payload, dict):
+            raise ValueError("pairwise_comparisons.comparison.hazards must be an object")
+        hazards.extend(_object_list(hazard_payload.get("errors"), "hazards.errors"))
         alignment = comparison.get("alignment") or {}
-        hazards.extend(list(alignment.get("error_candidates") or []))
+        if not isinstance(alignment, dict):
+            raise ValueError("pairwise_comparisons.comparison.alignment must be an object")
+        hazards.extend(_object_list(alignment.get("error_candidates"), "alignment.error_candidates"))
     return hazards
+
+
+def _object_list(value: Any, label: str) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"{label} must be a list of objects")
+    return list(value)
 
 
 def _target_finding_ids(findings: list[dict[str, Any]], hazards: list[dict[str, Any]]) -> set[str]:
