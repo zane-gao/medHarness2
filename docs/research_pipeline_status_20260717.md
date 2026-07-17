@@ -22,6 +22,7 @@
 - 2026-07-17 真实逐页 OCR 复测记录：`CR2605290003`（CXR）、`CT2605300030`（CT）、`MR2605270001`（MRI）有 Yunwu `qwen3-vl-plus` exploratory sidecar；医院技术支持稀疏末页被记录为 `skip_reason=non_report_page`。按当前代码门禁，含该 warning 的结果应为 `review_required`，不能沿用旧 sidecar 的 `passed` 标记，也不改变 Doubao winner blocked 状态。
 - 2026-07-17 未注册 pilot10 exploratory OCR：外部记录首轮 8/10；`pilot-002`、`pilot-004` 针对性重试为 2/2。它们未写入正式 `outputs/research/20260717` 双重复 manifest，因此只作为调试线索，不升级为正式 10/10、winner 或论文证据。
 - 2026-07-17 同一未注册 pilot10 的第二次独立 Qwen 重复仅 `2/10` 直接通过、`4/10` `review_required`、`4/10` 因正文页疑似截断而 `blocked`。其中 `review_required` 来自探索脚本未传 verifier client；`blocked` 是正文输出不完整的真实失败证据。该重复结果进一步证明 Qwen 当前不能升级为稳定 OCR winner。
+- 2026-07-17 修复短英文技术页元话术（包括 `There is`）与“注释+审核时间”尾部的截断误报后，重新执行同一 10 例 Yunwu Qwen 小批次：10/10 均不再出现正文截断，第二页均记录为 `skip_reason=non_report_page`；但由于技术页 warning，当前门禁仍统一为 `review_required`，其中 1 例 verifier 返回非法 JSON。该结果只证明工程误报下降，不构成 OCR winner 或正式 benchmark 证据。
 - 2026-07-17 路由误判收尾：Tool 7 不再把任意 PNG/JPG/JPEG 直接当作 CXR；CT/MRI 的 `contact_sheet.png` 现在会交给 VLM 识别，无 VLM 或无可信文件名提示时返回 `unknown`。DICOM header 和显式病例 modality 仍优先，三模态 body_part 软排序语义不变。
 
 ## 当前证据状态
@@ -44,7 +45,7 @@
 | 工作线 | 状态 | 原因 |
 | --- | --- | --- |
 | 真实医生标注 | `not_started` | 尚未有真实 reader 输入 |
-| OCR winner | `blocked` | 已有可执行的双次运行器、benchmark 回写和 PaddleOCR adapter，但当前 Yunwu 未暴露可确认的 Doubao OCR 模型，DMX 凭据 401，PaddleOCR-VL runtime 也未就绪 |
+| OCR winner | `blocked` | 已有可执行的双次运行器、benchmark 回写和 PaddleOCR adapter；当前 Yunwu 目录只有 Seedream 图像生成模型而未暴露可确认的 Doubao OCR 模型，DMX 凭据 401，PaddleOCR-VL runtime 也未就绪 |
 | 论文 formal claim | `blocked`（`formal_claim_allowed=false`） | 只有实验设计，尚无 validated gate |
 
 ## 下一步
