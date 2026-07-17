@@ -5,7 +5,7 @@ import json
 from typing import Any
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, field_validator
 
 from medharness2.contracts import (
     HazardAdjudicationArtifact,
@@ -44,6 +44,13 @@ class _HazardAdjudicationDecisionResponse(BaseModel):
     confidence: StrictFloat = Field(ge=0, le=1)
     evidence_ids: list[str]
     abstain: StrictBool
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _require_real_float(cls, value: Any) -> Any:
+        if isinstance(value, bool) or not isinstance(value, float):
+            raise TypeError("confidence must be a float")
+        return value
 
 
 class _HazardAdjudicationResponse(BaseModel):

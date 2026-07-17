@@ -6,7 +6,7 @@ import re
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, field_validator
 
 from medharness2.contracts import StructureAuditArtifact, StructureAuditIssue
 from medharness2.llm_client import LLMClient, LLMClientError
@@ -28,6 +28,13 @@ class _StructureAssessmentResponse(BaseModel):
     confidence: StrictFloat = Field(ge=0, le=1)
     summary: str = Field(min_length=1)
     issues: list[StructureAuditIssue]
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _require_real_float(cls, value: Any) -> Any:
+        if isinstance(value, bool) or not isinstance(value, float):
+            raise TypeError("confidence must be a float")
+        return value
 
 
 def compare_structure(report_a: str, report_b: str) -> dict[str, Any]:

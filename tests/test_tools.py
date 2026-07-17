@@ -1748,6 +1748,41 @@ def test_tool4_adjudicator_response_rejects_implicit_numeric_types(bad):
         )
 
 
+@pytest.mark.parametrize("bad", ["0.5", 1, True])
+def test_tool4_adjudicator_confidence_rejects_implicit_float_types(bad):
+    from medharness2.tools.tool4_hazard import _HazardAdjudicationDecisionResponse
+
+    with pytest.raises(Exception):
+        _HazardAdjudicationDecisionResponse.model_validate(
+            {
+                "error_index": 0,
+                "error_type": "other",
+                "hazard_level": 3,
+                "recommended_action": "review_if_relevant",
+                "explanation": "x",
+                "confidence": bad,
+                "evidence_ids": ["d1"],
+                "abstain": False,
+            }
+        )
+
+
+@pytest.mark.parametrize("bad", ["0.5", 1, True])
+def test_tool6_assessment_confidence_rejects_implicit_float_types(bad):
+    from medharness2.tools.tool6_structure_diff import _StructureAssessmentResponse
+
+    with pytest.raises(Exception):
+        _StructureAssessmentResponse.model_validate(
+            {
+                "verdict": "abstain",
+                "clinical_impact": 1,
+                "confidence": bad,
+                "summary": "x",
+                "issues": [],
+            }
+        )
+
+
 def test_tool4_strict_mode_raises_instead_of_using_template_fallback():
     client = _SequenceClient(["not json", {"wrong": []}])
 
