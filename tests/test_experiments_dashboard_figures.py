@@ -39,6 +39,22 @@ def test_run_experiments_rejects_malformed_workflow2_cases(tmp_path: Path, bad: 
         run_experiments(run_dir, tmp_path / "out")
 
 
+@pytest.mark.parametrize("bad", [True, 1, [], "bad"])
+def test_experiment_finding_extraction_rejects_malformed_graph(tmp_path: Path, bad: object):
+    from medharness2.workflows.experiments import _finding_extraction
+
+    with pytest.raises(ValueError, match="human_evaluation"):
+        _finding_extraction([{"human_evaluation": bad}])
+
+
+@pytest.mark.parametrize("bad", [True, 1, ["bad"], "bad"])
+def test_experiment_hazard_evaluation_rejects_malformed_comparison(tmp_path: Path, bad: object):
+    from medharness2.workflows.experiments import _hazard_evaluation
+
+    with pytest.raises(ValueError, match="pairwise_comparisons"):
+        _hazard_evaluation([{"pairwise_comparisons": bad}])
+
+
 @pytest.mark.parametrize("field", ["generated_report_source_counts", "generated_report_evidence_tier_counts"])
 @pytest.mark.parametrize("bad", ["bad", [], ["x"], 7, True])
 def test_image_to_text_models_rejects_malformed_count_maps(tmp_path: Path, field: str, bad: object):

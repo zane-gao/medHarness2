@@ -202,9 +202,10 @@ def _finding_extraction(cases: list[dict[str, Any]]) -> dict[str, Any]:
     backends: Counter[str] = Counter()
     finding_count = 0
     for case in cases:
-        graph = (case.get("human_evaluation") or {}).get("finding_graph") or {}
+        human = _object(case.get("human_evaluation"), "human_evaluation")
+        graph = _object(human.get("finding_graph"), "human_evaluation.finding_graph")
         backends[str(graph.get("backend") or "unknown")] += 1
-        finding_count += len(graph.get("findings") or [])
+        finding_count += len(_object_list(graph.get("findings"), "finding_graph.findings"))
     return {
         "id": "finding_extraction",
         "title": "Radiologist Finding Extraction Study",
@@ -223,8 +224,10 @@ def _hazard_evaluation(cases: list[dict[str, Any]]) -> dict[str, Any]:
     error_types: Counter[str] = Counter()
     hazard_levels: Counter[str] = Counter()
     for case in cases:
-        for comparison in case.get("pairwise_comparisons") or []:
-            hazards = ((comparison.get("comparison") or {}).get("hazards") or {}).get("errors") or []
+        for comparison in _object_list(case.get("pairwise_comparisons"), "pairwise_comparisons"):
+            comparison_payload = _object(comparison.get("comparison"), "pairwise_comparisons.comparison")
+            hazard_payload = _object(comparison_payload.get("hazards"), "comparison.hazards")
+            hazards = _object_list(hazard_payload.get("errors"), "comparison.hazards.errors")
             for error in hazards:
                 error_types[str(error.get("error_type") or "unknown")] += 1
                 hazard_levels[str(error.get("hazard_level") or "unknown")] += 1
@@ -248,8 +251,8 @@ def _educational_study(run_dir: Path) -> dict[str, Any]:
     suggestion_count = 0
     for path in files:
         payload = _read_optional(path)
-        suggestion_count += len(payload.get("suggestions") or [])
-        suggestion_count += len(payload.get("general_suggestions") or [])
+        suggestion_count += len(_object_list(payload.get("suggestions"), f"{path.name}.suggestions"))
+        suggestion_count += len(_object_list(payload.get("general_suggestions"), f"{path.name}.general_suggestions"))
     return {
         "id": "educational_study",
         "title": "Radiologist Educational Study",
@@ -405,6 +408,22 @@ def _read_optional(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     return read_json(path)
+
+
+def _object(value: Any, label: str) -> dict[str, Any]:
+    if value in (None, ""):
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
+def _object_list(value: Any, label: str) -> list[dict[str, Any]]:
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"{label} must be a list of objects")
+    return value
 
 
 def _read_csv(path: Path) -> list[dict[str, str]]:
