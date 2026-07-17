@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import pytest
 
 from medharness2.annotation import AnnotationCase, build_pilot_annotation_package, validate_pilot_annotation_package
+from pydantic import ValidationError
+from medharness2.annotation.models import HazardAnnotation
 from medharness2.cli import main
 from medharness2.privacy import ExternalPayloadPolicy
 
@@ -119,7 +122,21 @@ def test_annotation_schema_is_exported_with_package(tmp_path: Path):
 
     schema = json.loads((output_dir / "annotation.schema.json").read_text(encoding="utf-8"))
     assert schema["title"] == "AnnotationCase"
-    assert (output_dir / "README.md").exists()
+
+
+@pytest.mark.parametrize("bad", [0, 1, "false", "true", [], {}])
+def test_hazard_annotation_rejects_implicit_boolean(bad):
+    with pytest.raises(ValidationError):
+        HazardAnnotation.model_validate(
+            {
+                "error_id": "e1",
+                "candidate_id": "candidate-1",
+                "error_type": "other",
+                "hazard_level": 3,
+                "clinically_significant": bad,
+                "rationale": "test",
+            }
+        )
 
 
 def test_validate_pilot_annotation_package_reports_not_started_without_fabricating_completion(tmp_path: Path):

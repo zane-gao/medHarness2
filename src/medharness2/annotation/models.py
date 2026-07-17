@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, StrictBool
 
 from medharness2.contracts.common import SCHEMA_VERSION, ContractModel, Measurement
 
@@ -39,7 +39,7 @@ class HazardAnnotation(ContractModel):
         "other",
     ]
     hazard_level: int = Field(ge=1, le=5)
-    clinically_significant: bool
+    clinically_significant: StrictBool
     evidence_finding_ids: list[str] = Field(default_factory=list)
     rationale: str = Field(min_length=1)
 
