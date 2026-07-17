@@ -81,7 +81,7 @@ workstreams:
     next_gate: Freeze repeated-run reliability targets, complete dual-reader gold labels, and benchmark every model role before a formal case run.
   ocr:
     status: in_progress
-    summary: OCR 现已升级为逐页 300 DPI 图像管线，记录页级 hash、provider/model/role、页序、墨量、空白页跳过和疑似截断；缓存 sidecar 绑定 case/source/provider/model/role，模型变更不会误复用旧 OCR。OCR 结果现在显式分为 passed、review_required、blocked：空结果或疑似截断不再作为可用 report_text 进入样本清单，verifier disagreement/失败只进入人工复核，不静默改写主 OCR。北川参考报告作为当前文本 benchmark gold 已就绪；dmx_strong 已提供 Doubao Seed 候选主 OCR 与独立 Qwen OCR verifier 的 audit-only 路由，但二者仍是候选，尚未凭宣传或单例样本指定生产 winner；必须在北川冻结集上按 clinical CER、数字/否定词、截断率和重测一致性实测。独立多模态模型只允许产出差异审计，不静默改写主 OCR。
+    summary: OCR 现已升级为逐页 300 DPI 图像管线，记录页级 hash、provider/model/role、页序、墨量、空白页跳过和疑似截断；缓存 sidecar 绑定 case/source/provider/model/role，并新增缓存文本 `text_sha256` 与质量摘要一致性校验，模型变更、文本替换或 verifier 状态矛盾不会误复用旧 OCR。OCR 结果现在显式分为 passed、review_required、blocked：空结果或疑似截断不再作为可用 report_text 进入样本清单，verifier disagreement/失败只进入人工复核，不静默改写主 OCR。北川参考报告作为当前文本 benchmark gold 已就绪；dmx_strong 已提供 Doubao Seed 候选主 OCR 与独立 Qwen OCR verifier 的 audit-only 路由，但二者仍是候选，尚未凭宣传或单例样本指定生产 winner；必须在北川冻结集上按 clinical CER、数字/否定词、截断率和重测一致性实测。独立多模态模型只允许产出差异审计，不静默改写主 OCR。
     evidence_paths:
       - docs/superpowers/specs/2026-07-11-dmx-doubao-ocr-benchmark-design.md
       - outputs/ocr_quality_audit_qwen3vl4b_20260711/summary.json

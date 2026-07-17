@@ -165,7 +165,7 @@ def test_ocr_cache_sidecar_rejects_inconsistent_verifier_quality_status(quality_
 
 @pytest.mark.parametrize(
     "field",
-    ["case_id", "source_pdf_sha256", "method", "provider", "model", "role", "prompt_version"],
+    ["case_id", "source_pdf_sha256", "method", "provider", "model", "role", "prompt_version", "text_sha256"],
 )
 @pytest.mark.parametrize("bad", [1, True, [], {}])
 def test_ocr_cache_sidecar_rejects_malformed_provenance_types(field: str, bad: object):
@@ -233,6 +233,39 @@ def test_ocr_cache_does_not_reuse_blocked_quality_result(tmp_path: Path):
     assert result.method == "vlm_ocr"
     assert len(second.paths) == 1
     assert result.metadata["quality_status"] == "passed"
+
+
+def test_ocr_cache_does_not_reuse_when_text_file_changes_after_sidecar(tmp_path: Path):
+    pdf = tmp_path / "text-cache-integrity.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+
+    first = PageOCRClient()
+    extract_report_text(
+        pdf,
+        case_id="case-text-integrity",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai", model="ocr-v1")),
+        llm_client=first,
+        force=True,
+    )
+    cache_path = tmp_path / "ocr" / "case-text-integrity.txt"
+    cache_path.write_text("tampered report\n", encoding="utf-8")
+
+    second = PageOCRClient()
+    result = extract_report_text(
+        pdf,
+        case_id="case-text-integrity",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai", model="ocr-v1")),
+        llm_client=second,
+    )
+
+    assert result.method == "vlm_ocr"
+    assert len(second.paths) == 1
+    assert result.text.startswith("FINDINGS: page 1")
 
 
 def test_scanned_pdf_ocr_is_page_ordered_and_records_provenance(tmp_path: Path):

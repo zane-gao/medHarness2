@@ -79,6 +79,8 @@
 > **2026-07-17 交接路径修正**：pilot10 已作为 tracked 包提交到 `annotation/pilot10/`，远程检出后可直接交给两位真实 reader；`outputs/annotation/pilot10_20260717/` 不再作为远程交接路径。模型身份映射仍仅保留在本地 ignored 产物中。北川参考报告已作为当前文本 gold；真实 reader 校准尚未开始，OCR winner 和论文 formal claim 仍需 provider、质量与重复一致性证据。
 
 > **2026-07-17 research manifest contract 增量**：`research prepare-manifests` 不再只信任 pilot `manifest.jsonl` 的字符串字段；现在会 fail-closed 校验 `annotation_path` 必须为 `cases/` 下的相对路径、目标文件存在且符合 `AnnotationCase` contract，并核对 `pilot_case_id` 与模态一致。新增缺失文件和身份漂移回归测试；北川参考报告已登记为当前文本 gold，pilot10 OCR 仍因真实 provider 双次运行未完成而 blocked，没有把阻塞状态升级成 winner。
+
+> **2026-07-17 OCR sidecar 文本绑定增量**：新写入的 OCR sidecar 记录缓存文本 `text_sha256`，复用前会校验 sidecar 与文本内容一致；文本被替换、sidecar 类型损坏或质量摘要与 verifier 页状态矛盾时会 fail-closed 重新执行 OCR，不再静默复用错配缓存。OCR 专项回归为 `186 passed`。
 > **2026-07-16 标注 CLI 门禁增量**：`annotation validate` 退出码现在区分完整（0）、未完成（1）和结构/状态阻断（2）；自动化任务不会再把 `not_started` 当成成功校验。
 > **2026-07-16 统计缺失值增量**：department/analyze reader 汇总不再把缺失或非法 `overall_score` 默认填成 0；此类 reader 从统计群体排除并写入 `excluded_readers`，CSV 保留空值。全量回归测试为 431 passed、18 warnings。
 > **2026-07-16 OCR/ranking/annotation 深度门禁增量**：OCR sidecar 现在绑定 `case_id`；Tool9 缺失配置指标的候选不再按 0 分排名，而是排除并等待完整指标；pilot10 validator 增加路径越界、重复/未列出文件、候选数和“未开始但已有内容”检查。全量回归测试为 435 passed、18 warnings。
