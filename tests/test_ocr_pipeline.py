@@ -115,6 +115,62 @@ def test_ocr_cache_sidecar_rejects_malformed_provenance_types(field: str, bad: o
     assert _cache_metadata_valid(payload) is False
 
 
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"pages": "not-a-list"},
+        {"pages": [{"char_count": "12"}]},
+        {"pages": [{"ink_ratio": 2.0}]},
+        {"page_count": True},
+        {"source_page_count": 1, "retained_page_count": 2},
+        {"quality_audit": {"pages": [{"status": "maybe"}]}},
+    ],
+)
+def test_ocr_cache_sidecar_rejects_malformed_page_contracts(payload: dict[str, object]):
+    base = {
+        "warnings": [],
+        "verifier": {"configured": False},
+        "quality_audit": None,
+        "quality_status": "passed",
+    }
+    base.update(payload)
+    assert _cache_metadata_valid(base) is False
+
+
+def test_ocr_cache_does_not_reuse_blocked_quality_result(tmp_path: Path):
+    pdf = tmp_path / "blocked-cache.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=200, height=200)
+    page.draw_rect(fitz.Rect(10, 10, 11, 11), color=(0, 0, 0), fill=(0, 0, 0))
+    doc.save(pdf)
+
+    class TruncatedClient:
+        def call(self, *args, **kwargs):
+            return "FINDINGS: unfinished sentence"
+
+    first = extract_report_text(
+        pdf,
+        case_id="case-blocked-cache",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai", model="ocr-v1")),
+        llm_client=TruncatedClient(),
+        force=True,
+    )
+    assert first.metadata["quality_status"] == "blocked"
+
+    second = PageOCRClient()
+    result = extract_report_text(
+        pdf,
+        case_id="case-blocked-cache",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="openai", model="ocr-v1")),
+        llm_client=second,
+    )
+    assert result.method == "vlm_ocr"
+    assert len(second.paths) == 1
+    assert result.metadata["quality_status"] == "passed"
+
+
 def test_scanned_pdf_ocr_is_page_ordered_and_records_provenance(tmp_path: Path):
     pdf = tmp_path / "report.pdf"
     doc = fitz.open()

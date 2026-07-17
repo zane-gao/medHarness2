@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import math
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -317,6 +318,13 @@ def _cache_is_compatible(
         return meta.get("provider") == "local_pdf_text"
     if method != "vlm_ocr":
         return False
+    # A blocked OCR result is evidence that the previous transcription is not
+    # safe to consume.  Do not keep returning it forever from the cache:
+    # callers must get a fresh provider attempt (or an explicit failure).
+    if meta.get("quality_status") == "blocked":
+        return False
+    if meta.get("quality_status") is None and _cache_quality_is_blocked(meta):
+        return False
     if require_real and not _is_real_ocr_meta(meta):
         return False
     if str(meta.get("provider") or "").lower() != provider:
@@ -382,10 +390,129 @@ def _cache_metadata_valid(meta: dict[str, Any]) -> bool:
         pages = audit["pages"]
         if not isinstance(pages, list) or any(not isinstance(page, dict) for page in pages):
             return False
+        if any(not _cache_audit_page_valid(page) for page in pages):
+            return False
+    if isinstance(audit, dict) and "status" in audit:
+        status = audit["status"]
+        if not isinstance(status, str) or status not in {
+            "agree",
+            "disagreement",
+            "verifier_failed",
+            "invalid_verifier_response",
+            "completed",
+        }:
+            return False
     status = meta.get("quality_status")
-    if status is not None and status not in {"passed", "review_required", "blocked"}:
+    if status is not None and (
+        not isinstance(status, str)
+        or status not in {"passed", "review_required", "blocked"}
+    ):
+        return False
+    if "pages" in meta:
+        pages = meta["pages"]
+        if not isinstance(pages, list) or any(
+            not isinstance(page, dict) or not _cache_ocr_page_valid(page)
+            for page in pages
+        ):
+            return False
+    for field in ("page_count", "source_page_count", "retained_page_count"):
+        if field in meta:
+            value = meta[field]
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                return False
+    if (
+        isinstance(meta.get("source_page_count"), int)
+        and isinstance(meta.get("retained_page_count"), int)
+        and meta["retained_page_count"] > meta["source_page_count"]
+    ):
+        return False
+    if "page_count" in meta and "retained_page_count" in meta:
+        if meta["page_count"] != meta["retained_page_count"]:
+            return False
+    pages = meta.get("pages")
+    if isinstance(pages, list) and pages and isinstance(meta.get("source_page_count"), int):
+        page_indices = [page.get("page_index") for page in pages]
+        if page_indices != list(range(1, meta["source_page_count"] + 1)):
+            return False
+        retained = sum(not page.get("skipped", False) for page in pages)
+        if isinstance(meta.get("retained_page_count"), int) and retained != meta["retained_page_count"]:
+            return False
+    return True
+
+
+def _cache_ocr_page_valid(page: dict[str, Any]) -> bool:
+    """Validate the typed fields emitted for one OCR-rendered page."""
+    if "page_index" in page:
+        value = page["page_index"]
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            return False
+    if "char_count" in page:
+        value = page["char_count"]
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            return False
+    for field in ("image_sha256", "text_sha256", "skip_reason"):
+        if field in page and page[field] is not None and not isinstance(page[field], str):
+            return False
+    if "ink_ratio" in page:
+        value = page["ink_ratio"]
+        if (
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(float(value))
+            or not 0.0 <= float(value) <= 1.0
+        ):
+            return False
+    if "skipped" in page and not isinstance(page["skipped"], bool):
         return False
     return True
+
+
+def _cache_audit_page_valid(page: dict[str, Any]) -> bool:
+    """Validate page-level verifier audit identity without trusting its text."""
+    if "page_index" in page:
+        value = page["page_index"]
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            return False
+    if "status" in page:
+        status = page["status"]
+        if not isinstance(status, str) or status not in {
+            "agree",
+            "disagreement",
+            "verifier_failed",
+            "invalid_verifier_response",
+        }:
+            return False
+    return True
+
+
+def _cache_quality_is_blocked(meta: dict[str, Any]) -> bool:
+    warnings = meta.get("warnings") or []
+    if any(
+        warning == "empty_vlm_ocr_result"
+        or warning == "ocr_possible_truncation"
+        or warning.startswith("ocr_possible_truncation:")
+        or warning.startswith("ocr_empty_page_response:")
+        for warning in warnings
+        if isinstance(warning, str)
+    ):
+        return True
+    pages = meta.get("pages")
+    if isinstance(pages, list):
+        for page in pages:
+            if not isinstance(page, dict) or page.get("skipped") is True:
+                continue
+            char_count = page.get("char_count")
+            if not isinstance(char_count, int) or isinstance(char_count, bool) or char_count <= 0:
+                return True
+    audit = meta.get("quality_audit")
+    statuses: list[str] = []
+    if isinstance(audit, dict):
+        pages = audit.get("pages")
+        if isinstance(pages, list):
+            statuses = [page.get("status", "") for page in pages if isinstance(page, dict)]
+        elif isinstance(audit.get("status"), str):
+            statuses = [audit["status"]]
+    return any(status == "blocked" for status in statuses)
 
 
 def _render_pdf_pages(pdf: Path, output_dir: Path) -> list[str]:
