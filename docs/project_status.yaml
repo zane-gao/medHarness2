@@ -148,7 +148,7 @@ workstreams:
       - docs/research_pipeline_status_20260717.md
       - docs/real_clinician_handoff_20260717.md
       - annotation/pilot10/annotation.schema.json
-    next_gate: 使用 annotation export-reader 分别交付 reader_a/reader_b，独立完成 10 例标注，再用 annotation import-reader 安全回收并 adjudication；完成后重新运行 annotation validate 并计算 inter-rater reliability。
+    next_gate: 使用 annotation export-reader 分别交付 reader_a/reader_b，独立完成 10 例标注，再用 annotation import-reader 安全回收并 adjudication；完成后运行 annotation validate + annotation analyze，再计算正式 inter-rater reliability。
   experiments:
     status: in_progress
     summary: 六条 executable YAML protocol 和严格门禁仍在；新增 10 例临床标注准备、OCR 候选双次比较和论文实验 manifest。研究 manifest 现在会逐条校验 annotation case 文件存在性、路径必须位于 cases/、Pydantic contract、病例身份和模态一致性；prepare-manifests 作为准备阶段在生成 blocked/pending gate 时返回 0，实际执行仍在证据缺失时非零退出；北川文本 gold 已登记，当前 OCR winner 仍 blocked（候选 provider 双次运行未完成），论文 formal claim false，尚无 validated gate。

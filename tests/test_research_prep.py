@@ -9,6 +9,7 @@ from medharness2.annotation.models import AnnotationCase, CandidateReportForAnno
 from medharness2.ocr_benchmark import evaluate_ocr_candidates
 from medharness2.research_prep import prepare_research_manifests, run_ocr_research
 import medharness2.research_prep as research_prep
+from medharness2.annotation.analysis import analyze_pilot_annotations
 
 
 def _pilot(tmp_path: Path, rows: list[dict]) -> Path:
@@ -217,6 +218,51 @@ def test_run_ocr_research_records_missing_source_pdf_per_case(tmp_path: Path):
     assert result["status"] == "blocked"
     assert "source_pdf_missing" in result["blocked_reasons"]
     assert result["blocked_count"] > 0
+
+
+def test_analyze_pilot_annotations_blocks_until_both_readers_and_adjudication_complete(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    result = analyze_pilot_annotations(pilot, tmp_path / "analysis.json")
+    assert result["status"] == "blocked"
+    assert result["complete_case_count"] == 0
+    payload = json.loads((tmp_path / "analysis.json").read_text())
+    assert payload["formal_claim_allowed"] is False
+    assert payload["disagreement_queue"] == []
+
+
+def test_analyze_pilot_annotations_emits_reader_agreement_and_disagreement_queue(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    case_path = pilot / "cases/pilot-001.json"
+    case = AnnotationCase.model_validate_json(case_path.read_text())
+    for slot, finding_id in (("reader_a", "f-1"), ("reader_b", "f-2"), ("adjudication", "f-1")):
+        case.annotations[slot] = ReaderAnnotation(
+            reader_slot=slot,
+            status="complete",
+            findings=[],
+            hazards=[],
+            overall_notes="done",
+            confidence=0.9,
+        )
+    case.annotations["reader_a"].findings = []
+    case.annotations["reader_b"].findings = []
+    case.annotations["reader_a"].hazards = []
+    case.annotations["reader_b"].hazards = []
+    case_path.write_text(case.model_dump_json(indent=2) + "\n")
+    manifest = pilot / "manifest.jsonl"
+    row = json.loads(manifest.read_text().splitlines()[0])
+    row["status"] = "complete"
+    manifest.write_text(json.dumps(row) + "\n")
+    result = analyze_pilot_annotations(pilot, tmp_path / "analysis.json")
+    assert result["status"] == "complete"
+    assert result["complete_case_count"] == 1
+    assert result["reader_agreement"]["case_exact_agreement"] == 1.0
+    assert result["formal_claim_allowed"] is True
 
 
 def test_run_ocr_research_blocks_unreadable_source_pdf_hash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -11,6 +11,7 @@ from medharness2.annotation.pilot import (
     import_reader_annotation_package,
     validate_pilot_annotation_package,
 )
+from medharness2.annotation.analysis import analyze_pilot_annotations
 
 __all__ = [
     "AnnotationCase",
@@ -22,4 +23,5 @@ __all__ = [
     "export_reader_annotation_package",
     "import_reader_annotation_package",
     "validate_pilot_annotation_package",
+    "analyze_pilot_annotations",
 ]

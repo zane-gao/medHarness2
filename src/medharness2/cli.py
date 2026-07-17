@@ -11,6 +11,7 @@ from medharness2.annotation import (
     export_reader_annotation_package,
     import_reader_annotation_package,
     validate_pilot_annotation_package,
+    analyze_pilot_annotations,
 )
 from medharness2.research_prep import prepare_research_manifests, run_ocr_research
 from medharness2.config import load_config
@@ -102,6 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
     annotation_import.add_argument("--package-dir", required=True)
     annotation_import.add_argument("--reader-package-dir", required=True)
     annotation_import.add_argument("--reader", choices=["reader_a", "reader_b"], required=True)
+    annotation_analyze = annotation_sub.add_parser("analyze")
+    annotation_analyze.add_argument("--package-dir", required=True)
+    annotation_analyze.add_argument("--output", required=True)
     research = subparsers.add_parser("research")
     research_sub = research.add_subparsers(dest="research_command", required=True)
     research_prepare = research_sub.add_parser("prepare-manifests")
@@ -299,6 +303,14 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
+    if args.command == "annotation" and args.annotation_command == "analyze":
+        try:
+            result = analyze_pilot_annotations(args.package_dir, args.output)
+        except Exception as exc:
+            print(f"medHarness2 annotation analyze failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["status"] == "complete" else 2
     if args.command == "research" and args.research_command == "prepare-manifests":
         try:
             result = prepare_research_manifests(args.pilot_dir, args.output_dir)

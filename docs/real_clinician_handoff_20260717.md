@@ -65,6 +65,21 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
 回收采用同目录暂存、备份与失败回滚；如果某个病例写回失败，之前已写入的病例文件和主 manifest 会恢复，
 不会留下“部分 reader 已合并”的主包。参考报告和 `instructions_version` 也必须与主包一致。
 
+## 回收后的自动分析
+
+两位 reader 和 adjudication 回收后，先运行统一分析入口：
+
+```bash
+PYTHONPATH=src .venv/bin/python -m medharness2.cli \
+  annotation analyze \
+  --package-dir annotation/pilot10 \
+  --output outputs/research/20260717/pilot_annotation_analysis.json
+```
+
+该命令会生成病例完成数、双读 exact-set agreement、finding/hazard 分歧队列和下一 gate。
+在任意病例未完成时命令以非零退出并写入 `status=blocked`；不会填充 kappa、ICC、模型排名或论文正式结果。
+只有所有病例完成双读和 adjudication 后，才允许把该文件作为正式统计协议的输入。
+
 ## 证据边界
 
 - 自动生成的候选、规则抽取和模型建议不是医生标注；
