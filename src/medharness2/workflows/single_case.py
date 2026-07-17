@@ -6,6 +6,7 @@ from typing import Any
 from medharness2.checkpoints import StageCheckpointStore
 from medharness2.config import AppConfig, load_config
 from medharness2.llm_client import LLMClient
+from medharness2.modality import normalize_modality
 from medharness2.modules.pairwise_report import evaluate_pairwise
 from medharness2.modules.single_report import evaluate_single_report
 from medharness2.schema import GeneratedReport
@@ -46,7 +47,11 @@ def run_single_case(
     assets = _strict_prepared_assets(prepared_assets)
     image = assets.get("primary_image") or str(image_path)
     generation_image = assets.get("volume_path") or assets.get("primary_image") or str(image_path)
-    modality_key = modality or recognize_modality(image, config=cfg, llm_client=client)
+    modality_key = (
+        normalize_modality(modality)
+        if modality is not None
+        else recognize_modality(image, config=cfg, llm_client=client)
+    )
     generated = (
         list(precomputed_generated_reports)
         if precomputed_generated_reports is not None
