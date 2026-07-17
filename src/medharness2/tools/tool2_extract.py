@@ -204,6 +204,11 @@ def _extraction_prompt(
     }
     retry_note = (
         f"\nPrevious validation errors: {json.dumps(previous_errors[-3:], ensure_ascii=False)}"
+        "\nIf an evidence grounding error occurred, copy evidence character-for-character from report_text, "
+        "preserving source order and punctuation; do not merge, reorder, summarize, translate, or join "
+        "separate clauses. Return a shorter exact quote when needed."
+        " For schema errors, laterality must be exactly one of: left, right, bilateral, midline, unknown; "
+        "never put explanatory text, anatomy, or multiple sides in that field."
         "\nFix all errors and return only the corrected JSON object."
         if previous_errors
         else ""
@@ -379,15 +384,34 @@ def _locate_evidence(report_text: str, requested: str) -> tuple[int, int, str]:
     evidence = requested.strip()
     start = report_text.find(evidence)
     if start < 0:
-        tokens = [token for token in re.split(r"\s+", evidence) if token]
-        if tokens:
-            match = re.search(r"\s+".join(re.escape(token) for token in tokens), report_text)
-            if match:
-                start, end = match.span()
-                return start, end, report_text[start:end]
+        # OCR/PDF extraction may insert line breaks or spaces inside an otherwise
+        # contiguous Chinese evidence span. Match only after removing whitespace,
+        # then map the normalized span back to the exact original report slice so
+        # downstream provenance still points at source text.
+        normalized_report, original_positions = _normalize_evidence_text(report_text)
+        normalized_evidence = re.sub(r"\s+", "", evidence)
+        normalized_start = normalized_report.find(normalized_evidence)
+        if normalized_start >= 0 and normalized_evidence:
+            start = original_positions[normalized_start]
+            last_position = original_positions[normalized_start + len(normalized_evidence) - 1]
+            end = last_position + 1
+            return start, end, report_text[start:end]
         raise ValueError("Tool 2 finding evidence is not grounded in report_text")
     end = start + len(evidence)
     return start, end, report_text[start:end]
+
+
+def _normalize_evidence_text(text: str) -> tuple[str, list[int]]:
+    """Remove whitespace while retaining a normalized-to-source index map."""
+
+    characters: list[str] = []
+    positions: list[int] = []
+    for index, character in enumerate(text):
+        if character.isspace():
+            continue
+        characters.append(character)
+        positions.append(index)
+    return "".join(characters), positions
 
 
 def _validate_finding_semantics(finding: _LLMFinding, evidence: str) -> None:

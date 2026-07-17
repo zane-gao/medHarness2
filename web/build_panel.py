@@ -32,6 +32,13 @@ from pathlib import Path
 import yaml
 
 from medharness2.annotation import validate_pilot_annotation_package
+from medharness2.research_prep import (
+    _is_positive_int,
+    _read_json_object,
+    _validated_experiments,
+    _validated_ocr_winner,
+    _validation_errors,
+)
 
 REPO = Path(__file__).resolve().parents[1]
 DEFAULT_RUN = REPO / "outputs" / "sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710"
@@ -527,49 +534,29 @@ def extract_paper_evidence_gate(
     """Expose the unified paper gate without turning missing files into passes."""
     checks = []
     annotation_result = annotation_dir / "pilot_annotation_analysis.json"
-    if annotation_result.exists():
-        try:
-            payload = read_json(annotation_result)
-        except (OSError, UnicodeError, ValueError):
-            payload = {}
-    else:
-        payload = {}
+    payload = _read_json_object(annotation_result)
     case_count = payload.get("case_count")
     complete_count = payload.get("complete_case_count")
     reader_passed = (
         payload.get("status") == "complete"
-        and isinstance(case_count, int)
-        and isinstance(complete_count, int)
-        and case_count > 0
+        and _is_positive_int(case_count)
+        and _is_positive_int(complete_count)
         and complete_count == case_count
+        and not _validation_errors(payload)
     )
     checks.append({"id": "clinical_reader_annotation", "passed": reader_passed,
                    "reason": "complete_double_read_and_adjudication" if reader_passed else "annotation_analysis_missing_or_incomplete"})
 
     ocr_path = research_dir / "ocr_manifest.json"
-    try:
-        ocr = read_json(ocr_path)
-    except (OSError, UnicodeError, ValueError):
-        ocr = {}
+    ocr = _read_json_object(ocr_path)
     benchmark_results = ocr.get("benchmark_results")
-    ocr_passed = (
-        ocr.get("status") == "succeeded"
-        and ocr.get("winner_status") in {"validated", "frozen"}
-        and isinstance(benchmark_results, dict)
-        and set(benchmark_results) >= {"1", "2"}
-        and all(isinstance(item, dict) and item.get("status") == "succeeded" for item in benchmark_results.values())
-    )
+    ocr_passed = _validated_ocr_winner(ocr, benchmark_results)
     checks.append({"id": "ocr_winner", "passed": ocr_passed,
                    "reason": "validated_two_repeat_winner" if ocr_passed else "ocr_winner_missing_or_not_frozen"})
 
-    try:
-        experiments = read_json(experiment_results)
-    except (OSError, UnicodeError, ValueError):
-        experiments = {}
+    experiments = _read_json_object(experiment_results)
     experiment_rows = experiments.get("experiments")
-    experiments_passed = isinstance(experiment_rows, list) and bool(experiment_rows) and all(
-        isinstance(item, dict) and item.get("status") == "validated" for item in experiment_rows
-    )
+    experiments_passed = _validated_experiments(experiment_rows)
     checks.append({"id": "formal_experiments", "passed": experiments_passed,
                    "reason": "all_protocols_validated" if experiments_passed else "one_or_more_protocols_not_validated"})
     passed = all(item["passed"] for item in checks)
@@ -780,6 +767,27 @@ def extract_blindspot_audit(path: Path) -> dict | None:
     }
 
 
+def filter_deferred_audit_items(audit: dict | None) -> dict | None:
+    """Keep deferred security findings out of the published dashboard payload.
+
+    The source audit remains complete for traceability, but the dashboard is an
+    execution surface and should not repeat findings explicitly deferred by the
+    current project scope.
+    """
+    if audit is None:
+        return None
+    deferred = {"C1", "H1", "H2", "H3", "H4"}
+    filtered = dict(audit)
+    filtered["critical_issues"] = [item for item in audit.get("critical_issues", []) if item.get("id") not in deferred]
+    filtered["high_issues"] = [item for item in audit.get("high_issues", []) if item.get("id") not in deferred]
+    priority = audit.get("fix_priority") or {}
+    filtered["fix_priority"] = {
+        tier: [item for item in priority.get(tier, []) if item.get("id") not in deferred]
+        for tier in ("tier1", "tier2", "tier3")
+    }
+    return filtered
+
+
 # ---------------------------------------------------------------- 汇总组装
 
 def build_data(run_dir: Path) -> dict:
@@ -826,6 +834,7 @@ def build_data(run_dir: Path) -> dict:
         display_run_dir = str(run_dir.relative_to(REPO))
     except ValueError:
         display_run_dir = str(run_dir)
+    blindspot_audit = filter_deferred_audit_items(extract_blindspot_audit(BLINDSPOT_AUDIT))
     return {
         "run_dir": display_run_dir,
         "project_meta": {
@@ -886,7 +895,7 @@ def build_data(run_dir: Path) -> dict:
             EXPERIMENTS_RESULTS,
         ),
         "pilot10": extract_pilot10(PILOT10_MANIFEST),
-        "blindspot_audit": extract_blindspot_audit(BLINDSPOT_AUDIT),
+        "blindspot_audit": blindspot_audit,
     }
 
 

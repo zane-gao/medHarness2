@@ -13,7 +13,7 @@ from medharness2.annotation import (
     validate_pilot_annotation_package,
     analyze_pilot_annotations,
 )
-from medharness2.research_prep import evaluate_paper_evidence_gate, prepare_research_manifests, run_ocr_research
+from medharness2.research_prep import evaluate_paper_evidence_gate, freeze_ocr_winner, prepare_research_manifests, run_ocr_research
 from medharness2.config import load_config
 from medharness2.contracts import export_json_schemas, migrate_run_case_artifacts
 from medharness2.dashboard import build_dashboard, build_dashboard_summary
@@ -122,6 +122,8 @@ def build_parser() -> argparse.ArgumentParser:
     research_paper_gate.add_argument("--annotation-analysis", required=True)
     research_paper_gate.add_argument("--experiment-results", required=True)
     research_paper_gate.add_argument("--output", required=True)
+    research_freeze = research_sub.add_parser("freeze-ocr-winner")
+    research_freeze.add_argument("--research-dir", required=True)
     benchmark = subparsers.add_parser("benchmark")
     benchmark_sub = benchmark.add_subparsers(dest="benchmark_command", required=True)
     benchmark_plan = benchmark_sub.add_parser("plan")
@@ -361,6 +363,14 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result["status"] == "passed" else 2
+    if args.command == "research" and args.research_command == "freeze-ocr-winner":
+        try:
+            result = freeze_ocr_winner(args.research_dir)
+        except Exception as exc:
+            print(f"medHarness2 research freeze-ocr-winner failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
     if args.command == "benchmark" and args.benchmark_command == "plan":
         try:
             cfg = load_config(args.config) if args.config else load_config("config/formal_benchmark.yaml")

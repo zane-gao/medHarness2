@@ -77,7 +77,7 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
 ```
 
 该命令会生成病例完成数、双读 exact-set agreement、finding/hazard presence 的 Cohen κ、分歧队列和下一 gate。
-在任意病例未完成时命令以非零退出并写入 `status=blocked`；不会填充 kappa、ICC、模型排名或论文正式结果。
+在任意病例未完成时命令以非零退出并写入 `status=blocked`；不会产生数值 kappa/ICC、模型排名或论文正式结果（kappa 字段会保留 `status=insufficient_data`、`kappa=null` 以便审计）。
 即使所有病例完成，该文件也只是正式统计协议的输入；`formal_claim_allowed` 仍保持 `false`，直到 OCR、模型、临床标签和论文实验门禁全部通过。
 
 论文总门禁命令：
@@ -118,3 +118,13 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
 ```
 
 当前 OCR `winner_status=blocked`：北川 gold 已可用，但真实 provider 双次运行尚未完成；在候选覆盖、质量和重复一致性门禁通过前不得发布 winner 或论文正式结果。
+
+真实 OCR 两次 benchmark 完成且结果无 blocker 后，先冻结 winner：
+
+```bash
+PYTHONPATH=src .venv/bin/python -m medharness2.cli \
+  research freeze-ocr-winner \
+  --research-dir outputs/research/20260717
+```
+
+冻结命令要求两次选择结果一致、每个候选/重复的运行质量均为 `passed`、病例覆盖完整，并写入 `winner_model`、`freeze_id`、`freeze_version` 与证据文件列表；条件不满足时保持非零退出。

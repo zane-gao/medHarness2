@@ -9,6 +9,7 @@ from medharness2.annotation.models import AnnotationCase, CandidateReportForAnno
 from medharness2.ocr_benchmark import evaluate_ocr_candidates
 from medharness2.research_prep import (
     evaluate_paper_evidence_gate,
+    freeze_ocr_winner,
     prepare_research_manifests,
     run_ocr_research,
 )
@@ -71,6 +72,8 @@ def test_prepare_research_manifests_creates_blocked_ocr_and_paper_plans(tmp_path
     assert result["modality_coverage"] == ["ct", "cxr", "mri"]
     ocr = json.loads((tmp_path / "research" / "ocr_manifest.json").read_text())
     assert ocr["winner_status"] == "blocked"
+    assert ocr["candidate_count"] == 3
+    assert ocr["repeat_count"] == 2
     assert ocr["gold_source"] == "beichuan_reference_report"
     assert ocr["gold_status"] == "available_for_current_benchmark"
     assert len(ocr["runs"]) == 18
@@ -313,6 +316,348 @@ def test_evaluate_paper_evidence_gate_is_blocked_without_external_evidence(tmp_p
         "ocr_winner",
         "formal_experiments",
     }
+
+
+def test_evaluate_paper_evidence_gate_fails_closed_on_malformed_inputs(tmp_path: Path):
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "ocr_manifest.json").write_text(
+        json.dumps({"status": "succeeded", "winner_status": "validated", "benchmark_results": {"1": {"status": "succeeded"}, "2": {"status": "succeeded"}}}),
+        encoding="utf-8",
+    )
+    annotation = tmp_path / "annotation.json"
+    annotation.write_text(json.dumps({"status": "complete", "case_count": "1", "complete_case_count": 1}), encoding="utf-8")
+    experiments = tmp_path / "experiments.json"
+    experiments.write_text(json.dumps({"experiments": "validated"}), encoding="utf-8")
+
+    result = evaluate_paper_evidence_gate(research, annotation, experiments, tmp_path / "gate.json")
+
+    assert result["status"] == "blocked"
+    assert result["formal_claim_allowed"] is False
+    assert all(item["passed"] is False for item in result["checks"] if item["id"] != "ocr_winner")
+    assert (tmp_path / "gate.json").exists()
+
+
+def test_evaluate_paper_evidence_gate_requires_validated_experiment_gates(tmp_path: Path):
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "ocr_manifest.json").write_text(
+        json.dumps({"status": "succeeded", "winner_status": "validated", "benchmark_results": {"1": {"status": "succeeded"}, "2": {"status": "succeeded"}}}),
+        encoding="utf-8",
+    )
+    annotation = tmp_path / "annotation.json"
+    annotation.write_text(json.dumps({"status": "complete", "case_count": 1, "complete_case_count": 1}), encoding="utf-8")
+    experiments = tmp_path / "experiments.json"
+    experiments.write_text(json.dumps({"experiments": [{"status": "validated"}]}), encoding="utf-8")
+
+    result = evaluate_paper_evidence_gate(research, annotation, experiments, tmp_path / "gate.json")
+
+    assert result["status"] == "blocked"
+    formal_check = next(item for item in result["checks"] if item["id"] == "formal_experiments")
+    assert formal_check["passed"] is False
+
+
+def test_evaluate_paper_evidence_gate_rejects_thin_ocr_winner_claim(tmp_path: Path):
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "ocr_manifest.json").write_text(
+        json.dumps(
+            {
+                "status": "succeeded",
+                "winner_status": "validated",
+                "benchmark_results": {
+                    "1": {"status": "succeeded"},
+                    "2": {"status": "succeeded"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    annotation = tmp_path / "annotation.json"
+    annotation.write_text(json.dumps({"status": "complete", "case_count": 1, "complete_case_count": 1}), encoding="utf-8")
+    experiments = tmp_path / "experiments.json"
+    experiments.write_text(json.dumps({"experiments": []}), encoding="utf-8")
+
+    result = evaluate_paper_evidence_gate(research, annotation, experiments, tmp_path / "gate.json")
+
+    ocr_check = next(item for item in result["checks"] if item["id"] == "ocr_winner")
+    assert ocr_check["passed"] is False
+
+
+def test_evaluate_paper_evidence_gate_requires_freeze_metadata(tmp_path: Path):
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "ocr_manifest.json").write_text(
+        json.dumps({
+            "schema_version": "1.0",
+            "artifact_type": "ocr_research_manifest",
+            "status": "succeeded",
+            "winner_status": "validated",
+            "winner_model": "ocr_primary_doubao",
+            "freeze_id": "a" * 64,
+            "gold_source": "beichuan_reference_report",
+            "gold_status": "available_for_current_benchmark",
+            "benchmark_results": {
+                "1": {"status": "succeeded", "selection": {"status": "provisional", "primary_model": "ocr_primary_doubao"}},
+                "2": {"status": "succeeded", "selection": {"status": "provisional", "primary_model": "ocr_primary_doubao"}},
+            },
+        }),
+        encoding="utf-8",
+    )
+    result = evaluate_paper_evidence_gate(research, tmp_path / "missing-annotation.json", tmp_path / "missing-experiment.json", tmp_path / "gate.json")
+    assert next(item for item in result["checks"] if item["id"] == "ocr_winner")["passed"] is False
+
+
+def test_freeze_ocr_winner_requires_two_consistent_benchmarks(tmp_path: Path):
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "ocr_manifest.json").write_text(
+        json.dumps({
+            "schema_version": "1.0",
+            "artifact_type": "ocr_research_manifest",
+            "status": "succeeded",
+            "gold_source": "beichuan_reference_report",
+            "gold_status": "available_for_current_benchmark",
+            "case_count": 1,
+            "candidate_count": 2,
+            "benchmark_candidates": [
+                {"candidate_id": "ocr_primary_doubao"},
+                {"candidate_id": "ocr_baseline_paddle"},
+            ],
+            "repeat_count": 2,
+            "runs": [
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 1, "status": "succeeded", "quality_status": "passed"},
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 2, "status": "succeeded", "quality_status": "passed"},
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_baseline_paddle"}, "repeat": 1, "status": "succeeded", "quality_status": "passed"},
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_baseline_paddle"}, "repeat": 2, "status": "succeeded", "quality_status": "passed"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    for repeat in (1, 2):
+        (research / f"ocr_benchmark_repeat_{repeat}_result.json").write_text(
+            json.dumps({
+                "status": "succeeded",
+                "evaluated_count": 2,
+                "case_count": 1,
+                "blocked_items": [],
+                "selection": {"status": "provisional", "primary_model": "ocr_primary_doubao"},
+            }),
+            encoding="utf-8",
+        )
+
+    result = freeze_ocr_winner(research)
+
+    assert result["status"] == "frozen"
+    assert result["winner_model"] == "ocr_primary_doubao"
+    manifest = json.loads((research / "ocr_manifest.json").read_text())
+    assert manifest["schema_version"] == "1.0"
+    assert manifest["artifact_type"] == "ocr_research_manifest"
+    assert manifest["winner_status"] == "frozen"
+    assert len(manifest["freeze_id"]) == 64
+    assert set(manifest["benchmark_results"]) == {"1", "2"}
+    repeat = freeze_ocr_winner(research)
+    assert repeat == result
+
+
+def test_freeze_ocr_winner_rejects_case_count_or_run_identity_mismatch(tmp_path: Path):
+    research = tmp_path / "research"
+    research.mkdir()
+    manifest = {
+        "status": "succeeded",
+        "gold_source": "beichuan_reference_report",
+        "gold_status": "available_for_current_benchmark",
+        "case_count": 2,
+        "candidate_count": 1,
+        "benchmark_candidates": [{"candidate_id": "ocr_primary_doubao"}],
+        "repeat_count": 2,
+        "runs": [
+            {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 1, "status": "succeeded", "quality_status": "passed"},
+            {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 2, "status": "succeeded", "quality_status": "passed"},
+            {"pilot_case_id": "pilot-002", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 1, "status": "succeeded", "quality_status": "passed"},
+            # Repeat 2 for pilot-002 is intentionally absent.
+        ],
+    }
+    (research / "ocr_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    for repeat in (1, 2):
+        (research / f"ocr_benchmark_repeat_{repeat}_result.json").write_text(
+            json.dumps({
+                "status": "succeeded", "evaluated_count": 2, "case_count": 2,
+                "blocked_items": [],
+                "selection": {"status": "provisional", "primary_model": "ocr_primary_doubao"},
+            }),
+            encoding="utf-8",
+        )
+    with pytest.raises(ValueError, match="ocr_manifest_run_coverage_mismatch"):
+        freeze_ocr_winner(research)
+
+
+def test_freeze_ocr_winner_rejects_malformed_idempotent_evidence(tmp_path: Path):
+    research = tmp_path / "research"
+    research.mkdir()
+    manifest = {
+        "status": "succeeded",
+        "winner_status": "frozen",
+        "winner_model": "ocr_primary_doubao",
+        "freeze_id": "a" * 64,
+        "freeze_version": "ocr-winner-freeze-v1",
+        "freeze_evidence": {
+            "benchmark_results": ["ocr_benchmark_repeat_1_result.json"],
+            "evaluated_count_by_repeat": {"1": 1, "2": 1},
+        },
+        "gold_source": "beichuan_reference_report",
+        "gold_status": "available_for_current_benchmark",
+        "case_count": 1,
+        "candidate_count": 1,
+        "benchmark_candidates": [{"candidate_id": "ocr_primary_doubao"}],
+        "repeat_count": 2,
+        "runs": [
+            {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 1, "status": "succeeded", "quality_status": "passed"},
+            {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 2, "status": "succeeded", "quality_status": "passed"},
+        ],
+    }
+    (research / "ocr_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="frozen_ocr_manifest_incomplete"):
+        freeze_ocr_winner(research)
+
+
+def test_paper_gate_rejects_status_only_annotation_artifact(tmp_path: Path):
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "ocr_manifest.json").write_text(json.dumps({}), encoding="utf-8")
+    annotation = tmp_path / "annotation.json"
+    annotation.write_text(json.dumps({
+        "schema_version": "1.0",
+        "artifact_type": "pilot_annotation_analysis",
+        "status": "complete",
+        "case_count": 1,
+        "complete_case_count": 1,
+        "validation": {"status": "complete", "case_count": 1, "complete_case_count": 1, "errors": []},
+    }), encoding="utf-8")
+    experiments = tmp_path / "experiments.json"
+    experiments.write_text(json.dumps({"experiments": []}), encoding="utf-8")
+    result = evaluate_paper_evidence_gate(research, annotation, experiments, tmp_path / "gate.json")
+    assert next(item for item in result["checks"] if item["id"] == "clinical_reader_annotation")["passed"] is False
+
+
+def test_freeze_ocr_winner_rejects_disagreement(tmp_path: Path):
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "ocr_manifest.json").write_text(
+        json.dumps({
+            "status": "succeeded",
+            "gold_source": "beichuan_reference_report",
+            "gold_status": "available_for_current_benchmark",
+            "case_count": 1,
+            "candidate_count": 2,
+            "benchmark_candidates": [
+                {"candidate_id": "ocr_primary_doubao"},
+                {"candidate_id": "ocr_baseline_paddle"},
+            ],
+            "repeat_count": 2,
+            "runs": [
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 1, "status": "succeeded", "quality_status": "passed"},
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 2, "status": "succeeded", "quality_status": "passed"},
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_baseline_paddle"}, "repeat": 1, "status": "succeeded", "quality_status": "passed"},
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_baseline_paddle"}, "repeat": 2, "status": "succeeded", "quality_status": "passed"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    for repeat, model in ((1, "ocr_primary_doubao"), (2, "ocr_baseline_paddle")):
+        (research / f"ocr_benchmark_repeat_{repeat}_result.json").write_text(
+            json.dumps({"status": "succeeded", "evaluated_count": 2, "case_count": 1, "blocked_items": [], "selection": {"status": "provisional", "primary_model": model}}),
+            encoding="utf-8",
+        )
+    with pytest.raises(ValueError, match="winner_model_disagreement"):
+        freeze_ocr_winner(research)
+
+
+def test_freeze_ocr_winner_rejects_partial_or_blocked_benchmark(tmp_path: Path):
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "ocr_manifest.json").write_text(
+        json.dumps({
+            "status": "succeeded",
+            "gold_source": "beichuan_reference_report",
+            "gold_status": "available_for_current_benchmark",
+            "case_count": 2,
+            "candidate_count": 1,
+            "benchmark_candidates": [{"candidate_id": "ocr_primary_doubao"}],
+            "repeat_count": 2,
+            "runs": [
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 1, "status": "succeeded", "quality_status": "passed"},
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 2, "status": "succeeded", "quality_status": "passed"},
+                {"pilot_case_id": "pilot-002", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 1, "status": "succeeded", "quality_status": "passed"},
+                {"pilot_case_id": "pilot-002", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 2, "status": "succeeded", "quality_status": "passed"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    (research / "ocr_benchmark_repeat_1_result.json").write_text(
+        json.dumps({
+            "status": "succeeded",
+            "evaluated_count": 1,
+            "case_count": 2,
+            "blocked_items": ["coverage:ocr_primary_doubao"],
+            "selection": {"status": "provisional", "primary_model": "ocr_primary_doubao"},
+        }),
+        encoding="utf-8",
+    )
+    (research / "ocr_benchmark_repeat_2_result.json").write_text(
+        json.dumps({
+            "status": "succeeded",
+            "evaluated_count": 2,
+            "case_count": 2,
+            "blocked_items": [],
+            "selection": {"status": "provisional", "primary_model": "ocr_primary_doubao"},
+        }),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="ocr_benchmark_repeat_1_not_clean"):
+        freeze_ocr_winner(research)
+
+
+def test_freeze_ocr_winner_writes_manifest_atomically(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "ocr_manifest.json").write_text(
+        json.dumps({
+            "status": "succeeded",
+            "gold_source": "beichuan_reference_report",
+            "gold_status": "available_for_current_benchmark",
+            "case_count": 1,
+            "candidate_count": 1,
+            "benchmark_candidates": [{"candidate_id": "ocr_primary_doubao"}],
+            "repeat_count": 2,
+            "runs": [
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 1, "status": "succeeded", "quality_status": "passed"},
+                {"pilot_case_id": "pilot-001", "candidate": {"candidate_id": "ocr_primary_doubao"}, "repeat": 2, "status": "succeeded", "quality_status": "passed"},
+            ],
+        }),
+        encoding="utf-8",
+    )
+    for repeat in (1, 2):
+        (research / f"ocr_benchmark_repeat_{repeat}_result.json").write_text(
+            json.dumps({
+                "status": "succeeded",
+                "evaluated_count": 1,
+                "case_count": 1,
+                "blocked_items": [],
+                "selection": {"status": "provisional", "primary_model": "ocr_primary_doubao"},
+            }),
+            encoding="utf-8",
+        )
+    original = research / "ocr_manifest.json"
+    original_bytes = original.read_bytes()
+
+    def fail_replace(_src: Path, _dst: Path) -> None:
+        raise OSError("replace failed")
+
+    monkeypatch.setattr(research_prep.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="replace failed"):
+        freeze_ocr_winner(research)
+    assert original.read_bytes() == original_bytes
 
 
 def test_run_ocr_research_blocks_unreadable_source_pdf_hash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

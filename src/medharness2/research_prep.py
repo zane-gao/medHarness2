@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import copy
 import hashlib
+import math
 import os
 import re
+import tempfile
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -40,6 +42,104 @@ OCR_BENCHMARK_CANDIDATES = tuple(
 # Clinical reader labels remain a separate calibration layer.
 CURRENT_GOLD_SOURCE = "beichuan_reference_report"
 CURRENT_GOLD_STATUS = "available_for_current_benchmark"
+OCR_WINNER_FREEZE_VERSION = "ocr-winner-freeze-v1"
+OCR_FREEZE_BENCHMARK_FILES = (
+    "ocr_benchmark_repeat_1_result.json",
+    "ocr_benchmark_repeat_2_result.json",
+)
+
+
+def freeze_ocr_winner(research_dir: str | Path) -> dict[str, Any]:
+    """Freeze a repeat-consistent OCR winner into the research manifest."""
+    research = Path(research_dir)
+    manifest_path = research / "ocr_manifest.json"
+    manifest = _read_json_object(manifest_path)
+    if manifest.get("winner_status") == "frozen":
+        # A second invocation is intentionally idempotent, but a partially
+        # written or hand-edited frozen manifest must never be accepted.
+        try:
+            if (
+                manifest.get("status") != "succeeded"
+                or manifest.get("gold_source") != CURRENT_GOLD_SOURCE
+                or manifest.get("gold_status") != CURRENT_GOLD_STATUS
+            ):
+                raise ValueError("frozen_manifest_status_invalid")
+            _validate_ocr_run_coverage(manifest)
+            _validate_freeze_metadata(manifest)
+            benchmark_candidates = _declared_candidate_ids(manifest, key="benchmark_candidates")
+            winner = manifest.get("winner_model")
+            if not isinstance(winner, str) or winner.strip() not in benchmark_candidates:
+                raise ValueError("frozen_winner_invalid")
+        except ValueError as exc:
+            raise ValueError("frozen_ocr_manifest_incomplete") from exc
+        winner = manifest.get("winner_model")
+        freeze_id = manifest.get("freeze_id")
+        if isinstance(winner, str) and winner.strip() and isinstance(freeze_id, str) and re.fullmatch(r"[0-9a-f]{64}", freeze_id):
+            return {"status": "frozen", "winner_model": winner.strip(), "freeze_id": freeze_id, "research_dir": str(research)}
+        raise ValueError("frozen_ocr_manifest_incomplete")
+    if manifest.get("status") != "succeeded":
+        raise ValueError("ocr_manifest_not_succeeded")
+    if manifest.get("gold_source") != CURRENT_GOLD_SOURCE or manifest.get("gold_status") != CURRENT_GOLD_STATUS:
+        raise ValueError("ocr_gold_not_current_beichuan_reference")
+    expected_case_count = manifest.get("case_count")
+    expected_case_ids, candidate_ids = _validate_ocr_run_coverage(manifest)
+    benchmark_candidates = _declared_candidate_ids(manifest, key="benchmark_candidates")
+    if not benchmark_candidates or not benchmark_candidates.issubset(candidate_ids):
+        raise ValueError("ocr_manifest_benchmark_candidate_coverage_mismatch")
+    selections: list[str] = []
+    benchmark_payloads: dict[str, dict[str, Any]] = {}
+    for repeat in (1, 2):
+        path = research / f"ocr_benchmark_repeat_{repeat}_result.json"
+        result = _read_json_object(path)
+        if result.get("status") != "succeeded" or result.get("blocked_items") != []:
+            raise ValueError(f"ocr_benchmark_repeat_{repeat}_not_clean")
+        selection = result.get("selection")
+        if not isinstance(selection, dict) or selection.get("status") != "provisional":
+            raise ValueError(f"ocr_benchmark_repeat_{repeat}_not_selectable")
+        model = selection.get("primary_model")
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError(f"ocr_benchmark_repeat_{repeat}_winner_missing")
+        evaluated_count = result.get("evaluated_count")
+        declared_case_count = result.get("case_count")
+        expected_evaluated_count = _expected_benchmark_evaluated_count(
+            manifest, expected_case_count
+        )
+        if (
+            not _is_positive_int(evaluated_count)
+            or not _is_positive_int(declared_case_count)
+            or declared_case_count != expected_case_count
+            or evaluated_count != expected_evaluated_count
+        ):
+            raise ValueError(f"ocr_benchmark_repeat_{repeat}_coverage_missing")
+        if model.strip() not in benchmark_candidates:
+            raise ValueError(f"ocr_benchmark_repeat_{repeat}_winner_unknown")
+        selections.append(model.strip())
+        benchmark_payloads[str(repeat)] = result
+    if selections[0] != selections[1]:
+        raise ValueError("winner_model_disagreement")
+    winner_model = selections[0]
+    freeze_payload = {
+        "manifest": manifest,
+        "benchmark_results": benchmark_payloads,
+        "winner_model": winner_model,
+        "freeze_version": OCR_WINNER_FREEZE_VERSION,
+    }
+    freeze_id = hashlib.sha256(
+        json.dumps(freeze_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    manifest["winner_status"] = "frozen"
+    manifest["winner_model"] = winner_model
+    manifest["freeze_id"] = freeze_id
+    manifest["freeze_version"] = OCR_WINNER_FREEZE_VERSION
+    # Preserve the complete benchmark artifacts in the frozen manifest so the
+    # paper gate can validate metrics without trusting a status-only summary.
+    manifest["benchmark_results"] = benchmark_payloads
+    manifest["freeze_evidence"] = {
+        "benchmark_results": list(OCR_FREEZE_BENCHMARK_FILES),
+        "evaluated_count_by_repeat": {key: value["evaluated_count"] for key, value in benchmark_payloads.items()},
+    }
+    _atomic_write_json(manifest_path, manifest)
+    return {"status": "frozen", "winner_model": winner_model, "freeze_id": freeze_id, "research_dir": str(research)}
 
 
 def evaluate_paper_evidence_gate(
@@ -58,19 +158,11 @@ def evaluate_paper_evidence_gate(
     annotation = _read_json_object(Path(annotation_analysis_path))
     experiments = _read_json_object(Path(experiment_results_path))
     ocr = _read_json_object(research / "ocr_manifest.json")
-    annotation_passed = annotation.get("status") == "complete" and int(annotation.get("complete_case_count") or 0) == int(annotation.get("case_count") or 0) and int(annotation.get("case_count") or 0) > 0
+    annotation_passed = _validated_annotation_analysis(annotation)
     experiment_rows = experiments.get("experiments")
-    experiments_passed = isinstance(experiment_rows, list) and bool(experiment_rows) and all(
-        isinstance(item, dict) and item.get("status") == "validated" for item in experiment_rows
-    )
+    experiments_passed = _validated_experiments(experiment_rows)
     benchmark_results = ocr.get("benchmark_results")
-    ocr_passed = (
-        ocr.get("status") == "succeeded"
-        and ocr.get("winner_status") in {"validated", "frozen"}
-        and isinstance(benchmark_results, dict)
-        and set(benchmark_results) >= {"1", "2"}
-        and all(isinstance(value, dict) and value.get("status") == "succeeded" for value in benchmark_results.values())
-    )
+    ocr_passed = _validated_ocr_winner(ocr, benchmark_results)
     checks = [
         {"id": "clinical_reader_annotation", "passed": annotation_passed, "reason": "complete_double_read_and_adjudication" if annotation_passed else "annotation_analysis_missing_or_incomplete"},
         {"id": "ocr_winner", "passed": ocr_passed, "reason": "validated_two_repeat_winner" if ocr_passed else "ocr_winner_missing_or_not_frozen"},
@@ -99,6 +191,341 @@ def _read_json_object(path: Path) -> dict[str, Any]:
     except (OSError, UnicodeError, json.JSONDecodeError):
         return {}
     return value if isinstance(value, dict) else {}
+
+
+def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Replace a research manifest atomically so a failed freeze cannot corrupt it."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            handle.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None and temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
+
+
+def _is_positive_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _is_nonnegative_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _declared_candidate_ids(manifest: dict[str, Any], *, key: str = "candidates") -> set[str]:
+    """Read a candidate declaration without silently accepting duplicates."""
+    declared = manifest.get(key)
+    if declared is None:
+        return set()
+    if not isinstance(declared, list) or not declared:
+        raise ValueError(f"ocr_manifest_{key}_invalid")
+    ids: list[str] = []
+    for item in declared:
+        if not isinstance(item, dict):
+            raise ValueError(f"ocr_manifest_{key}_invalid")
+        candidate_id = item.get("candidate_id")
+        if not isinstance(candidate_id, str) or not candidate_id.strip():
+            raise ValueError(f"ocr_manifest_{key}_invalid")
+        ids.append(candidate_id.strip())
+    if len(ids) != len(set(ids)):
+        raise ValueError(f"ocr_manifest_{key}_duplicate")
+    return set(ids)
+
+
+def _expected_benchmark_evaluated_count(manifest: dict[str, Any], case_count: int) -> int:
+    """Return the expected candidate-row count for one benchmark repeat."""
+    benchmark_candidates = _declared_candidate_ids(manifest, key="benchmark_candidates")
+    return case_count * len(benchmark_candidates)
+
+
+def _validate_ocr_run_coverage(manifest: dict[str, Any]) -> tuple[set[str], set[str]]:
+    """Validate the full case/candidate/repeat run Cartesian product."""
+    runs = manifest.get("runs")
+    expected_case_count = manifest.get("case_count")
+    expected_candidate_count = manifest.get("candidate_count")
+    expected_repeat_count = manifest.get("repeat_count")
+    if not isinstance(runs, list) or not runs:
+        raise ValueError("ocr_runs_missing")
+    if (
+        not _is_positive_int(expected_case_count)
+        or not _is_positive_int(expected_candidate_count)
+        or expected_repeat_count != 2
+    ):
+        raise ValueError("ocr_manifest_coverage_missing")
+    declared_candidates = _declared_candidate_ids(manifest)
+    seen: set[tuple[str, str, int]] = set()
+    case_ids: set[str] = set()
+    candidate_ids: set[str] = set()
+    for run in runs:
+        if not isinstance(run, dict):
+            raise ValueError("ocr_manifest_malformed_run")
+        raw_case_id = run.get("pilot_case_id", run.get("case_id"))
+        case_id = raw_case_id.strip() if isinstance(raw_case_id, str) else ""
+        candidate = run.get("candidate")
+        candidate_id = candidate.get("candidate_id") if isinstance(candidate, dict) else None
+        candidate_id = candidate_id.strip() if isinstance(candidate_id, str) else ""
+        repeat = run.get("repeat")
+        if not case_id or not candidate_id or not _is_positive_int(repeat) or repeat not in {1, 2}:
+            raise ValueError("ocr_manifest_run_identity_missing")
+        key = (case_id, candidate_id, repeat)
+        if key in seen:
+            raise ValueError("ocr_manifest_duplicate_run")
+        seen.add(key)
+        case_ids.add(case_id)
+        candidate_ids.add(candidate_id)
+        if run.get("status") != "succeeded" or run.get("quality_status") != "passed":
+            raise ValueError("ocr_run_quality_not_passed")
+    if len(case_ids) != expected_case_count:
+        raise ValueError("ocr_manifest_case_coverage_mismatch")
+    if len(candidate_ids) != expected_candidate_count:
+        raise ValueError("ocr_manifest_candidate_coverage_mismatch")
+    if declared_candidates and declared_candidates != candidate_ids:
+        raise ValueError("ocr_manifest_candidate_coverage_mismatch")
+    expected = {
+        (case_id, candidate_id, repeat)
+        for case_id in case_ids
+        for candidate_id in candidate_ids
+        for repeat in (1, 2)
+    }
+    if seen != expected or len(runs) != len(expected):
+        raise ValueError("ocr_manifest_run_coverage_mismatch")
+    return case_ids, candidate_ids
+
+
+def _validate_freeze_metadata(manifest: dict[str, Any]) -> None:
+    """Validate evidence fields required for an idempotent frozen manifest."""
+    if manifest.get("freeze_version") != OCR_WINNER_FREEZE_VERSION:
+        raise ValueError("freeze_version_invalid")
+    evidence = manifest.get("freeze_evidence")
+    if not isinstance(evidence, dict):
+        raise ValueError("freeze_evidence_invalid")
+    benchmark_files = evidence.get("benchmark_results")
+    if benchmark_files != list(OCR_FREEZE_BENCHMARK_FILES):
+        raise ValueError("freeze_evidence_invalid")
+    counts = evidence.get("evaluated_count_by_repeat")
+    case_count = manifest.get("case_count")
+    embedded_results = manifest.get("benchmark_results")
+    try:
+        expected_count = _expected_benchmark_evaluated_count(manifest, case_count)
+    except (TypeError, ValueError):
+        raise ValueError("freeze_evidence_invalid") from None
+    if (
+        not isinstance(counts, dict)
+        or set(counts) != {"1", "2"}
+        or not isinstance(embedded_results, dict)
+        or set(embedded_results) != {"1", "2"}
+        or any(not isinstance(embedded_results[key], dict) for key in ("1", "2"))
+        or not _is_positive_int(case_count)
+        or any(counts[key] != expected_count for key in ("1", "2"))
+    ):
+        raise ValueError("freeze_evidence_invalid")
+
+
+def _validation_errors(payload: dict[str, Any]) -> list[Any]:
+    validation = payload.get("validation")
+    if validation is None:
+        return []
+    if not isinstance(validation, dict):
+        return ["validation_must_be_object"]
+    errors = validation.get("errors", [])
+    if not isinstance(errors, list):
+        return ["validation.errors_must_be_list"]
+    return errors
+
+
+def _validated_annotation_analysis(annotation: dict[str, Any]) -> bool:
+    """Require the concrete analysis artifact and its package validation."""
+    if (
+        annotation.get("schema_version") != "1.0"
+        or annotation.get("artifact_type") != "pilot_annotation_analysis"
+        or annotation.get("status") != "complete"
+    ):
+        return False
+    case_count = annotation.get("case_count")
+    complete_count = annotation.get("complete_case_count")
+    validation = annotation.get("validation")
+    if (
+        not _is_positive_int(case_count)
+        or not _is_positive_int(complete_count)
+        or complete_count != case_count
+        or not isinstance(validation, dict)
+        or validation.get("status") != "complete"
+        or validation.get("case_count") != case_count
+        or validation.get("complete_case_count") != complete_count
+        or validation.get("errors") != []
+        or not isinstance(validation.get("warnings"), list)
+    ):
+        return False
+    agreement = annotation.get("reader_agreement")
+    if (
+        not isinstance(agreement, dict)
+        or agreement.get("compared_case_count") != complete_count
+        or not isinstance(annotation.get("disagreement_queue"), list)
+        or annotation.get("formal_claim_allowed") is not False
+    ):
+        return False
+    for field in ("case_exact_agreement", "finding_exact_agreement", "hazard_exact_agreement"):
+        value = agreement.get(field)
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
+            return False
+    return True
+
+
+def _validated_experiments(rows: Any) -> bool:
+    """Require validated status plus an explicit, fully passed gate list."""
+    if not isinstance(rows, list) or not rows:
+        return False
+    for item in rows:
+        if not isinstance(item, dict) or item.get("status") != "validated":
+            return False
+        gates = item.get("validation_gates")
+        if not isinstance(gates, list) or not gates:
+            return False
+        for gate in gates:
+            if (
+                not isinstance(gate, dict)
+                or not isinstance(gate.get("id"), str)
+                or not gate["id"].strip()
+                or gate.get("passed") is not True
+            ):
+                return False
+        summary = item.get("gate_summary")
+        if summary is not None:
+            if not isinstance(summary, dict):
+                return False
+            if summary.get("total") != len(gates) or summary.get("passed") != len(gates):
+                return False
+    return True
+
+
+def _validated_ocr_winner(ocr: dict[str, Any], benchmark_results: Any) -> bool:
+    """Require a real, repeat-consistent and explicitly frozen OCR winner."""
+    if (
+        ocr.get("schema_version") != "1.0"
+        or ocr.get("artifact_type") != "ocr_research_manifest"
+        or ocr.get("status") != "succeeded"
+        or ocr.get("winner_status") != "frozen"
+        or ocr.get("gold_source") != CURRENT_GOLD_SOURCE
+        or ocr.get("gold_status") != CURRENT_GOLD_STATUS
+        or not isinstance(ocr.get("winner_model"), str)
+        or not ocr["winner_model"].strip()
+        or not isinstance(ocr.get("freeze_id"), str)
+        or re.fullmatch(r"[0-9a-f]{64}", ocr["freeze_id"].strip()) is None
+        or not isinstance(benchmark_results, dict)
+        or set(benchmark_results) != {"1", "2"}
+    ):
+        return False
+    try:
+        case_ids, run_candidate_ids = _validate_ocr_run_coverage(ocr)
+        _validate_freeze_metadata(ocr)
+        benchmark_candidate_ids = _declared_candidate_ids(ocr, key="benchmark_candidates")
+    except ValueError:
+        return False
+    if not benchmark_candidate_ids or not benchmark_candidate_ids.issubset(run_candidate_ids):
+        return False
+    winner_model = ocr["winner_model"].strip()
+    if winner_model not in benchmark_candidate_ids:
+        return False
+    selections = []
+    for repeat in ("1", "2"):
+        result = benchmark_results.get(repeat)
+        if not _validated_benchmark_result(
+            result,
+            case_ids=case_ids,
+            candidate_ids=benchmark_candidate_ids,
+            winner_model=winner_model,
+        ):
+            return False
+        selection = result.get("selection")
+        model = selection.get("primary_model")
+        if not isinstance(model, str) or not model.strip():
+            return False
+        selections.append(model.strip())
+    return selections[0] == selections[1] == winner_model
+
+
+def _validated_benchmark_result(
+    result: Any,
+    *,
+    case_ids: set[str],
+    candidate_ids: set[str],
+    winner_model: str,
+) -> bool:
+    """Validate one embedded OCR benchmark artifact and its metric coverage."""
+    if not isinstance(result, dict):
+        return False
+    expected_count = len(case_ids)
+    expected_rows = expected_count * len(candidate_ids)
+    if (
+        result.get("schema_version") != "1.0"
+        or result.get("artifact_type") != "ocr_candidate_benchmark"
+        or result.get("status") != "succeeded"
+        or result.get("blocked_items") != []
+        or result.get("case_count") != expected_count
+        or result.get("evaluated_count") != expected_rows
+    ):
+        return False
+    selection = result.get("selection")
+    if (
+        not isinstance(selection, dict)
+        or selection.get("status") not in {"provisional", "validated", "frozen"}
+        or selection.get("primary_model") != winner_model
+    ):
+        return False
+    metrics = result.get("metrics")
+    if not isinstance(metrics, list) or len(metrics) != expected_rows:
+        return False
+    seen: set[tuple[str, str]] = set()
+    for item in metrics:
+        if not isinstance(item, dict):
+            return False
+        case_id = item.get("case_id")
+        model = item.get("model")
+        if not isinstance(case_id, str) or case_id not in case_ids:
+            return False
+        if not isinstance(model, str) or model not in candidate_ids:
+            return False
+        key = (case_id, model)
+        if key in seen:
+            return False
+        seen.add(key)
+        for field in ("clinical_cer", "digit_token_accuracy", "negation_token_accuracy"):
+            value = item.get(field)
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
+                return False
+        if not isinstance(item.get("possible_truncation"), bool):
+            return False
+    if seen != {(case_id, model) for case_id in case_ids for model in candidate_ids}:
+        return False
+    by_model = result.get("by_model")
+    if not isinstance(by_model, dict) or set(by_model) != candidate_ids:
+        return False
+    for model in candidate_ids:
+        summary = by_model.get(model)
+        if not isinstance(summary, dict) or summary.get("case_count") != expected_count:
+            return False
+        for field in ("clinical_cer_mean", "digit_token_accuracy_mean", "negation_token_accuracy_mean"):
+            value = summary.get(field)
+            if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
+                return False
+        if not _is_nonnegative_int(summary.get("truncation_count")):
+            return False
+    return True
 
 
 def run_ocr_research(
@@ -1033,6 +1460,8 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
         "artifact_type": "ocr_research_manifest",
         "status": "blocked",
         "case_count": len(rows),
+        "candidate_count": len(OCR_CANDIDATES),
+        "repeat_count": 2,
         "modality_coverage": sorted(modalities),
         "coverage_ok": coverage_ok,
         "gold_source": CURRENT_GOLD_SOURCE,

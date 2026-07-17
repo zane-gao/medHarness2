@@ -188,6 +188,8 @@ def test_ocr_cache_sidecar_rejects_malformed_provenance_types(field: str, bad: o
         {"page_count": True},
         {"source_page_count": 1, "retained_page_count": 2},
         {"quality_audit": {"pages": [{"status": "maybe"}]}},
+        {"quality_audit": {"pages": []}},
+        {"quality_audit": {"pages": [{"page_index": 1}]}},
     ],
 )
 def test_ocr_cache_sidecar_rejects_malformed_page_contracts(payload: dict[str, object]):
@@ -199,6 +201,21 @@ def test_ocr_cache_sidecar_rejects_malformed_page_contracts(payload: dict[str, o
     }
     base.update(payload)
     assert _cache_metadata_valid(base) is False
+
+
+def test_ocr_cache_sidecar_requires_audit_when_verifier_is_configured():
+    payload = {
+        "warnings": [],
+        "verifier": {
+            "configured": True,
+            "provider": "chat_completions",
+            "model": "verifier-v1",
+            "role": "ocr_verifier",
+        },
+        "quality_audit": None,
+        "quality_status": "passed",
+    }
+    assert _cache_metadata_valid(payload) is False
 
 
 def test_ocr_cache_does_not_reuse_blocked_quality_result(tmp_path: Path):
@@ -331,6 +348,45 @@ def test_direct_pdf_text_extraction_closes_document_and_preserves_text(tmp_path:
     result = extract_report_text(pdf, case_id="text-layer", output_dir=tmp_path / "ocr", force=True)
     assert result.method == "pdf_text_layer"
     assert "Clear lungs" in result.text
+
+
+def test_text_layer_ocr_runs_configured_verifier_audit(tmp_path: Path):
+    """A text layer must not bypass the configured page-level visual audit."""
+    pdf = tmp_path / "text-layer-audited.pdf"
+    doc = fitz.open()
+    for text in (
+        "FINDINGS: Clear lungs. IMPRESSION: Normal.",
+        "FINDINGS: No pleural effusion. IMPRESSION: Stable.",
+    ):
+        page = doc.new_page(width=300, height=200)
+        page.insert_text((30, 60), text)
+    doc.save(pdf)
+
+    class Verifier:
+        def __init__(self) -> None:
+            self.images: list[str] = []
+
+        def call(self, prompt, image_path=None, **kwargs):
+            assert image_path
+            self.images.append(image_path)
+            return {"status": "disagreement", "reason": "audit only"}
+
+    verifier = Verifier()
+    result = extract_report_text(
+        pdf,
+        case_id="text-layer-audited",
+        output_dir=tmp_path / "ocr",
+        config=AppConfig(llm=LLMConfig(provider="mock")),
+        verifier_client=verifier,
+        verifier_options={"provider": "chat_completions", "model": "verifier-v1"},
+        force=True,
+    )
+
+    assert result.method == "pdf_text_layer"
+    assert "Clear lungs" in result.text
+    assert len(verifier.images) == 2
+    assert result.metadata["quality_status"] == "review_required"
+    assert [item["page_index"] for item in result.metadata["quality_audit"]["pages"]] == [1, 2]
 
 
 def test_pdf_text_cache_is_not_reused_when_verifier_is_configured_but_missing(

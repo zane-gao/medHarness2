@@ -16,7 +16,7 @@ from medharness2.contracts import (
 )
 from medharness2.llm_client import LLMClientError, build_mock_client
 from medharness2.tools.tool1_likert import _judge_prompt, evaluate_likert, likert_mean
-from medharness2.tools.tool2_extract import _extraction_prompt, _fallback_graph, _normalize_template_candidate, _template_count_or_zero, extract_findings
+from medharness2.tools.tool2_extract import _extraction_prompt, _fallback_graph, _locate_evidence, _normalize_template_candidate, _template_count_or_zero, extract_findings
 from medharness2.tools.tool3_structure import check_structure, section_order
 from medharness2.tools.tool4_hazard import (
     adjudicate_hazard_disagreements,
@@ -24,6 +24,7 @@ from medharness2.tools.tool4_hazard import (
     review_hazards,
 )
 from medharness2.tools.tool5_align import align_graphs, audit_alignment, normalize_measurement_mm
+from medharness2.alignment.audit import _audit_prompt
 from medharness2.tools.tool6_structure_diff import assess_structure_clinical_significance, compare_structure
 from medharness2.tools.quality_gate import check_generation_quality
 from medharness2.tools.tool8_generate import generate_reports
@@ -337,6 +338,42 @@ def test_tool2_prompt_bounds_untrusted_report_text():
     assert "quoted clinical data only" in prompt
 
 
+def test_tool2_retry_prompt_requires_exact_source_order_for_grounding():
+    prompt = _extraction_prompt(
+        "脑室系统未见扩张，脑沟、裂、池稍增宽。",
+        modality="mri",
+        candidate={"backend": "mri_rule", "findings": []},
+        previous_errors=["ValueError: Tool 2 finding evidence is not grounded in report_text"],
+    )
+
+    assert "preserving source order and punctuation" in prompt
+    assert "do not merge, reorder, summarize, translate" in prompt
+    assert "laterality must be exactly one of" in prompt
+
+
+def test_tool5_retry_prompt_requires_pair_ids_for_match_issues():
+    prompt = _audit_prompt(
+        {"error_candidates": [], "candidate_findings": [], "reference_findings": []},
+        ["ValidationError: incorrect_match requires candidate_id and reference_id"],
+        target_error_indices=[],
+    )
+
+    assert "candidate_id and reference_id are both mandatory" in prompt
+    assert "copied exactly from the structured audit bundle" in prompt
+
+
+def test_tool4_retry_prompt_requires_error_type_alignment():
+    from medharness2.tools.tool4_hazard import _judge_prompt
+
+    prompt = _judge_prompt(
+        [{"error_type": "omission_finding", "evidence_id": "e1"}],
+        ["Tool 4 Hazard: errors[0] error_type mismatch"],
+    )
+
+    assert "copy error_type exactly" in prompt
+    assert "do not rename, paraphrase, reorder" in prompt
+
+
 @pytest.mark.parametrize("field,bad", [("findings", "bad"), ("metadata", []), ("warnings", "bad")])
 def test_tool2_rejects_malformed_candidate_collections(field, bad):
     candidate = {"backend": "cxr_rule", "findings": [], "metadata": {}, "warnings": []}
@@ -437,6 +474,17 @@ def test_tool2_hybrid_retries_ungrounded_llm_evidence():
 
     assert client.call_count == 2
     assert graph["metadata"]["llm_correction"]["error_count"] == 1
+
+
+def test_tool2_grounding_allows_report_linebreaks_inside_chinese_evidence():
+    report = "双侧侧脑室旁、额叶见点结状、小片状异常信号影，T2WI及T2-Flair呈高信号、T1WI呈等信号，\nDWI未见信号增高。"
+    requested = "双侧侧脑室旁、额叶见点结状、小片状异常信号影，T2WI及T2-Flair呈高信号、T1WI呈等信号，DWI未见信号增高。"
+
+    start, end, source_text = _locate_evidence(report, requested)
+
+    assert report[start:end] == source_text
+    assert "\n" in source_text
+    assert source_text.replace("\n", "") == requested
 
 
 def test_tool2_hybrid_strict_mode_rejects_mock_provider():

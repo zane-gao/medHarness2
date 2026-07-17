@@ -434,10 +434,10 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
     <h3 style="margin-top:0">五阶段闭环：从输入到可治理结论</h3>
     <div class="flow">
       <div class="step"><div class="no">1</div><div class="body"><h4>契约与迁移</h4><p>冻结 case、finding、report、hazard 和 run schema，旧产物先迁移、再验证。</p></div></div>
-      <div class="step"><div class="no">2</div><div class="body"><h4>生成与评估基准</h4><p>按模态/部位生成候选，区分 formal_fresh、exploratory_fresh、artifact 和 debug_fallback。</p></div></div>
+      <div class="step"><div class="no">2</div><div class="body"><h4>生成与评估基准</h4><p>先按三种主模态（CXR / CT / MRI）生成候选，部位只作为排序信号；区分 formal_fresh、exploratory_fresh、artifact 和 debug_fallback。</p></div></div>
       <div class="step"><div class="no">3</div><div class="body"><h4>重评估与实验</h4><p>确定性主结果与 LLM 审计分开保存，重测稳定性、临床标注和六项实验门禁同步推进。</p></div></div>
       <div class="step"><div class="no">4</div><div class="body"><h4>图表与控制面板</h4><p>只从真实产物构建页面，显示 Git、来源健康、证据等级和未通过门禁。</p></div></div>
-      <div class="step"><div class="no">5</div><div class="body"><h4>临床与治理</h4><p>双读者/仲裁、隐私和凭据治理完成后，才把探索性工程证据升级为正式研究结论。</p></div></div>
+      <div class="step"><div class="no">5</div><div class="body"><h4>临床与治理</h4><p>双读者/仲裁和研究门禁完成后，才把探索性工程证据升级为正式研究结论。</p></div></div>
     </div>
   </div>
 </section>
@@ -489,30 +489,26 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
     <h2>代码审计与盲区扫描（2026-07-14）</h2>
     <p class="sec-lead">
       8 维度并行代码审计（62 个 agent）+ 对抗性验证：每条发现派独立"怀疑者"读真实代码反驳。
-      原始 54 条发现 → 验证后 37 条留存（1 CRITICAL / 17 HIGH / 13 MEDIUM / 6 LOW）。
+      原始 54 条发现，当前执行项按项目范围过滤后展示。
       <b>关键结论：权威 benchmark 那次跑是干净的</b>（双重硬门禁把所有 mock/fallback 泄漏路径都挡住），
       但其他工作流没有门禁，能让伪造分数冒充真评委。
     </p>
+    <p class="note" style="font-size:12.5px;color:var(--ink-3)">安全治理与 API 风险按当前项目范围暂缓，本轮不作为执行项；下方只展示当前研发需要处理的质量、统计与复现问题。</p>
   </div>
 
   <div id="audit-summary" class="audit-summary"></div>
   <div id="audit-conclusion" class="conclusion-box" style="display:none"></div>
 
   <div class="card" style="margin-bottom: 16px;">
-    <h3 style="margin:0 0 12px">🔴 CRITICAL 级别问题（安全红线）</h3>
+    <h3 style="margin:0 0 12px">🔴 CRITICAL 级别问题（当前执行项）</h3>
     <div id="critical-issues"></div>
   </div>
 
   <div class="card" style="margin-bottom: 16px;">
-    <h3 style="margin:0 0 12px">🟠 HIGH 级别问题（17 条）</h3>
+    <h3 style="margin:0 0 12px">🟠 HIGH 级别问题（当前执行项 13 条）</h3>
     <p style="margin:0 0 12px;font-size:13px;color:var(--ink-2)">
-      分布：安全/隐私 4 条、统计有效性 4 条、mock/fallback 泄漏 2 条、科学有效性 1 条、
-      复现性 2 条、LLM 集成 2 条、测试覆盖 1 条、数据一致性 1 条
+      当前执行项分布：统计有效性 4 条、数据质量与 Mock 3 条、复现性与测试 4 条、LLM 集成 2 条。
     </p>
-    <details open>
-      <summary style="cursor:pointer;font-weight:600;margin-bottom:12px;color:var(--c1)">▸ 安全与隐私（4 条）</summary>
-      <div id="high-security-issues"></div>
-    </details>
     <details open style="margin-top:12px">
       <summary style="cursor:pointer;font-weight:600;margin-bottom:12px;color:var(--c1)">▸ 统计有效性（4 条）</summary>
       <div id="high-stats-issues"></div>
@@ -542,8 +538,7 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
   <div class="card" style="margin-bottom: 16px;">
     <h3 style="margin:0 0 12px">📋 修复优先级与路线图</h3>
     <p style="margin:0 0 16px;font-size:13px;color:var(--ink-2)">
-      三梯队修复建议：梯队 1 是数字可信度地基（改动小、验证简单），梯队 2 是合规红线（动真实病人数据前必须），
-      梯队 3 是评委可靠性与工程健壮性。
+      三梯队修复建议：梯队 1 是数字可信度地基，梯队 2 是当前数据与实验执行项，梯队 3 是评委可靠性与工程健壮性。
     </p>
     <div id="fix-priority-tier1" class="tier-section"></div>
     <div id="fix-priority-tier2" class="tier-section"></div>
@@ -568,10 +563,10 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
 <section id="map">
   <div class="sec-head">
     <div class="sec-kicker">06.8 · MAP</div>
-    <h2>工程进度地图：九条战线与六道正式关卡</h2>
+    <h2>工程进度地图：项目战线与六道正式关卡</h2>
     <p class="sec-lead">
       项目已从「把流水线跑通」进入「向正式研究结论推进」阶段。这一节回答三个问题：
-      每条战线现在推进到哪了？发表级结论前还有哪些门禁没点亮？北川文本 gold 与临床 reader 校准分别推进到哪一步？
+      每条战线现在推进到哪了？发表级结论前还有哪些门禁没点亮？文本基准与临床 reader 校准分别推进到哪一步？
       数据全部来自 <code>docs/project_status.yaml</code> 与实验聚合产物，构建时注入。
     </p>
   </div>
@@ -672,11 +667,11 @@ const FLOW = [
   { no:"入", io:true, title:"进门：一张片子 + 一份医生报告",
     desc:"输入就这两样。片子可能是胸片、CT 或 MRI；报告是医生写的原文（本批数据由 OCR 从报告单识别而来）。", chips:[] },
   { no:"1", title:"认片子 —— 这是 CT 还是胸片？",
-    desc:"先搞清楚模态和部位，后面所有环节（找哪些陪练、用哪套抽取规则）都取决于它。", chips:[["tool7","T7 模态识别"]] },
+    desc:"先归一化三种主模态（CXR / CT / MRI）；部位作为辅助上下文，不再硬性淘汰候选。", chips:[["tool7","T7 模态识别"]] },
   { no:"2", title:"AI 陪练团各写一份报告",
-    desc:"按「模态 + 部位」路由到合适的本地医学模型（胸片找 MAIRA-2 / CheXagent，CT 找 CT-CHAT / Merlin…），每人对着片子写一份报告，当作对照组。", chips:[["tool8","T8 报告生成"]] },
+    desc:"按模态（CXR / CT / MRI）路由到兼容的本地医学模型，部位只参与候选排序；每个模型对着片子盲写一份报告，当作对照组。", chips:[["tool8","T8 报告生成"]] },
   { no:"3", title:"验货 —— AI 写的报告先过质检",
-    desc:"部位写串了没有？缺不缺「诊断印象」段？是不是兜底货？不合格的盖章记录在案，并给每份报告标「证据等级」。", chips:[["toolqg","质量门禁"]] },
+    desc:"检查模态是否冲突、段落是否完整、是否使用兜底；部位冲突保留为可审计 warning，不再作为硬阻断，并给每份报告标「证据等级」。", chips:[["toolqg","质量门禁"]] },
   { no:"4", title:"逐份体检 —— 医生的和 AI 的都要查",
     desc:"每份报告独立做三项检查：① 五维打分（写得好不好）② 拆成发现清单（写了什么）③ 结构检查（该有的段落全不全）。", chips:[["tool1","T1 五维打分"],["tool2","T2 病灶抽取"],["tool3","T3 结构检查"]] },
   { no:"5", title:"对答案 —— 医生 vs AI 逐条配对",
@@ -786,7 +781,7 @@ const TOOLS = [
     <table><tr><th>错误类型</th><th>危害</th><th>涉及内容</th></tr>${hzRows}</table>
     <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 本次判级后端是 <code>${esc(EX.hazard_backend)}</code>（分布：${esc(JSON.stringify(H.hazard_backends))}）——即按「错误类型→固定等级」查表，如所有漏诊一律 4 级。没有任何临床语义判断：漏一个 3mm 钙化结节和漏一处骨折被判了同样的刑。${DATA.smoke && DATA.smoke.t4 ? '<a href="#fresh">最新进展：真 LLM 三法官制（主判+复核+仲裁）已在 11 例上运行，见 ⑥.5 节 →</a>' : ''}</div>`,
   how:`<p><b>设计的做法：</b>把错误清单交给 LLM 法官，要求逐条返回等级+理由的 JSON，带格式校验和重试；全部失败才退回规则表。现在是<b>三法官制</b>：主判（gpt-5.6-terra）先判，复核官（claude-opus-4-8）独立再判，两者分歧自动送第三位仲裁官（gpt-5.6-sol）终裁——三份意见全部留卷，仲裁只追加不覆盖。11 例真跑中 133 个错误吵出 93 处分歧、全部完成仲裁。</p>
-    <p><b>意义：</b>「危害加权」是这个项目区别于普通文本相似度评估的核心卖点——本次 52 例 run 里还是查表实现，但真 LLM 三法官判级已在 11 例上兑现，待铺开 + 医生金标准校准。</p>` },
+    <p><b>意义：</b>「危害加权」是这个项目区别于普通文本相似度评估的核心卖点——本次 52 例 run 里还是查表实现，但真 LLM 三法官判级已在 11 例上兑现，待铺开 + 临床 reader 校准。</p>` },
 
 { id:"tool5", no:"T5", name:"发现对齐（对答案）", impl:IMPL.rule, honesty:honestyBadge("good"),
   say:"把医生和 AI 的两张发现清单逐条配对，配不上的就是问题：AI 多写的=疑似瞎编，医生有 AI 没有的=疑似漏诊。",
@@ -816,13 +811,13 @@ const TOOLS = [
   how:`<p><b>三级瀑布：</b>① 读 DICOM 头（医学影像自带的"身份证"，里面直接写着设备类型）→ ② 认不出再看文件后缀和路径关键词 → ③ 还认不出才问视觉大模型"这是什么片子"。便宜的手段优先，贵的手段兜底——这个瀑布式设计在整个项目里反复出现。</p>` },
 
 { id:"tool8", no:"T8", name:"报告生成（AI 陪练团）", impl:IMPL.mix("本地医学模型优先；通用 VLM 兜底"), honesty:honestyBadge("t8"),
-  say:"按「模态+部位」叫来合适的专科 AI 各写一份报告：胸片找 MAIRA-2 / CheXagent，CT 找 CT-CHAT / Merlin，脑 MRI 找 brain_gemma3d……",
+  say:"按三种主模态叫来兼容的医学 AI 各写一份报告：CXR、CT、MRI 分别展开可用候选，部位只用于排序与审计提示。",
   meta:"请几位陪练医生对着同一张片子各写一份，用来跟真医生对答案。找不到对口专科时，只好请「全科实习生」（通用视觉模型 qwen3-vl-4b）顶班。",
-  input:"图像 + 模态 + 部位", output:"多份候选报告（每份带 模型名 / 来源 / 证据等级 / 警告）",
+  input:"图像 + 模态 + 可选部位", output:"多份候选报告（每份带 模型名 / 来源 / 证据等级 / 警告）",
   example:`<div class="lab">真实例子 · ${esc(EX.case_id)} 由 ${esc(gen0.model)} 生成（来源 ${esc(gen0.source)}，证据等级 ${esc(gen0.evidence_tier)}）</div>
     <div class="snip">"${esc(gen0.snippet)}…"</div>
     <div style="margin-top:6px;color:#8a5d00;font-size:12.5px">⚠ 本次 ${K.generated_report_count} 份候选的来源：专科模型 CLI 生成 ${SOURCE_COUNTS.medharness_cli||0} 份 / 通用 VLM 顶班 ${SOURCE_COUNTS.local_vlm_fallback||0} 份 / 复用旧产物 ${SOURCE_COUNTS.artifact_reuse||0} 份。<b>更扎心的是：连那 ${SOURCE_COUNTS.medharness_cli||0} 份专科模型报告都被打上了 <code>${WARNING_COUNTS.legacy_reference_assisted_generation_assumed||0}</code> 个「疑似参考辅助生成」警告</b>（担心生成时偷看了医生报告答案），证据等级因此降到 debug_fallback。所以本次<b>没有一份候选是干净的 formal_fresh</b>；因此这些候选只能用于工程检查或探索性分析，不能进入正式模型比较。</div>`,
-  how:`<p><b>怎么实现的：</b>一个「模型花名册」（Registry）登记了每个本地模型擅长的模态和部位。来了病例先查花名册路由；对口模型都不在（如 CT-head 目前无专科模型）就落到通用 VLM 兜底，并在产物上打警告标签。所有模型权重在本地 8×A40 上推理，不出网。</p>
+  how:`<p><b>怎么实现的：</b>一个「模型花名册」（Registry）登记每个本地模型支持的模态。病例先按 CXR / CT / MRI 展开兼容候选，部位仅作为排序信号；没有可用专科模型时才落到通用 VLM 兜底，并在产物上打警告标签。所有模型权重在本地 8×A40 上推理，不出网。</p>
     <p><b>意义：</b>陪练团的专业度直接决定「对答案」有没有意义——拿实习生的报告、或偷看过答案的报告当参照，对齐结果都说明不了医生的真实水平。补齐空缺路由 + 确保「盲写」（不喂医生报告）是数据可信度的关键。</p>` },
 
 { id:"tool9", no:"T9", name:"排名（Top-K 选优）", impl:IMPL.rule, honesty:honestyBadge("good"),
@@ -851,11 +846,11 @@ const TOOLS = [
   how:`<p>Python 标准库 statistics，最朴素的一台仪器。医生百分位就是它算的。</p>` },
 
 { id:"toolqg", no:"QG", name:"质量门禁（验货员）", impl:IMPL.rule, honesty:honestyBadge("good"),
-  say:"AI 写的每份报告在进入对比前先验货：部位对不对、段落全不全、是不是兜底货，并盖上「证据等级」章。",
+  say:"AI 写的每份报告在进入对比前先验货：模态是否冲突、段落全不全、是不是兜底货；部位冲突记 warning，并盖上「证据等级」章。",
   meta:"仓库验货员：货不对板就贴红条，所有货都要标产地——后面的人一看标签就知道这批货能信几分。",
   input:"一份候选报告 + 期望的模态/部位", output:"通过/失败 + 警告标签 + 证据等级（formal_fresh / exploratory_fresh / artifact / debug_fallback / mock）",
   example:`<div class="lab">本次运行的真实战果</div>
-    <div>${K.generated_report_count} 份候选中 <b>${K.quality_passed}</b> 份过检、<b style="color:#a32e2e">${K.quality_failed}</b> 份被拦下。最典型的翻车：给胸部 CT 配的模型 dia_llama 在报告里写出了「脾脏」——部位不匹配，直接盖不合格章（见第 ⑥ 节失败清单）。本次证据等级分布：${esc(JSON.stringify(TIER_COUNTS))}——没有一份是 formal_fresh，全是旧产物复用或兜底。</div>`,
+    <div>${K.generated_report_count} 份候选中 <b>${K.quality_passed}</b> 份过检、<b style="color:#a32e2e">${K.quality_failed}</b> 份被拦下。质量门禁现在只对模态冲突和 fallback 做硬阻断；部位冲突会保留为 warning 并进入审计与排序。本次证据等级分布：${esc(JSON.stringify(TIER_COUNTS))}——没有一份是 formal_fresh，全是旧产物复用或兜底。</div>`,
   how:`<p><b>怎么实现的：</b>一串确定性检查规则 + 一套「证据等级」标签体系。等级从高到低：<code>formal_fresh</code>=正规模型正式新鲜推理、<code>exploratory_fresh</code>=探索性新鲜推理、<code>artifact</code>=复用以前跑好的旧产物、<code>debug_fallback</code>=兜底/调试性质、<code>mock</code>=假数据。<b>科研诚实性就是靠它机械保证的</b>：任何一个数字都能顺着标签查出它的成色，本页的「诚实度徽章」正是读这些标签算出来的。</p>` },
 ];
 
@@ -933,7 +928,7 @@ document.getElementById("reader-table").innerHTML = `
 
 document.getElementById("gate-table").innerHTML = `
   <h4>质量门禁拦下的 ${GATE_FAILURES.length} 份报告（这不是坏消息）</h4>
-  <p class="note">门禁能抓到问题恰恰说明流水线有自检能力。共性：模型和部位错配。</p>
+  <p class="note">门禁能抓到问题恰恰说明流水线有自检能力。模态冲突/fallback 会阻断；部位冲突只作为可审计 warning，不再硬淘汰候选。</p>
   <details class="more"><summary>展开失败清单</summary><div class="inner">
   <table class="plain"><tr><th>病例</th><th>模态/部位</th><th>模型</th><th>被拦原因</th></tr>
   ${GATE_FAILURES.map(r => `<tr><td class="mono">${esc(r.case_id)}</td><td>${esc(r.modality)}/${esc(r.body_part)}</td><td class="mono">${esc(r.model)}</td><td class="mono" style="font-size:11px">${esc(r.warnings)}</td></tr>`).join("")}
@@ -1109,17 +1104,17 @@ document.getElementById("gate-table").innerHTML = `
   const WS = DATA.workstreams, EG = DATA.experiment_gates, P10 = DATA.pilot10, PG = DATA.paper_evidence_gate;
   if (!WS && !EG && !P10 && !PG) { sec.style.display = "none"; return; }
 
-  /* --- 九条战线 --- */
+  /* --- 项目战线 --- */
   if (WS && WS.workstreams) {
     const META = {
       contracts:           ["数据契约", "所有产物的「格式法律」：schema 校验 + 哈希绑定"],
       tools:               ["评估工具（T1–T12）", "打分 / 抽取 / 判级 / 审计等 13 台仪器"],
       ocr:                 ["OCR 数据源", "报告单图片 → 文字，一切评估的最上游"],
       generation:          ["报告生成（陪练团）", "AI 对照组报告的产出与证据等级"],
-      clinical_validation: ["临床金标准", "医生标注——所有 AI 判断的最终裁判"],
+      clinical_validation: ["临床 reader 校准", "医生标注——校准自动评估与临床判断的一致性"],
       experiments:         ["六项正式实验", "论文的六个章节，各带 4 道验证门禁"],
       figures:             ["论文图表", "Fig.1–12 与统计表"],
-      security:            ["隐私与安全", "脱敏、密钥治理"],
+      security:            ["治理（暂缓）", "按当前项目范围暂缓，不纳入本轮执行"],
       control_panel:       ["控制面板", "本页面等可视化"],
     };
     const STATUS = {
@@ -1143,7 +1138,7 @@ document.getElementById("gate-table").innerHTML = `
       .map(([k,c]) => `<div class="seg" style="width:${counts[k]/total*100}%;background:${c}" title="${STATUS[k][0]} ×${counts[k]}"></div>`).join("");
 
     document.getElementById("ws-map").innerHTML = `
-      <h4 style="margin:0 0 2px">九条战线一眼看完（账本更新于 ${esc(WS.updated_at)}）</h4>
+      <h4 style="margin:0 0 2px">项目战线一眼看完（账本更新于 ${esc(WS.updated_at)}）</h4>
       <p class="note" style="font-size:12.5px;color:var(--ink-3);margin:0">
         ${Object.entries(counts).map(([k,c])=>`${STATUS[k]?STATUS[k][0]:k} ×${c}`).join("　")}</p>
       <div class="prog">${progBar}</div>
@@ -1154,8 +1149,8 @@ document.getElementById("gate-table").innerHTML = `
           <div class="ws-tag"><span class="ws-name">${esc(name)}</span><span class="ws-st ${cls}">${label}</span></div>
           <div class="ws-body">
             <div style="color:var(--ink-3);font-size:12px;margin-bottom:2px">${esc(plain)}</div>
-            <div>${esc(firstSentence(w.summary))}</div>
-            ${w.next_gate ? `<div class="ws-next"><b>下一道门：</b>${esc(w.next_gate)}</div>` : ""}
+            <div>${key === "security" ? "按当前项目范围暂缓，不纳入本轮执行" : esc(firstSentence(w.summary))}</div>
+            ${key !== "security" && w.next_gate ? `<div class="ws-next"><b>下一道门：</b>${esc(w.next_gate)}</div>` : ""}
           </div>
         </div>`;
       }).join("")}`;
@@ -1166,7 +1161,7 @@ document.getElementById("gate-table").innerHTML = `
   /* --- 六实验 × 门禁矩阵 --- */
   if (EG && EG.experiments) {
     const GATE_COL = [
-      ["gold",     "医生金标准",   /gold|clinician|approved_protocol/],
+      ["gold",     "临床标签",   /gold|clinician|approved_protocol/],
       ["frozen",   "冻结测试集",   /frozen|randomized/],
       ["method",   "方法学冻结",   /reliability|extractor_version|critical_recall|safety_endpoint|blinded|ablation|formal_fresh/],
       ["endpoint", "主终点分析",   /primary_endpoint/],
@@ -1193,7 +1188,7 @@ document.getElementById("gate-table").innerHTML = `
       return `<div class="gexp" title="${esc(e.title)}">${esc(EXP_NAME[e.id]||e.id)}<span class="bar-sub" style="margin-left:6px">${esc(e.status)}</span></div>${cells}<div class="gate-score ${cls}">${e.passed}/${e.total}</div>`;
     }).join("");
     function shortGate(id){
-      const M = { clinician_gold_labels:"缺医生打分", clinician_finding_gold:"缺发现金标", clinician_hazard_gold:"缺危害金标",
+      const M = { clinician_gold_labels:"缺临床评分标签", clinician_finding_gold:"缺临床发现标签", clinician_hazard_gold:"缺临床危害标签",
         clinician_approved_protocol:"协议未批准", frozen_test_split:"测试集未冻结", extractor_version_frozen:"版本未冻结",
         inter_rater_reliability:"缺一致性报告", critical_recall_gate:"高危召回未达标", randomized_reader_study:"读者研究未做",
         safety_endpoint_analysis:"安全分析未做", blinded_clinician_review:"盲评未做", missing_metadata_ablation:"消融未做",
@@ -1202,9 +1197,9 @@ document.getElementById("gate-table").innerHTML = `
     }
     document.getElementById("gate-matrix").innerHTML = `
       <h4 style="margin:0 0 2px">六项正式实验 × 验证门禁矩阵：${lit}/${total} 点亮</h4>
-      <p class="note" style="font-size:12.5px;color:var(--ink-3)">每项实验要点亮 4 盏灯才能从 pilot 升级为 validated、写进论文。现在的清一色灰格不是坏消息——它是一张<b>诚实的验收单</b>；北川文本 gold 已登记，临床 reader 校准与冻结测试集仍按各自门禁推进。悬停格子看门禁原文。</p>
+      <p class="note" style="font-size:12.5px;color:var(--ink-3)">每项实验要点亮 4 盏灯才能从 pilot 升级为 validated、写进论文。现在的清一色灰格不是坏消息——它是一张<b>诚实的验收单</b>；文本基准已登记，临床 reader 校准与冻结测试集仍按各自门禁推进。悬停格子看门禁原文。</p>
       <div class="gate-grid">${header}${body}</div>
-      <div class="honest-note" style="margin-top:12px">💡 <b>怎么读这张表：</b>文本 benchmark gold 已登记；「临床 reader 校准」相关门禁仍由下方 pilot10 的双读与仲裁进度决定。0/10 只表示临床校准尚未开始，不影响北川文本 gold 作为当前工程 benchmark 输入。</div>`;
+      <div class="honest-note" style="margin-top:12px">💡 <b>怎么读这张表：</b>文本 benchmark 已登记；「临床 reader 校准」相关门禁仍由下方 pilot10 的双读与仲裁进度决定。0/10 表示临床校准尚未开始。</div>`;
   } else {
     document.getElementById("gate-matrix").style.display = "none";
   }
@@ -1231,7 +1226,7 @@ document.getElementById("gate-table").innerHTML = `
       `<div class="seg" style="width:${c/total*100}%;background:${stColor[k]||"#c9c8c1"}" title="${stName[k]||k} ×${c}"></div>`).join("");
     document.getElementById("pilot10-card").innerHTML = `
       <h4 style="margin:0 0 2px">临床 reader 校准 pilot10：${done}/${total} 例完成标注</h4>
-      <p class="note" style="font-size:12.5px;color:var(--ink-3)">10 例试点（${Object.entries(P10.modality_counts).map(([k,v])=>`${k.toUpperCase()} ${v}`).join(" / ")}）已打包成结构化双读任务，等 reader A、reader B + 仲裁。<b>北川参考报告文本 gold 已可用于当前 benchmark</b>；pilot10 独立用于校准 AI 法官与临床一致性，当前三类 reader 状态仍由下方清单如实展示。</p>
+      <p class="note" style="font-size:12.5px;color:var(--ink-3)">10 例试点（${Object.entries(P10.modality_counts).map(([k,v])=>`${k.toUpperCase()} ${v}`).join(" / ")}）已打包成结构化双读任务，等 reader A、reader B + 仲裁。pilot10 独立用于校准 AI 法官与临床一致性，当前三类 reader 状态仍由下方清单如实展示。</p>
       <div class="prog" style="height:18px">${segs}</div>
       <div style="font-size:12.5px;color:var(--ink-2)">${Object.entries(P10.status_counts).map(([k,c])=>`${stName[k]||k} <b>${c}</b> 例`).join("　·　")}　<span class="bar-sub">任务包：annotation/pilot10/（manifest + 逐例标注文件 + schema）</span>${P10.validation_status && P10.validation_status !== "complete" && P10.validation_status !== "not_started" ? `　<span class="badge h-bad">${stName[P10.validation_status]||P10.validation_status}</span>` : ""}</div>`;
   } else {
@@ -1242,21 +1237,24 @@ document.getElementById("gate-table").innerHTML = `
   const BA = DATA.blindspot_audit;
   if (BA) {
     const stats = BA.stats;
+    const deferredSecurity = new Set(["C1", "H1", "H2", "H3", "H4"]);
+    const currentCritical = (BA.critical_issues || []).filter(issue => !deferredSecurity.has(issue.id));
+    const currentHigh = (BA.high_issues || []).filter(issue => !deferredSecurity.has(issue.id));
     // 渲染统计摘要
     document.getElementById("audit-summary").innerHTML = `
       <div class="audit-kpi">
         <div class="lab">原始发现</div>
         <div class="num">${stats.original_findings}</div>
-        <div class="lab" style="font-size:11px">→ 验证后 ${stats.critical_count + stats.high_count + stats.medium_count + stats.low_count} 条</div>
+        <div class="lab" style="font-size:11px">→ 当前执行项 ${currentCritical.length + currentHigh.length + stats.medium_count + stats.low_count} 条</div>
       </div>
       <div class="audit-kpi">
         <div class="lab">CRITICAL</div>
-        <div class="num critical">${stats.critical_count}</div>
-        <div class="lab">安全红线</div>
+        <div class="num critical">${currentCritical.length}</div>
+        <div class="lab">当前执行项</div>
       </div>
       <div class="audit-kpi">
         <div class="lab">HIGH</div>
-        <div class="num high">${stats.high_count}</div>
+        <div class="num high">${currentHigh.length}</div>
         <div class="lab">需优先修复</div>
       </div>
       <div class="audit-kpi">
@@ -1281,8 +1279,9 @@ document.getElementById("gate-table").innerHTML = `
     }
 
     // 渲染 CRITICAL 问题
-    if (BA.critical_issues && BA.critical_issues.length > 0) {
-      document.getElementById("critical-issues").innerHTML = BA.critical_issues.map(issue => `
+    document.getElementById("critical-issues").parentElement.style.display = currentCritical.length ? "block" : "none";
+    if (currentCritical.length > 0) {
+      document.getElementById("critical-issues").innerHTML = currentCritical.map(issue => `
         <div class="issue-card critical">
           <div class="issue-header">
             <span class="issue-id">${esc(issue.id)}</span>
@@ -1295,12 +1294,12 @@ document.getElementById("gate-table").innerHTML = `
     }
 
     // 渲染 HIGH 问题（分类）
-    const highIssues = BA.high_issues || [];
-    const securityIssues = highIssues.slice(0, 4);  // H1-H4
-    const statsIssues = highIssues.slice(4, 8);     // H5-H8
-    const mockIssues = highIssues.slice(8, 11);     // H9-H11
-    const reproduceIssues = [...highIssues.slice(11, 13), highIssues[15], highIssues[16]]; // H12-H13, H16-H17
-    const llmIssues = highIssues.slice(13, 15);     // H14-H15
+    const highIssues = currentHigh;
+    const securityIssues = []; // H1-H4 are deferred by project scope.
+    const statsIssues = highIssues.filter(issue => /^H[5-8]$/.test(issue.id));
+    const mockIssues = highIssues.filter(issue => /^H(9|10|11)$/.test(issue.id));
+    const reproduceIssues = highIssues.filter(issue => /^H(12|13|16|17)$/.test(issue.id));
+    const llmIssues = highIssues.filter(issue => /^H(14|15)$/.test(issue.id));
 
     const renderIssues = (issues, containerId) => {
       document.getElementById(containerId).innerHTML = issues.map(issue => `
@@ -1315,7 +1314,6 @@ document.getElementById("gate-table").innerHTML = `
       `).join("");
     };
 
-    renderIssues(securityIssues, "high-security-issues");
     renderIssues(statsIssues, "high-stats-issues");
     renderIssues(mockIssues, "high-mock-issues");
     renderIssues(reproduceIssues, "high-reproduce-issues");
@@ -1358,9 +1356,10 @@ document.getElementById("gate-table").innerHTML = `
     };
 
     const fp = BA.fix_priority || {};
-    renderTier(fp.tier1, "fix-priority-tier1", 1, "数字可信度地基（改动小、验证简单）");
-    renderTier(fp.tier2, "fix-priority-tier2", 2, "合规红线（动真实病人数据前必须）");
-    renderTier(fp.tier3, "fix-priority-tier3", 3, "评委可靠性与工程健壮性");
+    const visibleTier = tier => (tier || []).filter(item => !deferredSecurity.has(item.id));
+    renderTier(visibleTier(fp.tier1), "fix-priority-tier1", 1, "数字可信度地基（改动小、验证简单）");
+    renderTier(visibleTier(fp.tier2), "fix-priority-tier2", 2, "当前执行项（数据与实验门禁）");
+    renderTier(visibleTier(fp.tier3), "fix-priority-tier3", 3, "评委可靠性与工程健壮性");
   } else {
     document.getElementById("audit").style.display = "none";
   }
@@ -1374,12 +1373,12 @@ const weakGen = (SOURCE_COUNTS.local_vlm_fallback||0) + (SOURCE_COUNTS.artifact_
 const smokeOK = !!DATA.smoke;
 const O = DATA.ocr_audit;
 const ISSUES = [
-  { sev:"critical", icon:"🚨", title:"临床校准：pilot10 仍为 0/10，reader 尚未开始", why:`pilot10 只完成病例打包，reader A、reader B 和 adjudication 尚未完成；北川参考报告文本 gold 已用于当前 benchmark，自动评估的临床一致性仍待 reader 校准。`, next:`<b>下一步：</b>完成 10 例双读者盲标与仲裁，冻结 schema 和一致性指标，再接入六项实验门禁。` },
+  { sev:"critical", icon:"🚨", title:"临床校准：pilot10 仍为 0/10，reader 尚未开始", why:`pilot10 只完成病例打包，reader A、reader B 和 adjudication 尚未完成；自动评估的临床一致性仍待 reader 校准。`, next:`<b>下一步：</b>完成 10 例双读者盲标与仲裁，冻结 schema 和一致性指标，再接入六项实验门禁。` },
   { sev:"critical", icon:"🚨", title:"历史 OCR 产物有截断，需用新缓存门禁重跑", why: O ? `${O.definite_truncation} 例明确截断、${O.suspected_truncation} 例疑似，${O.missing_impression_count} 例丢失诊断印象；新 sidecar 已绑定文本 hash 并对损坏/替换缓存 fail-closed，但当前 52 例仍需重跑。` : "本次构建未找到 OCR 审计产物。", next:`<b>下一步：</b>完成北川冻结 OCR 候选双次运行并按临床指标选定生产路由，再重跑 52 例文本。` },
   { sev:"critical", icon:"🚨", title:"LLM 重测稳定性不足，分数还不能当结论", why:`同样 9 例重测中，T1 五维完全一致率仅 11%，重大错误共识完全一致率仅 22%；在 pilot10 reader 校准完成前，自动评分不能写进论文。`, next:`<b>下一步：</b>冻结稳定性指标与达标线，完成 pilot10 标注并校准三位 AI 法官。` },
   { sev:"critical", icon:"🚨", title:"52 例基线 zero formal_fresh，候选不能进入正式比较", why:`当前 ${K.generated_report_count || "—"} 份候选中 formal_fresh 为 0；artifact、debug_fallback 或 exploratory_fresh 只能用于工程检查/探索性分析。`, next:`<b>下一步：</b>按冻结配置重跑 52 例，补齐版本、输入和审计链，产生可追溯的 formal_fresh 候选。` },
   { sev:"critical", icon:"🚨", title:"六项正式实验仍为 0 validated", why:`六项实验协议和门禁已存在，但当前没有任何 validated 结果；图表只能展示探索性状态。`, next:`<b>下一步：</b>完成 pilot10 reader 校准、formal_fresh 数据和主终点分析，再逐项点亮验证门禁。` },
-  { sev:"warn", icon:"📋", title:"模型-部位错配暴露路由缺陷", why:`${wc.body_part_mismatch||0} 份报告部位不匹配，门禁已拦截；根因是模型花名册和实际覆盖范围不一致。`, next:`<b>下一步：</b>修订路由花名册，并监控每次 run 的被拦率。` },
+  { sev:"warn", icon:"📋", title:"部位提示仍需持续审计（不再硬阻断）", why:`${wc.body_part_mismatch||0} 份报告带有 body_part_mismatch warning；三模态路由不会因部位词误报淘汰候选，但仍需在冻结集上监控真实部位质量。`, next:`<b>下一步：</b>保留 warning 统计，结合北川冻结集评估部位排序与文本质量。` },
   { sev:"warn", icon:"📋", title:"教学建议仍是模板句", why:`WF4 已能产出文件，但建议尚未引用医生的具体病例错误。`, next:`<b>下一步：</b>正式评估铺满 52 例后，将带临床理由的错误清单接入 education 角色。` },
 ];
 document.getElementById("issue-list").innerHTML = ISSUES.map(i => `

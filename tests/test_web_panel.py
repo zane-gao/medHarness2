@@ -5,6 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "web"))
 import build_panel
+from medharness2 import research_prep
 from medharness2.dashboard import _format_gate_status, _render_fail_count, _render_modelsrc_rows, summarize_dashboard_payload
 from medharness2.dashboard import _render_kpis, _render_health_strip
 
@@ -48,6 +49,61 @@ def test_extract_paper_gate_is_blocked_when_external_evidence_is_missing(tmp_pat
         "ocr_winner",
         "formal_experiments",
     }
+
+
+def test_extract_paper_gate_rejects_status_only_experiments(tmp_path):
+    experiments = tmp_path / "experiments.json"
+    experiments.write_text('{"experiments": [{"status": "validated"}]}', encoding="utf-8")
+    gate = build_panel.extract_paper_evidence_gate(
+        research_dir=tmp_path / "research",
+        annotation_dir=tmp_path / "annotation",
+        experiment_results=experiments,
+    )
+    formal = next(item for item in gate["checks"] if item["id"] == "formal_experiments")
+    assert formal["passed"] is False
+
+
+def test_extract_paper_gate_rejects_thin_ocr_winner(tmp_path):
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "ocr_manifest.json").write_text(
+        '{"status":"succeeded","winner_status":"validated","benchmark_results":{"1":{"status":"succeeded"},"2":{"status":"succeeded"}}}',
+        encoding="utf-8",
+    )
+    gate = build_panel.extract_paper_evidence_gate(
+        research_dir=research,
+        annotation_dir=tmp_path / "annotation",
+        experiment_results=tmp_path / "experiments.json",
+    )
+    ocr = next(item for item in gate["checks"] if item["id"] == "ocr_winner")
+    assert ocr["passed"] is False
+
+
+def test_dashboard_paper_gate_reuses_research_gate_helpers():
+    assert build_panel._validated_ocr_winner is research_prep._validated_ocr_winner
+    assert build_panel._validated_experiments is research_prep._validated_experiments
+    assert build_panel._validation_errors is research_prep._validation_errors
+
+
+def test_extract_paper_gate_requires_ocr_freeze_metadata(tmp_path):
+    research = tmp_path / "research"
+    research.mkdir()
+    (research / "ocr_manifest.json").write_text(
+        '{"status":"succeeded","winner_status":"frozen",'
+        '"gold_source":"beichuan_reference_report",'
+        '"gold_status":"available_for_current_benchmark",'
+        '"winner_model":"doubao", "freeze_id":"' + "f" * 64 + '",'
+        '"benchmark_results":{"1":{"status":"succeeded","selection":{"status":"provisional","primary_model":"doubao"}},'
+        '"2":{"status":"succeeded","selection":{"status":"provisional","primary_model":"doubao"}}}}',
+        encoding="utf-8",
+    )
+    gate = build_panel.extract_paper_evidence_gate(
+        research_dir=research,
+        annotation_dir=tmp_path / "annotation",
+        experiment_results=tmp_path / "experiments.json",
+    )
+    ocr = next(item for item in gate["checks"] if item["id"] == "ocr_winner")
+    assert ocr["passed"] is False
 
 
 def test_dashboard_summary_preserves_explicit_zero_counts():
@@ -440,6 +496,15 @@ def test_panel_uses_canonical_pilot10_status_labels():
     assert 'blocked:"已阻断"' in template
 
 
+def test_panel_describes_modality_first_soft_body_part_routing():
+    template = Path("web/panel_template.html").read_text(encoding="utf-8")
+
+    assert "三种主模态" in template
+    assert "部位只参与候选排序" in template
+    assert "部位冲突保留为可审计 warning" in template
+    assert "按「模态 + 部位」路由" not in template
+
+
 def test_extract_blindspot_audit_parses_heading_and_medium_issue_formats():
     audit = build_panel.extract_blindspot_audit(Path("docs/blindspot_audit_20260714.md"))
 
@@ -449,3 +514,15 @@ def test_extract_blindspot_audit_parses_heading_and_medium_issue_formats():
     assert audit["medium_issues"][0]["id"] == "M1"
     assert any(item["id"] == "H8" for item in audit["high_issues"])
     assert audit["fix_priority"]["tier1"]
+
+
+def test_filter_deferred_audit_items_removes_security_findings_from_panel_payload():
+    audit = {
+        "critical_issues": [{"id": "C1"}, {"id": "C2"}],
+        "high_issues": [{"id": "H1"}, {"id": "H5"}],
+        "fix_priority": {"tier1": [{"id": "H1"}], "tier2": [{"id": "C1"}], "tier3": [{"id": "H5"}]},
+    }
+    filtered = build_panel.filter_deferred_audit_items(audit)
+    assert [item["id"] for item in filtered["critical_issues"]] == ["C2"]
+    assert [item["id"] for item in filtered["high_issues"]] == ["H5"]
+    assert filtered["fix_priority"] == {"tier1": [], "tier2": [], "tier3": [{"id": "H5"}]}

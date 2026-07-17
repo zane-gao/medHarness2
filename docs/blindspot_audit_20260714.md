@@ -2,11 +2,13 @@
 
 > 本文档是 2026-07-14 的历史审计快照，后续增量记录当前修复状态；原始发现保留用于追溯，不应直接当作当前代码事实。
 
-> **最新复核（2026-07-17）**：当前主分支回归为 `1785 passed, 20 warnings`。真实 `research run-ocr` 已核验 pilot10 的 10/10 源 PDF 映射，但在缺少 Doubao/Qwen 凭据和 PaddleOCR-VL 运行时的环境中保持 blocked；这不是 OCR winner 或临床标注完成证据。下文更早的 `1718 passed` 等数字均为历史快照。
+> **最新复核（2026-07-17）**：当前主分支回归为 `1803 passed, 20 warnings`。真实 `research run-ocr` 已核验 pilot10 的 10/10 源 PDF 映射，但在缺少 Doubao/Qwen 凭据和 PaddleOCR-VL 运行时的环境中保持 blocked；这不是 OCR winner 或临床标注完成证据。下文更早的 `1718/1785/1801` 等数字均为历史快照。
 
 > **2026-07-17 PaddleOCR 边界收口**：PaddleOCR readiness 现在同时检查 `PaddleOCRVL` 与 Paddle runtime；OCR sidecar 对文本、warnings、metadata、quality audit 结构执行 fail-closed 校验；源 PDF hash 不可读、对象式 `parsing_res_list`、空文本和空页均有明确阻断/复核语义。新增研究专项回归后全量为 `1783 passed, 20 warnings`。
 
-> **2026-07-17 审计页列表边界收口**：verifier audit 的 `pages` 为空或混入非对象时统一判为 `blocked`，不会因过滤非法项后恰好剩余 `agree` 而误通过；全量回归更新为 `1785 passed, 20 warnings`。
+> **2026-07-17 审计页列表边界收口**：verifier audit 的 `pages` 为空或混入非对象时统一判为 `blocked`，不会因过滤非法项后恰好剩余 `agree` 而误通过；全量回归曾为 `1785/1801 passed, 20 warnings`，当前基线为 `1803 passed, 20 warnings`。
+
+> **2026-07-17 OCR winner 冻结收口**：新增 `research freeze-ocr-winner`；只有两次 benchmark 均为无 blocker、完整病例覆盖、所有候选重复质量为 `passed` 且 winner 一致时，才会以原子写回方式写入 `winner_model`、`freeze_id`、`freeze_version` 和证据文件列表。当前 OCR manifest 仍为 `blocked`，因此冻结命令按预期拒绝，不生成 winner。
 
 > **2026-07-17 运行门禁复核**：真实数据路径上的 `workflow preflight --require-real-ocr` 已确认 52 例与 `cxr/ct/mri=20/25/7` 路由覆盖；当前仅因 `DMX_API_KEY` 缺失而阻断真实 OCR/verifier。`annotation validate` 对 pilot10 返回 `not_started`、`0/10` 并以非零退出；这两类阻断均未被渲染或统计为成功。
 

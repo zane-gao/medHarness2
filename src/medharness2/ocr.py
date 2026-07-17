@@ -99,11 +99,32 @@ def extract_report_text(
     if verifier_missing:
         warnings.append("ocr_verifier_client_missing")
     quality_audit: dict[str, Any] | None = None
-    direct_text = _extract_pdf_text(pdf)
+    direct_pages = _extract_pdf_text_pages(pdf)
+    direct_text = "\n".join(page for page in direct_pages if page).strip()
     if len(direct_text.strip()) >= min_direct_chars:
         text = direct_text
         method = "pdf_text_layer"
         provider = "local_pdf_text"
+        if verifier_client is not None:
+            try:
+                with tempfile.TemporaryDirectory(prefix=f"{case_id}-verifier-") as tmp_dir:
+                    rendered_pages = _render_pdf_pages(pdf, Path(tmp_dir))
+                    if not rendered_pages:
+                        raise RuntimeError("verifier rendered no pages")
+                    quality_audit, verifier_warnings = _audit_verifier_pages(
+                        direct_pages,
+                        rendered_pages,
+                        verifier_client,
+                        effective_verifier_options,
+                    )
+                    warnings.extend(verifier_warnings)
+            except Exception as exc:
+                quality_audit = {
+                    "status": "verifier_failed",
+                    "error_type": type(exc).__name__,
+                    "error": str(exc)[:500],
+                }
+                warnings.extend(("ocr_verifier_failed",))
     else:
         if require_real and primary_provider not in REAL_OCR_PROVIDERS:
             raise RuntimeError(
@@ -297,15 +318,74 @@ def extract_report_text(
 
 
 def _extract_pdf_text(pdf: Path) -> str:
+    return "\n".join(page for page in _extract_pdf_text_pages(pdf) if page).strip()
+
+
+def _extract_pdf_text_pages(pdf: Path) -> list[str]:
     try:
         import fitz
     except Exception:
-        return ""
+        return []
     try:
         with fitz.open(pdf) as doc:
-            return "\n".join(page.get_text().strip() for page in doc).strip()
+            return [page.get_text().strip() for page in doc]
     except Exception:
-        return ""
+        return []
+
+
+def _audit_verifier_pages(
+    page_texts: list[str],
+    image_paths: list[str],
+    verifier_client: Any,
+    verifier_options: dict[str, Any],
+) -> tuple[dict[str, Any], list[str]]:
+    """Audit page text against rendered pages without changing the OCR text."""
+    page_audits: list[dict[str, Any]] = []
+    warnings: list[str] = []
+    for page_index, image_path in enumerate(image_paths, start=1):
+        page_text = page_texts[page_index - 1] if page_index <= len(page_texts) else ""
+        audit_prompt = (
+            "Audit this OCR transcription against the supplied report page. "
+            "Return JSON only with status (agree/disagreement), evidence spans, and short reason. "
+            "Do not rewrite or provide a replacement transcription.\n\nOCR:\n" + page_text
+        )
+        try:
+            raw_audit = verifier_client.call(
+                audit_prompt,
+                image_path=image_path,
+                response_format="json",
+                payload_classification="raw_medical_document",
+                **verifier_options,
+            )
+            try:
+                if isinstance(raw_audit, dict):
+                    audit = dict(raw_audit)
+                elif isinstance(raw_audit, str):
+                    audit = json.loads(raw_audit)
+                else:
+                    raise TypeError("verifier response must be a JSON object")
+                if not isinstance(audit, dict):
+                    raise TypeError("verifier response must be a JSON object")
+                status = str(audit.get("status") or "").strip().lower()
+                if status not in {"agree", "disagreement"}:
+                    raise ValueError("verifier status must be agree or disagreement")
+                audit["status"] = status
+            except (TypeError, ValueError, json.JSONDecodeError):
+                audit = {"status": "invalid_verifier_response", "raw": str(raw_audit)[:500]}
+                warnings.extend((f"ocr_verifier_invalid_response:page_{page_index}", "ocr_verifier_invalid_response"))
+        except Exception as exc:
+            audit = {
+                "status": "verifier_failed",
+                "error_type": type(exc).__name__,
+                "error": str(exc)[:500],
+            }
+            warnings.extend((f"ocr_verifier_failed:page_{page_index}", "ocr_verifier_failed"))
+        page_audits.append({"page_index": page_index, **audit})
+    if not page_audits:
+        raise RuntimeError("verifier produced no page audits")
+    if len(page_audits) == 1:
+        return page_audits[0], warnings
+    return {"status": "completed", "pages": page_audits}, warnings
 
 
 def _ocr_role_options(config: AppConfig, role: str) -> dict[str, Any]:
@@ -424,20 +504,24 @@ def _cache_metadata_valid(meta: dict[str, Any]) -> bool:
         return False
     if isinstance(audit, dict) and "pages" in audit:
         pages = audit["pages"]
-        if not isinstance(pages, list) or any(not isinstance(page, dict) for page in pages):
+        if not isinstance(pages, list) or not pages or any(not isinstance(page, dict) for page in pages):
             return False
         if any(not _cache_audit_page_valid(page) for page in pages):
             return False
-    if isinstance(audit, dict) and "status" in audit:
-        status = audit["status"]
+        summary_status = audit.get("status")
+        if summary_status is not None and summary_status != "completed":
+            return False
+    if isinstance(audit, dict) and "pages" not in audit:
+        status = audit.get("status")
         if not isinstance(status, str) or status not in {
             "agree",
             "disagreement",
             "verifier_failed",
             "invalid_verifier_response",
-            "completed",
         }:
             return False
+    if isinstance(verifier, dict) and verifier.get("configured") is True and audit is None:
+        return False
     status = meta.get("quality_status")
     if status is not None and (
         not isinstance(status, str)
@@ -537,16 +621,13 @@ def _cache_audit_page_valid(page: dict[str, Any]) -> bool:
         value = page["page_index"]
         if not isinstance(value, int) or isinstance(value, bool) or value < 1:
             return False
-    if "status" in page:
-        status = page["status"]
-        if not isinstance(status, str) or status not in {
-            "agree",
-            "disagreement",
-            "verifier_failed",
-            "invalid_verifier_response",
-        }:
-            return False
-    return True
+    status = page.get("status")
+    return isinstance(status, str) and status in {
+        "agree",
+        "disagreement",
+        "verifier_failed",
+        "invalid_verifier_response",
+    }
 
 
 def _cache_quality_status_consistent(

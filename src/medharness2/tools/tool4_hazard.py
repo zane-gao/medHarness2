@@ -617,7 +617,13 @@ def _judge_prompt(error_candidates: list[dict[str, Any]], previous_errors: list[
             }
         ]
     }
-    retry_note = f"\nPrevious invalid responses: {previous_errors}\nReturn only valid JSON." if previous_errors else ""
+    retry_note = (
+        f"\nPrevious invalid responses: {previous_errors}\n"
+        "For each output errors[i], copy error_type exactly from the corresponding input item at the same index; "
+        "do not rename, paraphrase, reorder, merge, or omit error types. Return only valid JSON."
+        if previous_errors
+        else ""
+    )
     return (
         "You are a radiology report safety judge. Assign clinical hazard levels to report comparison errors.\n"
         "Use 1=no meaningful risk, 2=minor, 3=moderate, 4=high, 5=critical.\n"
