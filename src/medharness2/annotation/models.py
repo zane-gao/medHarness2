@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field, StrictBool
+from pydantic import Field, StrictBool, StrictFloat, StrictInt
 
 from medharness2.contracts.common import SCHEMA_VERSION, ContractModel, Measurement
 
@@ -38,7 +38,7 @@ class HazardAnnotation(ContractModel):
         "contradiction",
         "other",
     ]
-    hazard_level: int = Field(ge=1, le=5)
+    hazard_level: StrictInt = Field(ge=1, le=5)
     clinically_significant: StrictBool
     evidence_finding_ids: list[str] = Field(default_factory=list)
     rationale: str = Field(min_length=1)
@@ -50,7 +50,7 @@ class ReaderAnnotation(ContractModel):
     findings: list[FindingAnnotation] = Field(default_factory=list)
     hazards: list[HazardAnnotation] = Field(default_factory=list)
     overall_notes: str = ""
-    confidence: float | None = Field(default=None, ge=0, le=1)
+    confidence: StrictFloat | None = Field(default=None, ge=0, le=1)
 
 
 class AnnotationCase(ContractModel):

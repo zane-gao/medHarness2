@@ -139,6 +139,29 @@ def test_hazard_annotation_rejects_implicit_boolean(bad):
         )
 
 
+@pytest.mark.parametrize("field,bad", [("hazard_level", "3"), ("confidence", "0.5")])
+def test_annotation_numeric_fields_reject_implicit_coercion(field, bad):
+    payload = {
+        "error_id": "e1",
+        "candidate_id": "candidate-1",
+        "error_type": "other",
+        "hazard_level": 3,
+        "clinically_significant": True,
+        "rationale": "test",
+    }
+    if field == "confidence":
+        from medharness2.annotation.models import ReaderAnnotation
+
+        with pytest.raises(ValidationError):
+            ReaderAnnotation.model_validate(
+                {"reader_slot": "reader_a", "confidence": bad}
+            )
+    else:
+        payload[field] = bad
+        with pytest.raises(ValidationError):
+            HazardAnnotation.model_validate(payload)
+
+
 def test_validate_pilot_annotation_package_reports_not_started_without_fabricating_completion(tmp_path: Path):
     run_dir = _write_run(tmp_path / "run")
     output_dir = tmp_path / "pilot10"
