@@ -181,20 +181,31 @@ def load_config(path: str | Path | None = None) -> AppConfig:
         return AppConfig(project_root=PROJECT_ROOT)
     payload = _read_yaml(config_path)
     root = config_path.parent.parent if config_path.name == "default.yaml" else PROJECT_ROOT
+    sections = {name: _mapping(payload.get(name), name) for name in (
+        "llm", "extractor", "generator", "ranking", "alignment", "privacy", "model_roles", "modality_map"
+    )}
     return AppConfig(
         project_root=root.resolve(),
-        llm=LLMConfig(**dict(payload.get("llm") or {})),
-        extractor=ExtractorConfig(**dict(payload.get("extractor") or {})),
-        generator=GeneratorConfig(**dict(payload.get("generator") or {})),
-        ranking=RankingConfig(**dict(payload.get("ranking") or {})),
-        alignment=AlignmentConfig(**dict(payload.get("alignment") or {})),
-        privacy=PrivacyConfig(**dict(payload.get("privacy") or {})),
+        llm=LLMConfig(**sections["llm"]),
+        extractor=ExtractorConfig(**sections["extractor"]),
+        generator=GeneratorConfig(**sections["generator"]),
+        ranking=RankingConfig(**sections["ranking"]),
+        alignment=AlignmentConfig(**sections["alignment"]),
+        privacy=PrivacyConfig(**sections["privacy"]),
         model_roles={
-            str(role): ModelRoleConfig(**dict(role_config or {}))
-            for role, role_config in dict(payload.get("model_roles") or {}).items()
+            role: ModelRoleConfig(**_mapping(role_config, f"model_roles.{role}"))
+            for role, role_config in sections["model_roles"].items()
         },
-        modality_map=dict(payload.get("modality_map") or AppConfig().modality_map),
+        modality_map=sections["modality_map"] or AppConfig().modality_map,
     )
+
+
+def _mapping(value: Any, label: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be a mapping")
+    return dict(value)
 
 
 def resolve_project_path(config: AppConfig, path: str | Path) -> Path:

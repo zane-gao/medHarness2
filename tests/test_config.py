@@ -26,6 +26,16 @@ def test_loads_override_config(tmp_path: Path):
     assert cfg.ranking.top_n == 2
 
 
+@pytest.mark.parametrize("field,bad", [("llm", []), ("generator", "bad"), ("model_roles", []), ("modality_map", [["DX", "cxr"]])])
+def test_load_config_rejects_non_mapping_sections(tmp_path: Path, field, bad):
+    config_path = tmp_path / "bad.yaml"
+    import yaml
+
+    config_path.write_text(yaml.safe_dump({field: bad}), encoding="utf-8")
+    with pytest.raises(ValueError, match=field):
+        load_config(config_path)
+
+
 def test_loads_model_role_routes_without_secrets(tmp_path: Path):
     config_path = tmp_path / "dmx.yaml"
     config_path.write_text(
