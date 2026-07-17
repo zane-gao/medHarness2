@@ -466,7 +466,10 @@ def _validate_candidate_provenance(
     if candidate_case_id:
         declared_fields = True
     candidate_model = _first_value(observed, model_fields)
-    if candidate_model not in (None, ""):
+    candidate_model_key = observed.get("model_key")
+    if candidate_model_key is not None and not isinstance(candidate_model_key, str):
+        blockers.append(f"provenance:{item.get('case_id')}:{model}:model_key")
+    if candidate_model not in (None, "") or candidate_model_key not in (None, ""):
         declared_fields = True
     quality_status = str(observed.get("quality_status") or "").strip().lower()
     if quality_status in {"blocked", "review_required"}:
@@ -508,7 +511,8 @@ def _validate_candidate_provenance(
             blockers.append(f"provenance:{item.get('case_id')}:{model}:case_id")
         elif not observed_case_id:
             blockers.append(f"provenance:{item.get('case_id')}:{model}:case_id_missing")
-        if candidate_model not in (None, "") and str(candidate_model) != str(model):
+        identity = candidate_model_key if candidate_model_key not in (None, "") else candidate_model
+        if identity not in (None, "") and str(identity) != str(model):
             blockers.append(f"provenance:{item.get('case_id')}:{model}:model_key")
     return blockers
 

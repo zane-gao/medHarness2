@@ -832,6 +832,42 @@ def test_ocr_candidate_benchmark_scores_and_blocks_missing_artifacts(tmp_path: P
     assert result["blocked_items"] == ["case2:model-a"]
 
 
+def test_ocr_candidate_benchmark_accepts_candidate_key_separate_from_provider_model(tmp_path: Path):
+    candidate = tmp_path / "candidate.json"
+    candidate.write_text(
+        json.dumps({
+            "case_id": "case1",
+            "modality": "cxr",
+            "model_key": "ocr_primary_doubao",
+            "model": "doubao-seed-2-1-pro-260628",
+            "provider": "chat_completions",
+            "role": "ocr_primary",
+            "quality_status": "passed",
+            "text": "FINDINGS: No nodule measuring 8 mm.",
+        }),
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(json.dumps([{
+        "case_id": "case1",
+        "modality": "cxr",
+        "gold_text": "FINDINGS: No nodule measuring 8 mm.",
+        "candidate_routes": {
+            "ocr_primary_doubao": {
+                "provider": "chat_completions",
+                "model": "doubao-seed-2-1-pro-260628",
+                "role": "ocr_primary",
+            }
+        },
+        "candidates": {"ocr_primary_doubao": {"path": "candidate.json"}},
+    }]), encoding="utf-8")
+
+    result = evaluate_ocr_candidates(manifest, tmp_path / "summary.json")
+
+    assert result["evaluated_count"] == 1
+    assert result["blocked_items"] == []
+
+
 def test_ocr_candidate_benchmark_blocks_missing_manifest(tmp_path: Path):
     result = evaluate_ocr_candidates(tmp_path / "does-not-exist.json", tmp_path / "summary.json")
     assert result["status"] == "blocked"

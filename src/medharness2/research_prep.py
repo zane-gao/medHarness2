@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import copy
+import hashlib
+import os
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +11,10 @@ from medharness2.modality import normalize_modality
 from medharness2.annotation import validate_pilot_annotation_package
 from medharness2.annotation.models import AnnotationCase
 from medharness2.utils.io import read_json
+from medharness2.config import AppConfig, PROJECT_ROOT, load_config
+from medharness2.llm_client import LLMClient
+from medharness2.ocr import extract_report_text
+from medharness2.ocr_benchmark import evaluate_ocr_candidates
 
 
 OCR_CANDIDATES = (
@@ -15,11 +22,459 @@ OCR_CANDIDATES = (
     {"candidate_id": "ocr_verifier_qwen", "provider": "chat_completions", "model": "qwen-vl-ocr-latest", "role": "ocr_verifier"},
     {"candidate_id": "ocr_baseline_paddle", "provider": "paddleocr", "model": "PaddleOCR-VL", "role": "ocr_baseline"},
 )
+# Only OCR-producing routes are scored.  The Qwen route is an external
+# audit-only quality check and must not create a missing-candidate blocker in
+# the text benchmark.
+OCR_BENCHMARK_CANDIDATES = tuple(
+    candidate for candidate in OCR_CANDIDATES if candidate["role"] != "ocr_verifier"
+)
+OCR_BENCHMARK_CANDIDATES = tuple(
+    candidate for candidate in OCR_CANDIDATES if candidate["role"] != "ocr_verifier"
+)
 
 # The Beichuan reference reports are the current engineering benchmark gold.
 # Clinical reader labels remain a separate calibration layer.
 CURRENT_GOLD_SOURCE = "beichuan_reference_report"
 CURRENT_GOLD_STATUS = "available_for_current_benchmark"
+
+
+def run_ocr_research(
+    pilot_dir: str | Path,
+    research_dir: str | Path,
+    *,
+    config_path: str | Path | None = None,
+    source_root: str | Path | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Execute the frozen OCR candidate manifest without fabricating evidence.
+
+    Every declared case/repeat/candidate receives a JSON sidecar.  Provider,
+    source-asset, or quality failures are represented as ``blocked`` or
+    ``review_required`` sidecars and never converted into candidate text.
+    """
+    pilot = Path(pilot_dir)
+    research = Path(research_dir)
+    manifest_result = prepare_research_manifests(pilot, research)
+    cfg = load_config(config_path) if config_path else load_config()
+    root = Path(source_root) if source_root else PROJECT_ROOT.parent / "medHarness"
+    source_index = _build_source_pdf_index(root)
+    route_status = _ocr_candidate_readiness(cfg)
+    blocked_reasons: list[str] = []
+    if not route_status["ocr_primary_doubao"]["ready"]:
+        blocked_reasons.append("real_ocr_provider_unavailable")
+    if not route_status["ocr_verifier_qwen"]["ready"]:
+        blocked_reasons.append("real_ocr_verifier_unavailable")
+    client = LLMClient(cfg) if any(item["ready"] for item in route_status.values()) else None
+    blocked_count = 0
+    review_count = 0
+    success_count = 0
+    audit_success_count = 0
+    audit_review_count = 0
+    audit_blocked_count = 0
+    pilot_rows = _read_pilot_rows(pilot)
+    run_payloads: dict[tuple[str, str, int], dict[str, Any]] = {}
+    for row in pilot_rows:
+        case_id = str(row["pilot_case_id"])
+        case = AnnotationCase.model_validate_json((pilot / row["annotation_path"]).read_text(encoding="utf-8"))
+        source_pdf = source_index.get(case.source_case_sha256)
+        for repeat in (1, 2):
+            primary_payload: dict[str, Any] | None = None
+            for candidate in OCR_CANDIDATES:
+                candidate_id = candidate["candidate_id"]
+                sidecar_path = research / "ocr_runs" / f"repeat_{repeat}" / case_id / f"{candidate_id}.json"
+                sidecar_path.parent.mkdir(parents=True, exist_ok=True)
+                payload = _blocked_ocr_sidecar(case, candidate, repeat, reason=None)
+                payload["model"] = _candidate_model_name(cfg, candidate)
+                payload["model_key"] = candidate_id
+                payload["execution_mode"] = (
+                    "audit_only" if candidate["role"] == "ocr_verifier" else "primary_ocr"
+                )
+                if source_pdf is not None:
+                    payload["source_pdf"] = str(source_pdf)
+                    payload["source_pdf_sha256"] = _hash_file(source_pdf)
+                readiness = route_status[candidate_id]
+                if candidate["role"] == "ocr_verifier":
+                    # Qwen is an audit-only external multimodal check.  It is
+                    # never scored as an independent OCR transcription and
+                    # must not be routed through the primary OCR role.
+                    reasons: list[str] = []
+                    if source_pdf is None:
+                        reasons.append("source_pdf_missing")
+                    elif not readiness["ready"]:
+                        reasons.append(readiness["reason"])
+                    if primary_payload is not None:
+                        audit = (primary_payload.get("metadata") or {}).get("quality_audit")
+                        if audit is not None:
+                            payload["quality_audit"] = audit
+                        payload["audit_target_sidecar"] = str(
+                            research / "ocr_runs" / f"repeat_{repeat}" / case_id / "ocr_primary_doubao.json"
+                        )
+                        if not reasons and audit is not None:
+                            audit_status = _audit_quality_status(audit)
+                            payload["status"] = (
+                                "audit_succeeded" if audit_status == "passed" else "audit_review_required"
+                            )
+                            payload["quality_status"] = audit_status
+                            payload["blocked_reasons"] = (
+                                [] if audit_status == "passed" else ["verifier_audit_review_required"]
+                            )
+                            if audit_status == "passed":
+                                audit_success_count += 1
+                            else:
+                                audit_review_count += 1
+                        else:
+                            payload["blocked_reasons"] = reasons or ["primary_ocr_audit_missing"]
+                            payload["status"] = "blocked"
+                            payload["quality_status"] = "blocked"
+                            audit_blocked_count += 1
+                    else:
+                        payload["blocked_reasons"] = reasons or ["primary_ocr_audit_missing"]
+                        payload["status"] = "blocked"
+                        payload["quality_status"] = "blocked"
+                        audit_blocked_count += 1
+                elif source_pdf is None:
+                    payload["status"] = "blocked"
+                    payload["blocked_reasons"] = ["source_pdf_missing"]
+                    blocked_count += 1
+                elif candidate["provider"] == "paddleocr":
+                    # The baseline candidate is declared for comparability,
+                    # but this runner has no PaddleOCR adapter yet.  Keep the
+                    # integration gap explicit instead of reporting a
+                    # misleading missing-key failure.
+                    payload["status"] = "blocked"
+                    payload["blocked_reasons"] = ["paddleocr_provider_not_integrated"]
+                    blocked_count += 1
+                elif not readiness["ready"]:
+                    payload["status"] = "blocked"
+                    payload["blocked_reasons"] = [readiness["reason"]]
+                    blocked_count += 1
+                else:
+                    try:
+                        verifier_ready = route_status["ocr_verifier_qwen"]["ready"]
+                        call_cfg = _primary_candidate_config(
+                            cfg,
+                            candidate["role"],
+                            include_verifier=True,
+                        )
+                        result = extract_report_text(
+                            source_pdf,
+                            case_id,
+                            output_dir=research / "ocr_cache" / candidate_id / f"repeat_{repeat}",
+                            config=call_cfg,
+                            llm_client=client,
+                            verifier_client=client if verifier_ready else None,
+                            ocr_role="ocr_primary",
+                            require_real=True,
+                            force=force,
+                        )
+                        quality = (result.metadata or {}).get("quality_status") or "blocked"
+                        payload.update({
+                            "status": "succeeded" if quality == "passed" else quality,
+                            "text": result.text if quality in {"passed", "review_required"} else "",
+                            "warnings": list(result.warnings),
+                            "quality_status": quality,
+                            "metadata": dict(result.metadata or {}),
+                        })
+                        payload["model"] = _candidate_model_name(cfg, candidate)
+                        payload["model_key"] = candidate_id
+                        if quality == "passed":
+                            success_count += 1
+                        elif quality == "review_required":
+                            review_count += 1
+                        else:
+                            blocked_count += 1
+                    except Exception as exc:
+                        payload["status"] = "blocked"
+                        payload["blocked_reasons"] = [f"provider_error:{type(exc).__name__}"]
+                        payload["error"] = str(exc)[:500]
+                        blocked_count += 1
+                if candidate["role"] == "ocr_primary":
+                    primary_payload = payload
+                run_payloads[(case_id, candidate_id, repeat)] = payload
+                sidecar_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    benchmark_results: dict[str, dict[str, Any]] = {}
+    for repeat, name in ((1, "ocr_benchmark_repeat_1.json"), (2, "ocr_benchmark_repeat_2.json")):
+        manifest_path = research / name
+        result_path = research / f"{manifest_path.stem}_result.json"
+        benchmark_results[str(repeat)] = evaluate_ocr_candidates(manifest_path, result_path)
+    status = "succeeded" if success_count and not blocked_count and not review_count else "blocked"
+    benchmark_summary = {
+        key: {"status": value.get("status"), "selection": value.get("selection", {})}
+        for key, value in benchmark_results.items()
+    }
+    run_summary = {
+        "status": status,
+        "case_count": len(pilot_rows),
+        "candidate_count": len(OCR_CANDIDATES),
+        "repeat_count": 2,
+        "success_count": success_count,
+        "review_required_count": review_count,
+        "blocked_count": blocked_count,
+        "audit_success_count": audit_success_count,
+        "audit_review_required_count": audit_review_count,
+        "audit_blocked_count": audit_blocked_count,
+        "blocked_reasons": sorted(set(blocked_reasons + _collect_blocked_reasons(research))),
+        "benchmark_results": benchmark_summary,
+    }
+    _persist_ocr_run_state(research, run_payloads, cfg, run_summary, benchmark_results)
+    return {
+        "status": status,
+        "case_count": len(pilot_rows),
+        "candidate_count": len(OCR_CANDIDATES),
+        "repeat_count": 2,
+        "success_count": success_count,
+        "review_required_count": review_count,
+        "blocked_count": blocked_count,
+        "blocked_reasons": run_summary["blocked_reasons"],
+        "benchmark_results": benchmark_summary,
+        "research_dir": str(research),
+    }
+
+
+def _read_pilot_rows(pilot: Path) -> list[dict[str, Any]]:
+    return [json.loads(line) for line in (pilot / "manifest.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _canonical_payload_sha256(payload: dict[str, Any]) -> str:
+    """Return the same source hash used by the blinded pilot builder."""
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _build_source_pdf_index(source_root: Path) -> dict[str, Path]:
+    """Map an exact pilot source hash to a report PDF, failing closed on ambiguity.
+
+    ``source_root`` may be the medHarness project root, its ``data`` folder,
+    or one concrete ``sample_data_*`` folder.  The hash remains the only case
+    identity join; a PDF is never selected by a blinded case number alone.
+    """
+    root = Path(source_root)
+    if not root.exists():
+        return {}
+    if (root / "report.pdf").is_file():
+        pdfs = [root / "report.pdf"]
+    elif root.name.startswith("sample_data_"):
+        pdfs = sorted(root.glob("**/report.pdf"))
+    else:
+        pdfs = sorted(root.glob("data/sample_data*/**/report.pdf"))
+        if not pdfs:
+            pdfs = sorted(root.glob("sample_data*/**/report.pdf"))
+    if not pdfs:
+        return {}
+
+    workflow_roots: list[Path] = []
+    for candidate in (
+        PROJECT_ROOT,
+        root,
+        root.parent,
+        root.parent.parent,
+    ):
+        candidate = candidate.resolve()
+        if candidate not in workflow_roots:
+            workflow_roots.append(candidate)
+    case_payloads: dict[str, list[dict[str, Any]]] = {}
+    for workflow_root in workflow_roots:
+        outputs = workflow_root / "outputs"
+        if not outputs.is_dir():
+            continue
+        for case_json in outputs.glob("**/workflow2_cases/*.json"):
+            case_id = case_json.stem
+            try:
+                payload = json.loads(case_json.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, ValueError):
+                continue
+            if isinstance(payload, dict):
+                case_payloads.setdefault(case_id, []).append(payload)
+
+    by_hash: dict[str, Path] = {}
+    ambiguous: set[str] = set()
+    for pdf in pdfs:
+        case_id = pdf.parent.name
+        for payload in case_payloads.get(case_id, []):
+            digest = _canonical_payload_sha256(payload)
+            previous = by_hash.get(digest)
+            if previous is not None and previous != pdf:
+                ambiguous.add(digest)
+            else:
+                by_hash[digest] = pdf
+    for digest in ambiguous:
+        by_hash.pop(digest, None)
+    return by_hash
+
+
+def _ocr_candidate_readiness(config: AppConfig) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for candidate in OCR_CANDIDATES:
+        route = config.model_roles.get(candidate["role"])
+        provider = str(route.provider if route and route.provider else "").lower()
+        api_env = str(route.api_key_env if route else "")
+        ready = provider == candidate["provider"] and bool(api_env and str(os.environ.get(api_env) or "").strip())
+        result[candidate["candidate_id"]] = {"ready": ready, "reason": "missing_api_key" if not ready else ""}
+    return result
+
+
+def _primary_candidate_config(
+    config: AppConfig,
+    role: str,
+    *,
+    include_verifier: bool = False,
+) -> AppConfig:
+    cloned = copy.deepcopy(config)
+    route = cloned.model_roles.get(role)
+    cloned.model_roles = {"ocr_primary": route} if route is not None else {}
+    if include_verifier and "ocr_verifier" in config.model_roles:
+        cloned.model_roles["ocr_verifier"] = copy.deepcopy(config.model_roles["ocr_verifier"])
+    return cloned
+
+
+def _candidate_model_name(config: AppConfig, candidate: dict[str, Any]) -> str:
+    role = str(candidate.get("role") or "")
+    route = config.model_roles.get(role)
+    if route is not None and str(route.model or "").strip():
+        return str(route.model)
+    return str(candidate.get("model") or "")
+
+
+def _blocked_ocr_sidecar(case: AnnotationCase, candidate: dict[str, Any], repeat: int, reason: str | None) -> dict[str, Any]:
+    return {
+        "schema_version": "1.0",
+        "artifact_type": "ocr_candidate_sidecar",
+        "status": "blocked",
+        "case_id": case.pilot_case_id,
+        "modality": normalize_modality(case.modality),
+        "repeat": repeat,
+        "model": candidate["candidate_id"],
+        "provider": candidate["provider"],
+        "role": candidate["role"],
+        "source_case_sha256": case.source_case_sha256,
+        "quality_status": "blocked",
+        "text": "",
+        "blocked_reasons": [reason] if reason else [],
+    }
+
+
+def _hash_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _collect_blocked_reasons(research: Path) -> list[str]:
+    reasons: list[str] = []
+    for path in research.glob("ocr_runs/repeat_*/**/*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            continue
+        reasons.extend(str(item) for item in payload.get("blocked_reasons") or [])
+    return reasons
+
+
+def _audit_quality_status(audit: Any) -> str:
+    """Translate verifier audit evidence without treating it as OCR text."""
+    if not isinstance(audit, dict):
+        return "blocked"
+    statuses: list[str] = []
+    pages = audit.get("pages")
+    if isinstance(pages, list):
+        statuses = [str(item.get("status") or "").strip().lower() for item in pages if isinstance(item, dict)]
+    else:
+        statuses = [str(audit.get("status") or "").strip().lower()]
+    if statuses and all(status == "agree" for status in statuses):
+        return "passed"
+    if any(status in {"disagreement", "verifier_failed", "invalid_verifier_response"} for status in statuses):
+        return "review_required"
+    return "blocked"
+
+
+def _persist_ocr_run_state(
+    research: Path,
+    run_payloads: dict[tuple[str, str, int], dict[str, Any]],
+    config: AppConfig,
+    run_summary: dict[str, Any],
+    benchmark_results: dict[str, dict[str, Any]],
+) -> None:
+    """Write observed sidecar state back to the frozen manifest atomically enough for audit use."""
+    manifest_path = research / "ocr_manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ValueError("ocr_manifest_invalid_after_run") from exc
+    if not isinstance(manifest, dict) or not isinstance(manifest.get("runs"), list):
+        raise ValueError("ocr_manifest_invalid_after_run")
+    for run in manifest["runs"]:
+        if not isinstance(run, dict):
+            raise ValueError("ocr_manifest_malformed_run")
+        candidate = run.get("candidate")
+        if not isinstance(candidate, dict):
+            raise ValueError("ocr_manifest_malformed_candidate")
+        key = (
+            str(run.get("pilot_case_id") or ""),
+            str(candidate.get("candidate_id") or ""),
+            int(run.get("repeat") or 0),
+        )
+        payload = run_payloads.get(key)
+        if payload is None:
+            raise ValueError(f"ocr_manifest_missing_run_result:{key[0]}:{key[1]}:{key[2]}")
+        run["status"] = payload.get("status")
+        run["blocked_reasons"] = list(payload.get("blocked_reasons") or [])
+        run["quality_status"] = payload.get("quality_status")
+        run["execution_mode"] = payload.get("execution_mode")
+        run["sidecar_path"] = str(
+            Path("ocr_runs")
+            / f"repeat_{key[2]}"
+            / key[0]
+            / f"{key[1]}.json"
+        )
+        run["candidate"] = {
+            "candidate_id": key[1],
+            "provider": payload.get("provider"),
+            "model": payload.get("model"),
+            "role": payload.get("role"),
+        }
+    manifest["status"] = run_summary["status"]
+    manifest["winner_status"] = "blocked"
+    manifest["run_summary"] = dict(run_summary)
+    manifest["benchmark_results"] = dict(
+        {
+            repeat: {
+                "status": result.get("status"),
+                "selection": result.get("selection", {}),
+            }
+            for repeat, result in benchmark_results.items()
+        }
+    )
+    manifest["route_readiness"] = {
+        candidate["candidate_id"]: {
+            "provider": candidate["provider"],
+            "model": _candidate_model_name(config, candidate),
+            "role": candidate["role"],
+        }
+        for candidate in OCR_CANDIDATES
+    }
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # Keep benchmark provenance synchronized with the route actually used for
+    # this run; a custom model config must not be compared against the frozen
+    # default model name.
+    route_snapshot = manifest["route_readiness"]
+    for benchmark_name in manifest.get("benchmark_manifests") or []:
+        benchmark_path = research / str(benchmark_name)
+        try:
+            benchmark = json.loads(benchmark_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise ValueError(f"ocr_benchmark_manifest_invalid:{benchmark_name}") from exc
+        if not isinstance(benchmark, dict) or not isinstance(benchmark.get("cases"), list):
+            raise ValueError(f"ocr_benchmark_manifest_invalid:{benchmark_name}")
+        for case in benchmark["cases"]:
+            if not isinstance(case, dict):
+                raise ValueError(f"ocr_benchmark_manifest_invalid_case:{benchmark_name}")
+            case["candidate_routes"] = {
+                candidate_id: dict(route_snapshot[candidate_id])
+                for candidate_id in route_snapshot
+            }
+        benchmark_path.write_text(json.dumps(benchmark, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) -> dict[str, Any]:
@@ -60,7 +515,7 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
                 "model": item["model"],
                 "role": item["role"],
             }
-            for item in OCR_CANDIDATES
+            for item in OCR_BENCHMARK_CANDIDATES
         }
         for candidate in OCR_CANDIDATES:
             for repeat in (1, 2):
@@ -88,9 +543,27 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
                                 f"{candidate['candidate_id']}.json"
                             )
                         }
-                        for candidate in OCR_CANDIDATES
+                        for candidate in OCR_BENCHMARK_CANDIDATES
+                        },
+                    "candidate_routes": {
+                        candidate_id: candidate_routes[candidate_id]
+                        for candidate_id in {
+                            candidate["candidate_id"] for candidate in OCR_BENCHMARK_CANDIDATES
+                        }
                     },
-                    "candidate_routes": candidate_routes,
+                    "audit_candidates": {
+                        candidate["candidate_id"]: {
+                            "provider": candidate["provider"],
+                            "model": candidate["model"],
+                            "role": candidate["role"],
+                            "sidecar_path": (
+                                f"ocr_runs/repeat_{repeat}/{annotation_case.pilot_case_id}/"
+                                f"{candidate['candidate_id']}.json"
+                            ),
+                        }
+                        for candidate in OCR_BENCHMARK_CANDIDATES
+                        if candidate["role"] == "ocr_verifier"
+                    },
                 }
             )
     benchmark_manifest_names = ["ocr_benchmark_repeat_1.json", "ocr_benchmark_repeat_2.json"]
@@ -106,6 +579,7 @@ def prepare_research_manifests(pilot_dir: str | Path, output_dir: str | Path) ->
         "gold_status": CURRENT_GOLD_STATUS,
         "winner_status": "blocked",
         "candidates": list(OCR_CANDIDATES),
+        "benchmark_candidates": list(OCR_BENCHMARK_CANDIDATES),
         "runs": ocr_rows,
         "benchmark_manifests": benchmark_manifest_names,
         "winner_rule": ["clinical_cer", "truncation_count", "numeric_token_accuracy", "negation_accuracy", "repeat_consistency"],

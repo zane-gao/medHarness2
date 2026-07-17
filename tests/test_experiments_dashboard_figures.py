@@ -10,7 +10,12 @@ from medharness2.cli import main
 from medharness2.dashboard import _render_health_strip, _render_kpis, _render_reader_rows, build_dashboard
 from medharness2.figures import build_figures
 from medharness2.workflows.experiments import run_experiments
-from medharness2.workflows.experiments import _image_to_text_models, _modality_recognition, _radiologist_evaluation
+from medharness2.workflows.experiments import (
+    _case_payloads,
+    _image_to_text_models,
+    _modality_recognition,
+    _radiologist_evaluation,
+)
 from medharness2.workflows.experiments import experiment_registry_metrics
 from medharness2.figures import _int as figure_int
 
@@ -47,12 +52,39 @@ def test_experiment_finding_extraction_rejects_malformed_graph(tmp_path: Path, b
         _finding_extraction([{"human_evaluation": bad}])
 
 
+@pytest.mark.parametrize("bad", [7, True, [], {}])
+def test_experiment_finding_extraction_rejects_non_string_backend(bad: object):
+    from medharness2.workflows.experiments import _finding_extraction
+
+    with pytest.raises(ValueError, match="finding_graph.backend"):
+        _finding_extraction(
+            [{"human_evaluation": {"finding_graph": {"backend": bad, "findings": []}}}]
+        )
+
+
 @pytest.mark.parametrize("bad", [True, 1, ["bad"], "bad"])
 def test_experiment_hazard_evaluation_rejects_malformed_comparison(tmp_path: Path, bad: object):
     from medharness2.workflows.experiments import _hazard_evaluation
 
     with pytest.raises(ValueError, match="pairwise_comparisons"):
         _hazard_evaluation([{"pairwise_comparisons": bad}])
+
+
+@pytest.mark.parametrize("field", ["error_type", "hazard_level"])
+@pytest.mark.parametrize("bad", [7, True, [], {}])
+def test_experiment_hazard_evaluation_rejects_malformed_hazard_fields(field: str, bad: object):
+    from medharness2.workflows.experiments import _hazard_evaluation
+
+    error = {"error_type": "hallucination", "hazard_level": 3}
+    error[field] = bad
+    with pytest.raises(ValueError, match=f"comparison.hazards.errors\[0\].{field}"):
+        _hazard_evaluation(
+            [{
+                "pairwise_comparisons": [{
+                    "comparison": {"hazards": {"errors": [error]}}
+                }]
+            }]
+        )
 
 
 @pytest.mark.parametrize("field", ["generated_report_source_counts", "generated_report_evidence_tier_counts"])
@@ -82,6 +114,26 @@ def test_radiologist_evaluation_preserves_explicit_zero_counts():
     assert result["metrics"]["reader_count"] == 0
 
 
+@pytest.mark.parametrize("bad", ["reader", [], 7, True])
+def test_radiologist_evaluation_rejects_malformed_reader_maps(bad):
+    with pytest.raises(ValueError, match="per_reader"):
+        _radiologist_evaluation(
+            {"case_count": 0, "reader_count": 0},
+            {"case_count": 0, "per_reader": bad},
+            {"reader_percentiles": {}},
+        )
+
+
+@pytest.mark.parametrize("bad", ["reader", [], 7, True])
+def test_radiologist_evaluation_rejects_malformed_percentile_maps(bad):
+    with pytest.raises(ValueError, match="reader_percentiles"):
+        _radiologist_evaluation(
+            {"case_count": 0, "reader_count": 0},
+            {"case_count": 0, "per_reader": {}},
+            {"reader_percentiles": bad},
+        )
+
+
 def test_image_to_text_models_preserves_explicit_zero_model_count(tmp_path: Path):
     (tmp_path / "analysis").mkdir()
     (tmp_path / "analysis" / "model_source_summary.csv").write_text(
@@ -98,6 +150,15 @@ def test_image_to_text_models_preserves_explicit_zero_model_count(tmp_path: Path
     assert result["metrics"]["model_count"] == 0
 
 
+@pytest.mark.parametrize("bad", ["model", [], 7, True])
+def test_image_to_text_models_rejects_malformed_model_count_map(tmp_path: Path, bad):
+    with pytest.raises(ValueError, match="generated_report_model_counts"):
+        _image_to_text_models(
+            tmp_path,
+            {"generated_report_model_counts": bad},
+        )
+
+
 def test_modality_recognition_preserves_explicit_empty_counts():
     result = _modality_recognition(
         {"validation": {"summary": {"modality_counts": {}}}},
@@ -106,6 +167,33 @@ def test_modality_recognition_preserves_explicit_empty_counts():
 
     assert result["status"] == "missing_inputs"
     assert result["metrics"]["modality_counts"] == {}
+
+
+@pytest.mark.parametrize("bad", ["cxr", ["cxr"], 7, True])
+def test_modality_recognition_rejects_malformed_workflow_case_rows(bad):
+    with pytest.raises(ValueError, match="workflow2.cases"):
+        _modality_recognition(
+            {"validation": {}},
+            {"cases": [bad]},
+        )
+
+
+@pytest.mark.parametrize("bad", [7, True, [], {}])
+def test_modality_recognition_rejects_malformed_case_modality(bad):
+    with pytest.raises(ValueError, match=r"workflow2\.cases\[0\]\.modality"):
+        _modality_recognition(
+            {"validation": {}},
+            {"cases": [{"modality": bad}]},
+        )
+
+
+@pytest.mark.parametrize("bad", [7, True, [], {}])
+def test_case_payloads_rejects_non_string_workflow1_output(tmp_path: Path, bad):
+    with pytest.raises(ValueError, match="workflow1_output"):
+        _case_payloads(
+            tmp_path,
+            {"cases": [{"workflow1_output": bad}]},
+        )
 
 
 @pytest.mark.parametrize("bad", [True, 1.5, -1, "2"])

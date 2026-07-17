@@ -7,7 +7,8 @@ import pytest
 
 from medharness2.annotation.models import AnnotationCase, CandidateReportForAnnotation, ReaderAnnotation
 from medharness2.ocr_benchmark import evaluate_ocr_candidates
-from medharness2.research_prep import prepare_research_manifests
+from medharness2.research_prep import prepare_research_manifests, run_ocr_research
+import medharness2.research_prep as research_prep
 
 
 def _pilot(tmp_path: Path, rows: list[dict]) -> Path:
@@ -79,9 +80,9 @@ def test_prepare_research_manifests_creates_blocked_ocr_and_paper_plans(tmp_path
     assert len(repeat_manifest["cases"]) == 3
     assert set(repeat_manifest["cases"][0]["candidates"]) == {
         "ocr_primary_doubao",
-        "ocr_verifier_qwen",
         "ocr_baseline_paddle",
     }
+    assert set(repeat_manifest["cases"][0]["audit_candidates"]) == {"ocr_verifier_qwen"}
     benchmark_result = evaluate_ocr_candidates(
         tmp_path / "research" / "ocr_benchmark_repeat_1.json",
         tmp_path / "research" / "repeat-1-result.json",
@@ -175,3 +176,165 @@ def test_prepare_research_manifests_propagates_valid_reader_progress(tmp_path: P
     paper = json.loads((tmp_path / "research" / "paper_experiment_manifest.json").read_text())
     assert result["status"] == "blocked"
     assert paper["data"]["clinical_reader_status"] == "in_progress"
+
+
+def test_run_ocr_research_blocks_without_real_provider_and_writes_no_text(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    research = tmp_path / "research"
+    prepare_research_manifests(pilot, research)
+
+    result = run_ocr_research(
+        pilot,
+        research,
+        config_path=tmp_path / "missing-config.yaml",
+    )
+
+    assert result["status"] == "blocked"
+    assert "real_ocr_provider_unavailable" in result["blocked_reasons"]
+    assert not list((research / "ocr_runs").rglob("*.txt"))
+    sidecars = list((research / "ocr_runs").rglob("*.json"))
+    assert sidecars
+    assert all(json.loads(path.read_text())["status"] == "blocked" for path in sidecars)
+    assert all(json.loads(path.read_text())["model_key"] in {
+        "ocr_primary_doubao", "ocr_verifier_qwen", "ocr_baseline_paddle"
+    } for path in sidecars)
+    assert set(result["benchmark_results"]) == {"1", "2"}
+
+
+def test_run_ocr_research_records_missing_source_pdf_per_case(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    research = tmp_path / "research"
+    prepare_research_manifests(pilot, research)
+
+    result = run_ocr_research(pilot, research)
+
+    assert result["status"] == "blocked"
+    assert "source_pdf_missing" in result["blocked_reasons"]
+    assert result["blocked_count"] > 0
+
+
+def test_run_ocr_research_persists_sidecar_statuses_and_route_provenance(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    research = tmp_path / "research"
+    prepare_research_manifests(pilot, research)
+
+    config = tmp_path / "ocr.yaml"
+    config.write_text(
+        "\n".join(
+            [
+                "model_roles:",
+                "  ocr_primary:",
+                "    provider: chat_completions",
+                "    model: custom-primary",
+                "    api_key_env: MISSING_PRIMARY_KEY",
+                "  ocr_verifier:",
+                "    provider: chat_completions",
+                "    model: custom-verifier",
+                "    api_key_env: MISSING_VERIFIER_KEY",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = run_ocr_research(pilot, research, config_path=config)
+
+    manifest = json.loads((research / "ocr_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["run_summary"]["status"] == result["status"]
+    assert manifest["run_summary"]["blocked_count"] == result["blocked_count"]
+    assert manifest["benchmark_results"] == result["benchmark_results"]
+    runs = manifest["runs"]
+    assert len(runs) == 6
+    primary = next(item for item in runs if item["candidate"]["candidate_id"] == "ocr_primary_doubao")
+    assert primary["candidate"]["model"] == "custom-primary"
+    assert primary["status"] == "blocked"
+    assert primary["blocked_reasons"] == ["source_pdf_missing"]
+
+
+def test_run_ocr_research_labels_unintegrated_paddle_provider(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    research = tmp_path / "research"
+    prepare_research_manifests(pilot, research)
+    source_pdf = tmp_path / "report.pdf"
+    source_pdf.write_bytes(b"placeholder")
+    monkeypatch.setattr(
+        research_prep,
+        "_build_source_pdf_index",
+        lambda _root: {"a" * 64: source_pdf},
+    )
+
+    run_ocr_research(pilot, research)
+
+    sidecar = research / "ocr_runs" / "repeat_1" / "pilot-001" / "ocr_baseline_paddle.json"
+    payload = json.loads(sidecar.read_text(encoding="utf-8"))
+    assert payload["blocked_reasons"] == ["paddleocr_provider_not_integrated"]
+
+
+def test_run_ocr_research_marks_verifier_audit_without_scoring_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    research = tmp_path / "research"
+    prepare_research_manifests(pilot, research)
+    source_pdf = tmp_path / "report.pdf"
+    source_pdf.write_bytes(b"placeholder")
+    monkeypatch.setattr(research_prep, "_build_source_pdf_index", lambda _root: {"a" * 64: source_pdf})
+    monkeypatch.setattr(
+        research_prep,
+        "_ocr_candidate_readiness",
+        lambda _config: {
+            "ocr_primary_doubao": {"ready": True, "reason": ""},
+            "ocr_verifier_qwen": {"ready": True, "reason": ""},
+            "ocr_baseline_paddle": {"ready": False, "reason": "paddleocr_provider_not_integrated"},
+        },
+    )
+
+    class FakeResult:
+        text = "FINDINGS: normal\nIMPRESSION: normal"
+        warnings = []
+        metadata = {"quality_status": "passed", "quality_audit": {"status": "agree"}}
+
+    monkeypatch.setattr(research_prep, "extract_report_text", lambda *args, **kwargs: FakeResult())
+
+    result = run_ocr_research(pilot, research)
+
+    verifier = json.loads(
+        (research / "ocr_runs" / "repeat_1" / "pilot-001" / "ocr_verifier_qwen.json").read_text()
+    )
+    assert verifier["status"] == "succeeded"
+    assert verifier["execution_mode"] == "audit_only"
+    assert verifier["model_key"] == "ocr_verifier_qwen"
+    assert result["benchmark_results"]["1"]["selection"]["status"] == "blocked"
+    assert any(
+        "ocr_baseline_paddle" in item
+        for item in result["benchmark_results"]["1"]["selection"].get("blocked_items", [])
+    )
+
+
+def test_source_pdf_index_accepts_project_data_sample_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    payload = {"case_id": "CASE-001", "report_path": "reports/CASE-001.txt"}
+    digest = research_prep._canonical_payload_sha256(payload)
+    pdf = tmp_path / "sample_data_2026-06-05" / "CR" / "CASE-001" / "report.pdf"
+    pdf.parent.mkdir(parents=True)
+    pdf.write_bytes(b"%PDF-test")
+    workflow_case = tmp_path / "outputs" / "run" / "workflow2_cases" / "CASE-001.json"
+    workflow_case.parent.mkdir(parents=True)
+    workflow_case.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr(research_prep, "PROJECT_ROOT", tmp_path)
+
+    index = research_prep._build_source_pdf_index(tmp_path / "sample_data_2026-06-05")
+
+    assert index[digest] == pdf

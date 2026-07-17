@@ -12,20 +12,23 @@
 - 已增加 `annotation import-reader` 安全回收命令，只能更新指定 reader 槽位并拒绝身份/候选漂移。
 - `import-reader` 现在还绑定参考报告与指令版本，校验 slot 身份，并以原子暂存/备份/回滚方式写回，避免多病例交付包在异常时部分合并。
 - `validate_sample_run` 对 JSONL manifest 的身份、路径、warnings、图像列表和对象字段执行 fail-closed 类型门禁；损坏 manifest 只进入错误分母，不会污染 OCR/路由统计。
+- 新增 `research run-ocr`：按 10 例 × 2 重复执行已冻结的 OCR 研究 manifest，逐病例写入带源 PDF hash、provider/model/role、候选键和质量状态的 sidecar，并自动生成两次 `ocr-benchmark` 结果。
+- 运行器无真实凭据、源 PDF 缺失、provider 异常或质量门禁失败时只写 `blocked` / `review_required`，不写伪造文本；已在当前 A40 环境实测 60 个 sidecar 全部 `blocked/missing_api_key`。
+- Doubao 是当前 primary OCR 候选；Qwen 仅作为 audit-only 多模态抽查，不进入 winner 比较；PaddleOCR-VL 已登记为 baseline，但仓库尚未接入其 adapter，当前明确为 `paddleocr_provider_not_integrated`。
 
 ## 当前证据状态
 
 | 工作线 | 状态 | 原因 |
 | --- | --- | --- |
 | 真实医生标注 | `not_started` | 尚未有真实 reader 输入 |
-| OCR winner | `blocked` | 北川金标准文本已就绪，尚缺真实 provider 双次运行 |
+| OCR winner | `blocked` | 已有可执行的双次运行器和 benchmark 回写，但当前缺真实 provider 凭据，PaddleOCR adapter 也尚未接入 |
 | 论文 formal claim | `pending` | 只有实验设计，尚无 validated gate |
 
 ## 下一步
 
 1. 将 10 例标注包交给真实 `reader_a` 与 `reader_b` 独立完成；
 2. 完成 adjudication，并运行一致性与 hazard 统计；
-3. 按 `outputs/research/20260717/ocr_manifest.json` 在北川金标准上执行真实 OCR 候选双次比较；
+3. 按 `research run-ocr` 在北川金标准上执行真实 OCR 候选双次比较；Qwen 只看 audit sidecar，不参与 winner 排名；
 4. 只有所有 evidence gate 通过后，才允许生成 OCR winner 或论文正式结果。
 
 合成草稿、模型输出和自动规则结果不会被标记为真实医生标注；北川参考报告是当前文本 benchmark gold，不等同于 reader adjudication。

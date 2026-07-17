@@ -175,8 +175,8 @@ def _protocol_entry(experiment: dict[str, Any], spec: ExperimentProtocol) -> dic
 
 
 def _radiologist_evaluation(analysis: dict[str, Any], workflow2: dict[str, Any], workflow3: dict[str, Any]) -> dict[str, Any]:
-    readers = workflow2.get("per_reader") or {}
-    percentiles = workflow3.get("reader_percentiles") or {}
+    readers = _object_mapping(workflow2.get("per_reader"), "per_reader")
+    percentiles = _object_mapping(workflow3.get("reader_percentiles"), "reader_percentiles")
     return {
         "id": "radiologist_evaluation",
         "title": "Radiologist Evaluation Study",
@@ -204,7 +204,12 @@ def _finding_extraction(cases: list[dict[str, Any]]) -> dict[str, Any]:
     for case in cases:
         human = _object(case.get("human_evaluation"), "human_evaluation")
         graph = _object(human.get("finding_graph"), "human_evaluation.finding_graph")
-        backends[str(graph.get("backend") or "unknown")] += 1
+        backend = graph.get("backend")
+        if backend in (None, ""):
+            backend = "unknown"
+        if not isinstance(backend, str):
+            raise ValueError("finding_graph.backend must be a string")
+        backends[backend] += 1
         finding_count += len(_object_list(graph.get("findings"), "finding_graph.findings"))
     return {
         "id": "finding_extraction",
@@ -228,9 +233,27 @@ def _hazard_evaluation(cases: list[dict[str, Any]]) -> dict[str, Any]:
             comparison_payload = _object(comparison.get("comparison"), "pairwise_comparisons.comparison")
             hazard_payload = _object(comparison_payload.get("hazards"), "comparison.hazards")
             hazards = _object_list(hazard_payload.get("errors"), "comparison.hazards.errors")
-            for error in hazards:
-                error_types[str(error.get("error_type") or "unknown")] += 1
-                hazard_levels[str(error.get("hazard_level") or "unknown")] += 1
+            for index, error in enumerate(hazards):
+                error_type = error.get("error_type")
+                if error_type in (None, ""):
+                    error_type = "unknown"
+                if not isinstance(error_type, str):
+                    raise ValueError(
+                        f"comparison.hazards.errors[{index}].error_type must be a string"
+                    )
+                hazard_level = error.get("hazard_level")
+                if hazard_level in (None, ""):
+                    hazard_level = "unknown"
+                elif (
+                    not isinstance(hazard_level, int)
+                    or isinstance(hazard_level, bool)
+                    or not 1 <= hazard_level <= 5
+                ):
+                    raise ValueError(
+                        f"comparison.hazards.errors[{index}].hazard_level must be an integer from 1 to 5"
+                    )
+                error_types[error_type] += 1
+                hazard_levels[str(hazard_level)] += 1
     return {
         "id": "hazard_evaluation",
         "title": "Radiologist Error Hazard Evaluation Study",
@@ -328,7 +351,11 @@ def _image_to_text_models(run_dir: Path, analysis: dict[str, Any]) -> dict[str, 
         analysis.get("generated_report_evidence_tier_counts"),
         "generated_report_evidence_tier_counts",
     )
-    model_count = len(analysis.get("generated_report_model_counts") or {})
+    model_counts = _count_map(
+        analysis.get("generated_report_model_counts"),
+        "generated_report_model_counts",
+    )
+    model_count = len(model_counts)
     return {
         "id": "image_to_text_models",
         "title": "Validation of Image-to-text AI Models",
@@ -355,7 +382,10 @@ def _modality_recognition(run_summary: dict[str, Any], workflow2: dict[str, Any]
         raw_cases = workflow2.get("cases") or []
         if not isinstance(raw_cases, list) or any(not isinstance(case, dict) for case in raw_cases):
             raise ValueError("workflow2.cases must be a list of objects")
-        modalities = Counter(str(case.get("modality") or "unknown") for case in raw_cases)
+        modalities = Counter(
+            _strict_case_string(case, "modality", index=index)
+            for index, case in enumerate(raw_cases)
+        )
     return {
         "id": "modality_recognition",
         "title": "Validation of Modality Recognition VLM",
@@ -391,8 +421,11 @@ def _case_payloads(root: Path, workflow2: dict[str, Any]) -> list[dict[str, Any]
         raw_cases = []
     if not isinstance(raw_cases, list) or any(not isinstance(case, dict) for case in raw_cases):
         raise ValueError("workflow2.cases must be a list of objects")
-    for case in raw_cases:
-        path = Path(str(case.get("workflow1_output") or ""))
+    for index, case in enumerate(raw_cases):
+        raw_path = case.get("workflow1_output")
+        if raw_path is not None and not isinstance(raw_path, str):
+            raise ValueError(f"workflow2.cases[{index}].workflow1_output must be a string")
+        path = Path(raw_path or "")
         candidates = [path] if path.is_absolute() else [root / path, path]
         for candidate in candidates:
             if candidate.exists():
@@ -415,6 +448,26 @@ def _object(value: Any, label: str) -> dict[str, Any]:
         return {}
     if not isinstance(value, dict):
         raise ValueError(f"{label} must be an object")
+    return value
+
+
+def _object_mapping(value: Any, label: str) -> dict[str, Any]:
+    """Require aggregate maps to remain JSON objects, not iterable lookalikes."""
+    if value in (None, ""):
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    if any(not isinstance(item, dict) for item in value.values()):
+        raise ValueError(f"{label} values must be objects")
+    return value
+
+
+def _strict_case_string(case: dict[str, Any], field: str, *, index: int) -> str:
+    value = case.get(field)
+    if value is None or value == "":
+        return "unknown"
+    if not isinstance(value, str):
+        raise ValueError(f"workflow2.cases[{index}].{field} must be a string")
     return value
 
 
