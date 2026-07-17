@@ -4,6 +4,7 @@ import json
 import copy
 import hashlib
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +73,8 @@ def run_ocr_research(
     run_payloads: dict[tuple[str, str, int], dict[str, Any]] = {}
     for row in pilot_rows:
         case_id = str(row["pilot_case_id"])
+        if not _safe_case_component(case_id):
+            raise ValueError(f"pilot_case_id_unsafe_path:{case_id}")
         case = AnnotationCase.model_validate_json((pilot / row["annotation_path"]).read_text(encoding="utf-8"))
         source_pdf = source_index.get(case.source_case_sha256)
         for repeat in (1, 2):
@@ -322,10 +325,10 @@ def _ocr_candidate_readiness(config: AppConfig) -> dict[str, dict[str, Any]]:
     for candidate in OCR_CANDIDATES:
         if candidate["provider"] == "paddleocr":
             try:
-                from paddleocr import PaddleOCR  # type: ignore[import-not-found,unused-ignore]
-                del PaddleOCR
+                from paddleocr import PaddleOCRVL  # type: ignore[import-not-found,unused-ignore]
+                del PaddleOCRVL
                 result[candidate["candidate_id"]] = {"ready": True, "reason": ""}
-            except ImportError:
+            except Exception:
                 result[candidate["candidate_id"]] = {
                     "ready": False,
                     "reason": "paddleocr_provider_unavailable",
@@ -427,26 +430,31 @@ def _run_paddleocr_candidate(
     unsupported API responses become explicit blocked results at the caller.
     """
     try:
-        from paddleocr import PaddleOCR  # type: ignore[import-not-found]
-    except ImportError as exc:
+        from paddleocr import PaddleOCRVL  # type: ignore[import-not-found]
+    except Exception as exc:
         raise RuntimeError("paddleocr_provider_unavailable") from exc
     from medharness2.ocr import _render_pdf_pages
 
+    if not report_pdf.is_file():
+        raise RuntimeError("paddleocr_source_pdf_missing")
     output_dir.mkdir(parents=True, exist_ok=True)
     page_dir = output_dir / f"{case_id}_pages"
+    page_dir.mkdir(parents=True, exist_ok=True)
     pages = _render_pdf_pages(report_pdf, page_dir)
     if not pages:
         raise RuntimeError("paddleocr_no_rendered_pages")
-    try:
-        engine = PaddleOCR(lang="ch")
-    except TypeError:
-        engine = PaddleOCR()
+    engine = PaddleOCRVL()
     texts: list[str] = []
-    for page in pages:
-        result = engine.predict(page)
-        page_text = _paddleocr_text(result)
-        if page_text:
-            texts.append(page_text)
+    try:
+        for page in pages:
+            result = engine.predict(page)
+            page_text = _paddleocr_text(result)
+            if page_text:
+                texts.append(page_text)
+    finally:
+        close = getattr(engine, "close", None)
+        if callable(close):
+            close()
     text = "\n\n".join(texts).strip()
     if not text:
         raise RuntimeError("paddleocr_empty_result")
@@ -464,26 +472,49 @@ def _run_paddleocr_candidate(
 
 
 def _paddleocr_text(result: Any) -> str:
-    """Extract text from current/legacy PaddleOCR result shapes."""
-    values: list[str] = []
-    items = result if isinstance(result, (list, tuple)) else [result]
-    for item in items:
-        if isinstance(item, dict):
-            for key in ("rec_texts", "texts", "text"):
-                raw = item.get(key)
-                if isinstance(raw, str):
-                    values.append(raw)
-                elif isinstance(raw, list):
-                    values.extend(value for value in raw if isinstance(value, str))
-        elif hasattr(item, "json"):
-            try:
-                raw_json = item.json() if callable(item.json) else item.json
-                nested = _paddleocr_text(raw_json)
-                if nested:
-                    values.append(nested)
-            except Exception:
-                continue
-    return "\n".join(value.strip() for value in values if value.strip())
+    """Extract Markdown/text from current PaddleOCR-VL result shapes."""
+    if isinstance(result, str):
+        return result.strip()
+    if isinstance(result, (list, tuple)):
+        return "\n".join(part for part in (_paddleocr_text(item) for item in result) if part)
+    if isinstance(result, dict):
+        for key in ("markdown_text", "markdown_texts", "text", "ocr_text", "markdown", "rec_texts", "texts"):
+            if key in result:
+                text = _paddleocr_text(result[key])
+                if text:
+                    return text
+        blocks = result.get("parsing_res_list")
+        if isinstance(blocks, list):
+            text = "\n".join(
+                str(block.get("block_content")).strip()
+                for block in blocks
+                if isinstance(block, dict) and isinstance(block.get("block_content"), str)
+            )
+            if text:
+                return text
+        markdown_attr = getattr(result, "markdown", None)
+        if markdown_attr is not None and markdown_attr is not result:
+            text = _paddleocr_text(markdown_attr)
+            if text:
+                return text
+        return ""
+    for attr in ("markdown_text", "text", "ocr_text", "markdown", "json"):
+        if not hasattr(result, attr):
+            continue
+        try:
+            value = getattr(result, attr)
+            value = value() if callable(value) else value
+            text = _paddleocr_text(value)
+        except Exception:
+            continue
+        if text:
+            return text
+    return ""
+
+
+def _safe_case_component(value: str) -> bool:
+    """Keep generated sidecar paths inside the research output directory."""
+    return bool(value) and re.fullmatch(r"[A-Za-z0-9._-]+", value) is not None and value not in {".", ".."}
 
 
 def _persist_ocr_run_state(

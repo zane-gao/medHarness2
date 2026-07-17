@@ -317,6 +317,51 @@ def test_run_ocr_research_uses_injected_paddle_adapter(tmp_path: Path, monkeypat
     assert result["success_count"] == 2
 
 
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ({"markdown_text": "报告文本"}, "报告文本"),
+        ({"rec_texts": ["第一行", "第二行"]}, "第一行\n第二行"),
+        ({"parsing_res_list": [{"block_content": "版面文本"}]}, "版面文本"),
+        ([{"text": "嵌套文本"}], "嵌套文本"),
+        ("直接文本", "直接文本"),
+    ],
+)
+def test_paddleocr_text_handles_current_result_shapes(value: object, expected: str):
+    assert research_prep._paddleocr_text(value) == expected
+
+
+def test_paddleocr_readiness_requires_vl_pipeline(monkeypatch: pytest.MonkeyPatch):
+    class FakePaddle:
+        pass
+
+    fake_module = type("FakeModule", (), {"PaddleOCR": FakePaddle})
+    monkeypatch.setitem(__import__("sys").modules, "paddleocr", fake_module)
+    readiness = research_prep._ocr_candidate_readiness(research_prep.load_config())
+    assert readiness["ocr_baseline_paddle"] == {
+        "ready": False,
+        "reason": "paddleocr_provider_unavailable",
+    }
+
+
+def test_paddleocr_vl_dict_subclass_reads_markdown_property():
+    class FakeResult(dict):
+        @property
+        def markdown(self):
+            return {"markdown_texts": "FINDINGS: from PaddleOCR-VL"}
+
+    assert research_prep._paddleocr_text(FakeResult(parsing_res_list=[])) == "FINDINGS: from PaddleOCR-VL"
+
+
+def test_run_ocr_research_rejects_unsafe_case_path(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot/escape", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    with pytest.raises(ValueError, match="pilot_case_id_unsafe_path"):
+        run_ocr_research(pilot, tmp_path / "research")
+
+
 def test_run_ocr_research_marks_verifier_audit_without_scoring_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     pilot = _pilot(
         tmp_path,
