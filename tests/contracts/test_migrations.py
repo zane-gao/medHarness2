@@ -222,6 +222,23 @@ def test_hazard_migration_rejects_malformed_evidence_ids(bad):
         _migrate_hazard_result({"errors": [{"error_type": "false_finding", "evidence_ids": bad}]})
 
 
+@pytest.mark.parametrize("field", ["error_type", "explanation", "recommended_action"])
+@pytest.mark.parametrize("bad", [{"x": 1}, 7, True, ["x"]])
+def test_hazard_migration_rejects_non_string_text_fields(field, bad):
+    from medharness2.contracts.migrations import _migrate_hazard_result
+
+    with pytest.raises((TypeError, ValueError), match=field):
+        _migrate_hazard_result({"errors": [{"error_type": "false_finding", field: bad}]})
+
+
+@pytest.mark.parametrize("bad", [0, 1, "false", "true", {"x": 1}, [True]])
+def test_hazard_migration_rejects_non_boolean_abstain(bad):
+    from medharness2.contracts.migrations import _migrate_hazard_result
+
+    with pytest.raises((TypeError, ValueError), match="abstain"):
+        _migrate_hazard_result({"errors": [{"error_type": "false_finding", "abstain": bad}]})
+
+
 def test_migrate_v1_hazard_preserves_unknown_top_level_fields():
     legacy = _legacy_case()
     legacy["pairwise_comparisons"] = [

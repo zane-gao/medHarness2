@@ -384,6 +384,13 @@ def _migrate_hazard_result(payload: dict[str, Any]) -> dict[str, Any]:
     for index, raw in enumerate(payload.get("errors") or []):
         if not isinstance(raw, dict):
             raise TypeError(f"hazard_result.errors[{index}] must be an object")
+        for field in ("error_type", "explanation", "recommended_action"):
+            value = raw.get(field)
+            if value is not None and not isinstance(value, str):
+                raise TypeError(f"hazard_result.errors[{index}].{field} must be a string")
+        raw_abstain = raw.get("abstain")
+        if raw_abstain is not None and not isinstance(raw_abstain, bool):
+            raise TypeError(f"hazard_result.errors[{index}].abstain must be a boolean")
         raw_evidence_ids = raw.get("evidence_ids")
         if raw_evidence_ids not in (None, ""):
             if isinstance(raw_evidence_ids, str):
@@ -396,16 +403,16 @@ def _migrate_hazard_result(payload: dict[str, Any]) -> dict[str, Any]:
         if not evidence_ids:
             evidence_ids = _legacy_evidence_ids(raw)
         error = {
-            "error_type": str(raw.get("error_type") or "legacy_error"),
+            "error_type": raw.get("error_type") or "legacy_error",
             "hazard_level": _bounded_int(raw.get("hazard_level"), default=3, lower=1, upper=5),
-            "explanation": str(raw.get("explanation") or "Legacy hazard judgement without explanation."),
-            "recommended_action": str(
+            "explanation": raw.get("explanation") or "Legacy hazard judgement without explanation.",
+            "recommended_action": (
                 raw.get("recommended_action")
                 or "Review this discrepancy against the source study and adjudicate before use."
             ),
             "confidence": _optional_confidence(raw.get("confidence")),
             "evidence_ids": list(dict.fromkeys(evidence_ids)),
-            "abstain": bool(raw.get("abstain", False)),
+            "abstain": raw.get("abstain", False),
         }
         for field in (
             "finding",
