@@ -191,6 +191,22 @@ def _object_list(value: Any, label: str) -> list[dict[str, Any]]:
     return value
 
 
+def _string_list(value: Any, label: str) -> list[str]:
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise ValueError(f"{label} must be a list of strings")
+    return value
+
+
+def _object(value: Any, label: str) -> dict[str, Any]:
+    if value in (None, ""):
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
 def _audit_bundle(
     candidate_graph: dict[str, Any],
     reference_graph: dict[str, Any],
@@ -209,7 +225,7 @@ def _audit_bundle(
                     "category": category,
                     "candidate_id": _resolve_id(row.get("candidate") or row.get("a"), candidate_findings, candidate_ids),
                     "reference_id": _resolve_id(row.get("reference") or row.get("b"), reference_findings, reference_ids),
-                    "differences": list(row.get("differences") or []),
+                    "differences": _string_list(row.get("differences"), f"{category}.differences"),
                 }
             )
     error_rows = []
@@ -240,7 +256,7 @@ def _audit_bundle(
                 for finding in alignment_result.get("reference_only") or []
             ],
             "error_candidates": error_rows,
-            "metrics": dict(alignment_result.get("metrics") or {}),
+            "metrics": _object(alignment_result.get("metrics"), "metrics"),
         },
         set(candidate_ids),
         set(reference_ids),

@@ -2206,3 +2206,19 @@ def test_tool5_audit_rejects_malformed_error_candidate_lists(bad):
             {"error_candidates": bad},
             require_llm=False,
         )
+
+
+@pytest.mark.parametrize("field", ["differences", "metrics"])
+@pytest.mark.parametrize("bad", ["bad", [1], 7, True])
+def test_tool5_audit_rejects_malformed_structured_fields(field, bad):
+    alignment = {"matched": [], "error_candidates": [], field: bad}
+    if field == "differences":
+        finding = {"finding_id": "f1", "observation_text": "nodule"}
+        alignment["matched"] = [{"candidate": finding, "reference": finding, "differences": bad}]
+    with pytest.raises(ValueError, match=field):
+        audit_alignment(
+            {"findings": [{"finding_id": "f1", "observation_text": "nodule"}]},
+            {"findings": [{"finding_id": "f1", "observation_text": "nodule"}]},
+            alignment,
+            require_llm=False,
+        )
