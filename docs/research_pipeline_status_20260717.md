@@ -32,8 +32,8 @@
 - PaddleOCR baseline 现要求 `PaddleOCRVL` 和 Paddle runtime 同时可导入；sidecar 结构、空页、空文本、源 PDF hash 读取失败均 fail-closed，不会把“部分页面成功”升级为 OCR 通过。
 - 2026-07-17 已多次用 Yunwu `qwen3-vl-plus` 对 MR2605270001 做真实视觉链路探索：Tool 2、Tool 5、Tool 4 均曾成功越过，生成 fallback 也能返回非空 exploratory 文本。最新一次产物 `/tmp/single_yunwu_vl_mr2605270001_finalcheck` 完整生成 `generated_reports=1`、`generated_evaluations=1`、`rankings=1`、`pairwise=1`，无 errors 且质量门禁通过；但证据等级仍为 `exploratory_fresh`，fallback provenance 仍保留，且此前重复运行出现过 evidence 重排、枚举违规和 JSON 截断，因此尚未达到稳定小批次标准，不能作为正式评测结果。
 - 2026-07-17 修复了单病例空生成占位符级联：空报告不再进入 Tool 1–6、ranking 或 pairwise。真实外部 `llm_fallback` 若返回非空文本，会标记为 `exploratory_fresh`，先过内容质量门禁后可用于探索性评估/排序；mock/debug fallback 仍 fail-closed，所有 exploratory 结果仍不能进入 formal gate。
-- Tool 2 现在向视觉模型提供带 `span_id` 和源偏移的 source-ordered evidence spans，并由服务端按偏移恢复原文 grounding；Tool 5 在 pairwise 中对 Qwen/VL 模型按每块 1 个错误、其他模型按每块 5 个错误请求，并把分块策略写入 checkpoint 指纹，降低多模态 JSON 截断和旧缓存复用风险。真实 Qwen 单例仍需多次重试观察稳定性，不能把单次成功升级为 winner。
-- 跨模态 exploratory 复核：MRI `MR2605270001` 完整通过；CXR `CR2605290003` 完整通过；CT `CT2605300030` 在 Tool 5 第 4/20 块因 JSON 截断阻断。三例均未写入正式 benchmark 或论文统计。
+- Tool 2 现在向视觉模型提供带 `span_id` 和源偏移的 source-ordered evidence spans，并由服务端按完整报告原文恢复 grounding；Tool 5 在 pairwise 中对 Qwen/VL 模型按每块 1 个错误、其他模型按每块 5 个错误请求，并对每个错误块只保留相关 finding/pair 上下文，把分块策略写入 checkpoint 指纹，降低多模态 JSON 截断和旧缓存复用风险。真实 Qwen 结果仍是 exploratory，不能升级为 winner。
+- 跨模态 exploratory 复核：MRI `MR2605270001`、CXR `CR2605290003`、CT `CT2605300030` 均已完整生成报告、评估、ranking 和 pairwise，三例均无 errors 且质量门禁通过；CT 长病例在上下文裁剪后以 25 个单错误块完成 Tool 5，期间有一次 schema 重试但无 fallback。三例均未写入正式 benchmark 或论文统计。
 
 | 工作线 | 状态 | 原因 |
 | --- | --- | --- |

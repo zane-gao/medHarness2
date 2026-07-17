@@ -2,11 +2,13 @@
 
 > 本文档是 2026-07-14 的历史审计快照，后续增量记录当前修复状态；原始发现保留用于追溯，不应直接当作当前代码事实。
 
-> **最新复核（2026-07-17）**：当前主分支回归为 `1830 passed, 20 warnings`。真实 `research run-ocr` 已核验 pilot10 的 10/10 源 PDF 映射；Yunwu Qwen VL 已完成真实视觉探索，但 OCR winner 仍因缺少可确认的 Doubao OCR 候选、DMX 401 和 PaddleOCR-VL runtime 未就绪而保持 blocked；这不是 OCR winner 或临床标注完成证据。下文更早的 `1718/1785/1801` 等数字均为历史快照。
+> **最新复核（2026-07-17）**：当前主分支回归为 `1836 passed, 20 warnings`。真实 `research run-ocr` 已核验 pilot10 的 10/10 源 PDF 映射；Yunwu Qwen VL 已完成真实视觉探索，但 OCR winner 仍因缺少可确认的 Doubao OCR 候选、DMX 401 和 PaddleOCR-VL runtime 未就绪而保持 blocked；这不是 OCR winner 或临床标注完成证据。下文更早的 `1718/1785/1801` 等数字均为历史快照。
 
 > **2026-07-17 PaddleOCR 边界收口**：PaddleOCR readiness 现在同时检查 `PaddleOCRVL` 与 Paddle runtime；OCR sidecar 对文本、warnings、metadata、quality audit 结构执行 fail-closed 校验；源 PDF hash 不可读、对象式 `parsing_res_list`、空文本和空页均有明确阻断/复核语义。新增研究专项回归后全量为 `1783 passed, 20 warnings`。
 
-> **2026-07-17 审计页列表边界收口**：verifier audit 的 `pages` 为空或混入非对象时统一判为 `blocked`，不会因过滤非法项后恰好剩余 `agree` 而误通过；全量回归曾为 `1785/1801/1835 passed, 20 warnings`，当前基线为 `1830 passed, 20 warnings`。
+> **2026-07-17 审计页列表边界收口**：verifier audit 的 `pages` 为空或混入非对象时统一判为 `blocked`，不会因过滤非法项后恰好剩余 `agree` 而误通过；全量回归曾为 `1785/1801/1835 passed, 20 warnings`，当前基线为 `1836 passed, 20 warnings`。
+
+> **2026-07-17 多模态 exploratory 收口**：Tool 2 已改为 source span ID + 完整报告原文回填；Tool 5 对 Qwen/VL 使用单错误块并裁剪无关上下文。MRI `MR2605270001`、CXR `CR2605290003`、CT `CT2605300030` 三例真实 Yunwu exploratory 链路均已完整通过，但仍不具备 formal 或 winner 资格。
 
 > **2026-07-17 OCR winner 冻结收口**：新增 `research freeze-ocr-winner`；只有两次 benchmark 均为无 blocker、完整病例覆盖、所有候选重复质量为 `passed` 且 winner 一致时，才会以原子写回方式写入 `winner_model`、`freeze_id`、`freeze_version` 和证据文件列表。当前 OCR manifest 仍为 `blocked`，因此冻结命令按预期拒绝，不生成 winner。
 
