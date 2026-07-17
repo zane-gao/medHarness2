@@ -17,10 +17,10 @@
 - Create: `tests/test_clinical_prep.py`
 - Modify: `src/medharness2/cli.py`
 
-- [ ] 读取 52 例 manifest，严格校验病例对象、模态、源路径和 hash。
-- [ ] 按 `cxr/ct/mri` 覆盖及 OCR 风险排序，确定性选出 10 例。
-- [ ] 输出盲化 manifest、候选模型映射隔离文件、10 个 annotation case JSON。
-- [ ] 增加 CLI：`annotation prepare-pilot --run-dir ... --output-dir ... --count 10`。
+- [x] 读取 52 例 manifest，严格校验病例对象、模态、源路径和 hash。
+- [x] 按 `cxr/ct/mri` 覆盖及 OCR 风险排序，确定性选出 10 例。
+- [x] 输出盲化 manifest、候选模型映射隔离文件、10 个 annotation case JSON。
+- [x] 增加 CLI：`annotation prepare-pilot --run-dir ... --output-dir ... --count 10`。
 
 ### Task 2: OCR 与论文 manifest
 
@@ -29,9 +29,9 @@
 - Create: `tests/test_research_prep.py`
 - Modify: `src/medharness2/cli.py`
 
-- [ ] 输出 OCR candidate/repeat manifest，真实 provider 缺失时状态为 `blocked`。
-- [ ] 输出论文 experiment manifest，固定四组实验和统计方法。
-- [ ] 增加 manifest schema 校验和 CLI：`research prepare-manifests`。
+- [x] 输出 OCR candidate/repeat manifest，真实 provider 缺失时状态为 `blocked`。
+- [x] 输出论文 experiment manifest，固定四组实验和统计方法。
+- [x] 增加 manifest schema 校验和 CLI：`research prepare-manifests`。
 
 ### Task 3: 文档、前端和验证
 
@@ -40,7 +40,9 @@
 - Modify: `docs/blindspot_audit_20260714.md`
 - Modify: `web/index.html`
 
-- [ ] 记录 10 例准备状态、OCR winner 状态和论文实验状态。
-- [ ] 运行专项/全量测试、compileall、diff check。
-- [ ] 重建前端，确认 SHA 与 dirty 状态。
-- [ ] 提交并推送 `main`，核对远程 SHA。
+- [x] 记录 10 例准备状态、OCR winner 状态和论文实验状态。
+- [x] 运行专项/全量测试、compileall、diff check。
+- [x] 重建前端，确认 SHA 与 dirty 状态。
+- [x] 提交并推送 `main`，核对远程 SHA。
+
+> 以上是“准备流水线”任务的完成状态，不代表真实医生标注、真实 OCR provider 或论文 formal claim 已完成；这些仍由 `docs/project_status.yaml` 中的外部证据 gate 控制。
