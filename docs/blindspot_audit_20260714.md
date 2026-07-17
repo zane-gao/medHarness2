@@ -6,7 +6,7 @@
 
 > **2026-07-17 PaddleOCR 边界收口**：PaddleOCR readiness 现在同时检查 `PaddleOCRVL` 与 Paddle runtime；OCR sidecar 对文本、warnings、metadata、quality audit 结构执行 fail-closed 校验；源 PDF hash 不可读、对象式 `parsing_res_list`、空文本和空页均有明确阻断/复核语义。新增研究专项回归后全量为 `1783 passed, 20 warnings`。
 
-> **2026-07-17 审计页列表边界收口**：verifier audit 的 `pages` 为空或混入非对象时统一判为 `blocked`，不会因过滤非法项后恰好剩余 `agree` 而误通过；全量回归曾为 `1785/1801/1834 passed, 20 warnings`，当前基线为 `1830 passed, 20 warnings`。
+> **2026-07-17 审计页列表边界收口**：verifier audit 的 `pages` 为空或混入非对象时统一判为 `blocked`，不会因过滤非法项后恰好剩余 `agree` 而误通过；全量回归曾为 `1785/1801/1835 passed, 20 warnings`，当前基线为 `1830 passed, 20 warnings`。
 
 > **2026-07-17 OCR winner 冻结收口**：新增 `research freeze-ocr-winner`；只有两次 benchmark 均为无 blocker、完整病例覆盖、所有候选重复质量为 `passed` 且 winner 一致时，才会以原子写回方式写入 `winner_model`、`freeze_id`、`freeze_version` 和证据文件列表。当前 OCR manifest 仍为 `blocked`，因此冻结命令按预期拒绝，不生成 winner。
 

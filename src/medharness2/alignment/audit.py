@@ -396,7 +396,9 @@ def _audit_prompt(
         "exactly from the structured audit bundle; do not omit either field. "
         f"issue_type must be exactly one of [{allowed_issue_types}] and never an input error_type. "
         f"suggested_error_type may be only one of exactly [{allowed_error_types}] or null; "
-        "never use a description, synonym, or free-form explanation in that field."
+        "never use a description, synonym, or free-form explanation in that field. "
+        "If the previous error mentions invalid JSON, output the smallest valid object: issues=[], "
+        "one short sentence per requested error_judgement, and no extra keys."
         if previous_errors
         else ""
     )

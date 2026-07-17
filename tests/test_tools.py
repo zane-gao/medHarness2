@@ -16,7 +16,7 @@ from medharness2.contracts import (
 )
 from medharness2.llm_client import LLMClientError, build_mock_client
 from medharness2.tools.tool1_likert import _judge_prompt, evaluate_likert, likert_mean
-from medharness2.tools.tool2_extract import _extraction_prompt, _fallback_graph, _locate_evidence, _normalize_template_candidate, _template_count_or_zero, extract_findings
+from medharness2.tools.tool2_extract import _extraction_prompt, _fallback_graph, _evidence_span_records, _locate_evidence, _normalize_template_candidate, _template_count_or_zero, extract_findings
 from medharness2.tools.tool3_structure import check_structure, section_order
 from medharness2.tools.tool4_hazard import (
     adjudicate_hazard_disagreements,
@@ -399,6 +399,15 @@ def test_tool2_uses_server_resolved_evidence_span_id():
     assert graph["findings"][0]["source_text"] == "脑室系统未见扩张，脑沟、裂、池稍增宽。"
 
 
+def test_tool2_span_ids_remain_bound_to_full_report_when_prompt_is_bounded():
+    report = "前置信息。" + ("无关描述。" * 900) + "目标证据。"
+    records = _evidence_span_records(report)
+
+    assert records[0]["text"] == "前置信息。"
+    assert records[0]["start"] == 0
+    assert records[0]["end"] == len("前置信息。")
+
+
 def test_tool2_evidence_span_id_preserves_duplicate_span_offset():
     report = "同一句。其他内容。同一句。"
     response = {
@@ -444,6 +453,7 @@ def test_tool5_retry_prompt_requires_pair_ids_for_match_issues():
     assert "copied exactly from the structured audit bundle" in prompt
     assert "never use a description, synonym, or free-form explanation" in prompt
     assert "never use an input error_type" in prompt
+    assert "output the smallest valid object" in prompt
 
 
 def test_tool5_prompt_allows_empty_issues_when_pair_ids_are_unavailable():

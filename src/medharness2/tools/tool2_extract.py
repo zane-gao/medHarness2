@@ -184,7 +184,11 @@ def _extraction_prompt(
         else ""
     )
     bounded_report = _bound_report_text(report_text)
-    evidence_spans = _evidence_span_records(bounded_report)
+    # IDs are derived from the full source text and reused by the server when
+    # resolving evidence_span_id. The report body remains bounded separately;
+    # otherwise truncating the prompt could silently remap an index to a
+    # different clinical sentence.
+    evidence_spans = _evidence_span_records(report_text)
     candidate_graph = {
         "backend": candidate.get("backend"),
         "findings": [
