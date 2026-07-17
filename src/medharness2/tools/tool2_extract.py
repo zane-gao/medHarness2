@@ -6,7 +6,7 @@ import re
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from medharness2.contracts import FindingGraph, Measurement
 from medharness2.extractors import ExtractorRegistry
@@ -54,8 +54,8 @@ class _LLMFinding(BaseModel):
 class _LLMRelation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    source_index: int = Field(ge=0)
-    target_index: int = Field(ge=0)
+    source_index: StrictInt = Field(ge=0)
+    target_index: StrictInt = Field(ge=0)
     relation_type: str = Field(min_length=1)
     attributes: dict[str, Any] = Field(default_factory=dict)
 

@@ -2186,6 +2186,21 @@ def test_tool2_rejects_implicit_retry_integer_coercion(bad):
         extract_findings("FINDINGS: test", modality="cxr", max_retries=bad, llm_client=build_mock_client())
 
 
+@pytest.mark.parametrize("bad", [True, 1.0, "1"])
+def test_tool2_relation_indices_reject_implicit_integer_coercion(bad):
+    from medharness2.tools.tool2_extract import _LLMRelation
+
+    with pytest.raises(Exception):
+        _LLMRelation.model_validate(
+            {
+                "source_index": bad,
+                "target_index": 0,
+                "relation_type": "associated_with",
+                "attributes": {},
+            }
+        )
+
+
 @pytest.mark.parametrize("bad", [True, 1.5, 0, -1, "2"])
 def test_tool6_rejects_implicit_retry_integer_coercion(bad):
     with pytest.raises((ValueError, TypeError), match="max_retries"):
