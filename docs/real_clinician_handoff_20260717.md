@@ -76,9 +76,9 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
   --output outputs/research/20260717/pilot_annotation_analysis.json
 ```
 
-该命令会生成病例完成数、双读 exact-set agreement、finding/hazard 分歧队列和下一 gate。
+该命令会生成病例完成数、双读 exact-set agreement、finding/hazard presence 的 Cohen κ、分歧队列和下一 gate。
 在任意病例未完成时命令以非零退出并写入 `status=blocked`；不会填充 kappa、ICC、模型排名或论文正式结果。
-只有所有病例完成双读和 adjudication 后，才允许把该文件作为正式统计协议的输入。
+即使所有病例完成，该文件也只是正式统计协议的输入；`formal_claim_allowed` 仍保持 `false`，直到 OCR、模型、临床标签和论文实验门禁全部通过。
 
 ## 证据边界
 

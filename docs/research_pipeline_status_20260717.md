@@ -25,7 +25,7 @@
 - `research run-ocr` 在 pilot10 上生成 60 个 sidecar，当前无外部凭据/本地 PaddleOCR-VL runtime 时保持 `blocked`；未把阻断结果计入 CER、winner 或论文统计。
 - `research prepare-manifests` 是准备阶段命令，即使生成的 OCR/论文 gate 初始为 `blocked/pending` 也返回 0；只有实际执行命令在证据缺失时返回非零，避免自动化把“清单已生成”误判成“执行失败”。
 - `annotation validate --package-dir annotation/pilot10` 返回 `not_started`、`0/10`，并以非零退出；没有把空标注包误报为完成。
-- 新增 `annotation analyze`：真实 reader 回收后自动生成完成数、双读 exact-set agreement 和分歧队列；当前 pilot10 实测为 `blocked`、`0/10`，不生成虚假 kappa/ICC 或 formal claim。
+- 新增 `annotation analyze`：真实 reader 回收后自动生成完成数、双读 exact-set agreement、finding/hazard presence Cohen κ 和分歧队列；当前 pilot10 实测为 `blocked`、`0/10`，不生成虚假 ICC 或 formal claim。
 - PaddleOCR baseline 现要求 `PaddleOCRVL` 和 Paddle runtime 同时可导入；sidecar 结构、空页、空文本、源 PDF hash 读取失败均 fail-closed，不会把“部分页面成功”升级为 OCR 通过。
 
 | 工作线 | 状态 | 原因 |

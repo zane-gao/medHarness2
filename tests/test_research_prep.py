@@ -233,6 +233,28 @@ def test_analyze_pilot_annotations_blocks_until_both_readers_and_adjudication_co
     assert payload["disagreement_queue"] == []
 
 
+def test_analyze_pilot_annotations_writes_blocked_artifact_for_invalid_manifest(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    manifest = pilot / "manifest.jsonl"
+    row = json.loads(manifest.read_text(encoding="utf-8").splitlines()[0])
+    row["annotation_path"] = "../outside.json"
+    manifest.write_text(json.dumps(row) + "\n", encoding="utf-8")
+
+    output = tmp_path / "analysis.json"
+    result = analyze_pilot_annotations(pilot, output)
+
+    assert result["status"] == "blocked"
+    assert result["case_count"] == 1
+    assert result["complete_case_count"] == 0
+    assert result["formal_claim_allowed"] is False
+    assert result["reader_agreement"]["compared_case_count"] == 0
+    assert result["validation"]["errors"]
+    assert output.exists()
+
+
 def test_analyze_pilot_annotations_emits_reader_agreement_and_disagreement_queue(tmp_path: Path):
     pilot = _pilot(
         tmp_path,
@@ -262,7 +284,9 @@ def test_analyze_pilot_annotations_emits_reader_agreement_and_disagreement_queue
     assert result["status"] == "complete"
     assert result["complete_case_count"] == 1
     assert result["reader_agreement"]["case_exact_agreement"] == 1.0
-    assert result["formal_claim_allowed"] is True
+    assert result["formal_claim_allowed"] is False
+    assert result["formal_claim_reason"] == "paper_evidence_gate_not_satisfied"
+    assert result["reader_agreement"]["finding_presence_kappa"]["kappa"] == 1.0
 
 
 def test_run_ocr_research_blocks_unreadable_source_pdf_hash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
