@@ -5,15 +5,15 @@ release_readiness: pilot_only
 
 baseline:
   branch: main
-  git_sha: 1ec7359
-  ledger_commit: 1ec7359
+  git_sha: 5789075
+  ledger_commit: 5789075
   evidence_baseline_sha: 07a2c97
   dirty_worktree: false
-  pytest_passed: 1803
+  pytest_passed: 1828
   pytest_warnings: 20
-  latest_pytest_passed: 1803
+  latest_pytest_passed: 1828
   latest_pytest_warnings: 20
-  latest_regression_sha: 98e72a9
+  latest_regression_sha: 5789075
   current_run: outputs/sample_data_2026-06-05_final_local_routed_52_20260606_reeval_v2_qualityfix_20260710
   case_count: 52
   generated_report_count: 81
@@ -177,7 +177,7 @@ workstreams:
     next_gate: Re-enable strict data-governance review before any external clinical-data run.
   control_panel:
     status: validated
-    summary: The internal project-status dashboard is rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Current and legacy reader panels preserve missing scores/percentiles as null and exclude or show them as unavailable instead of rendering zero/P0. Reader totals are separated from statistically eligible reader counts, so mock/fallback rows are excluded from aggregates without changing completed-reader accounting. Rule extraction keeps missing measurements distinct from explicit zero values during finding de-duplication. Static checks, source inspection, and the latest full regression (`1803 passed, 20 warnings`) pass. The paper evidence gate is now visible in the panel and remains blocked until clinical double-read, OCR winner freeze, and validated experiment gates all pass. OCR winner freezing now requires two clean, repeat-consistent benchmark selections plus complete coverage and explicit freeze metadata. Formal benchmark case metrics preserve explicit zero agreement and adjudication counts instead of deriving nonzero fallbacks. Dashboard summaries and KPI rendering preserve explicit zero counts instead of falling back to stale analysis or artifact rows. Optional OCR preflight surfaces primary and configured verifier readiness separately. Complete Chinese OCR responses are not mislabeled as truncated. Legacy generation preserves caller case_id provenance in its input overlay. Explicit empty modality counts and aggregate arrays remain distinct from missing values. Model-role, top-level LLM, per-call provider, manifest, migration, ranking, provenance, and analysis identity fields use fail-closed type boundaries. Playwright visual regression has passed at 1440x900 and 390x844 using the repository test entry; the host libraries are available only through a user-space temporary bundle, so this does not claim system-wide dependency installation.
+    summary: The internal project-status dashboard is rebuilt against the current evidence ledger while preserving the original long-page visual design; generated HTML is intentionally published by explicit user direction. Current and legacy reader panels preserve missing scores/percentiles as null and exclude or show them as unavailable instead of rendering zero/P0. Reader totals are separated from statistically eligible reader counts, so mock/debug rows are excluded from aggregates without changing completed-reader accounting. Real external exploratory fallback outputs may pass content quality checks and enter exploratory ranking, but remain ineligible for formal gates; empty generation placeholders are removed before downstream evaluation. Rule extraction keeps missing measurements distinct from explicit zero values during finding de-duplication. Static checks, source inspection, and the latest full regression pass. The paper evidence gate is now visible in the panel and remains blocked until clinical double-read, OCR winner freeze, and validated experiment gates all pass. OCR winner freezing now requires two clean, repeat-consistent benchmark selections plus complete coverage and explicit freeze metadata. Formal benchmark case metrics preserve explicit zero agreement and adjudication counts instead of deriving nonzero fallbacks. Dashboard summaries and KPI rendering preserve explicit zero counts instead of falling back to stale analysis or artifact rows. Optional OCR preflight surfaces primary and configured verifier readiness separately. Complete Chinese OCR responses are not mislabeled as truncated. Legacy generation preserves caller case_id provenance in its input overlay. Explicit empty modality counts and aggregate arrays remain distinct from missing values. Model-role, top-level LLM, per-call provider, manifest, migration, ranking, provenance, and analysis identity fields use fail-closed type boundaries. Playwright visual regression has passed at 1440x900 and 390x844 using the repository test entry; the host libraries are available only through a user-space temporary bundle, so this does not claim system-wide dependency installation.
     evidence_paths:
       - web/build_panel.py
       - web/panel_template.html

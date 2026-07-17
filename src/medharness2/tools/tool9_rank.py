@@ -248,11 +248,13 @@ def _eligible_for_statistics(evaluation: dict[str, Any]) -> bool:
     fallback_used = metadata.get("fallback_used")
     if fallback_used is not None and not isinstance(fallback_used, bool):
         return False
-    if fallback_used is True:
+    evidence_tier = str(evaluation.get("evidence_tier") or "").lower()
+    source = str(evaluation.get("source") or "").lower()
+    if fallback_used is True and evidence_tier != "exploratory_fresh":
         return False
-    if str(evaluation.get("evidence_tier") or "").lower() in {"debug_fallback", "mock"}:
+    if evidence_tier in {"debug_fallback", "mock"}:
         return False
-    if str(evaluation.get("source") or "").lower() in {"local_vlm_fallback", "mock", "fallback", "mock_fallback", "mock_judge"}:
+    if source in {"local_vlm_fallback", "mock", "fallback", "mock_fallback", "mock_judge"}:
         return False
     return True
 

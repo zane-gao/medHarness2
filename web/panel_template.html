@@ -850,7 +850,7 @@ const TOOLS = [
   meta:"仓库验货员：货不对板就贴红条，所有货都要标产地——后面的人一看标签就知道这批货能信几分。",
   input:"一份候选报告 + 期望的模态/部位", output:"通过/失败 + 警告标签 + 证据等级（formal_fresh / exploratory_fresh / artifact / debug_fallback / mock）",
   example:`<div class="lab">本次运行的真实战果</div>
-    <div>${K.generated_report_count} 份候选中 <b>${K.quality_passed}</b> 份过检、<b style="color:#a32e2e">${K.quality_failed}</b> 份被拦下。质量门禁现在只对模态冲突和 fallback 做硬阻断；部位冲突会保留为 warning 并进入审计与排序。本次证据等级分布：${esc(JSON.stringify(TIER_COUNTS))}——没有一份是 formal_fresh，全是旧产物复用或兜底。</div>`,
+    <div>${K.generated_report_count} 份候选中 <b>${K.quality_passed}</b> 份过检、<b style="color:#a32e2e">${K.quality_failed}</b> 份被拦下。模态冲突、mock/debug fallback 和空报告会硬阻断；真实外部模型的 exploratory fallback 仍必须通过内容质量检查，且永远不能满足 formal gate。部位冲突会保留为 warning 并进入审计与排序。本次证据等级分布：${esc(JSON.stringify(TIER_COUNTS))}。</div>`,
   how:`<p><b>怎么实现的：</b>一串确定性检查规则 + 一套「证据等级」标签体系。等级从高到低：<code>formal_fresh</code>=正规模型正式新鲜推理、<code>exploratory_fresh</code>=探索性新鲜推理、<code>artifact</code>=复用以前跑好的旧产物、<code>debug_fallback</code>=兜底/调试性质、<code>mock</code>=假数据。<b>科研诚实性就是靠它机械保证的</b>：任何一个数字都能顺着标签查出它的成色，本页的「诚实度徽章」正是读这些标签算出来的。</p>` },
 ];
 
@@ -928,7 +928,7 @@ document.getElementById("reader-table").innerHTML = `
 
 document.getElementById("gate-table").innerHTML = `
   <h4>质量门禁拦下的 ${GATE_FAILURES.length} 份报告（这不是坏消息）</h4>
-  <p class="note">门禁能抓到问题恰恰说明流水线有自检能力。模态冲突/fallback 会阻断；部位冲突只作为可审计 warning，不再硬淘汰候选。</p>
+  <p class="note">门禁能抓到问题恰恰说明流水线有自检能力。模态冲突、mock/debug fallback 和空报告会阻断；真实外部 exploratory fallback 仍要过内容门禁，部位冲突只作为可审计 warning，不再硬淘汰候选。</p>
   <details class="more"><summary>展开失败清单</summary><div class="inner">
   <table class="plain"><tr><th>病例</th><th>模态/部位</th><th>模型</th><th>被拦原因</th></tr>
   ${GATE_FAILURES.map(r => `<tr><td class="mono">${esc(r.case_id)}</td><td>${esc(r.modality)}/${esc(r.body_part)}</td><td class="mono">${esc(r.model)}</td><td class="mono" style="font-size:11px">${esc(r.warnings)}</td></tr>`).join("")}
@@ -1376,7 +1376,7 @@ const ISSUES = [
   { sev:"critical", icon:"🚨", title:"临床校准：pilot10 仍为 0/10，reader 尚未开始", why:`pilot10 只完成病例打包，reader A、reader B 和 adjudication 尚未完成；自动评估的临床一致性仍待 reader 校准。`, next:`<b>下一步：</b>完成 10 例双读者盲标与仲裁，冻结 schema 和一致性指标，再接入六项实验门禁。` },
   { sev:"critical", icon:"🚨", title:"历史 OCR 产物有截断，需用新缓存门禁重跑", why: O ? `${O.definite_truncation} 例明确截断、${O.suspected_truncation} 例疑似，${O.missing_impression_count} 例丢失诊断印象；新 sidecar 已绑定文本 hash 并对损坏/替换缓存 fail-closed，但当前 52 例仍需重跑。` : "本次构建未找到 OCR 审计产物。", next:`<b>下一步：</b>完成北川冻结 OCR 候选双次运行并按临床指标选定生产路由，再重跑 52 例文本。` },
   { sev:"critical", icon:"🚨", title:"LLM 重测稳定性不足，分数还不能当结论", why:`同样 9 例重测中，T1 五维完全一致率仅 11%，重大错误共识完全一致率仅 22%；在 pilot10 reader 校准完成前，自动评分不能写进论文。`, next:`<b>下一步：</b>冻结稳定性指标与达标线，完成 pilot10 标注并校准三位 AI 法官。` },
-  { sev:"critical", icon:"🚨", title:"52 例基线 zero formal_fresh，候选不能进入正式比较", why:`当前 ${K.generated_report_count || "—"} 份候选中 formal_fresh 为 0；artifact、debug_fallback 或 exploratory_fresh 只能用于工程检查/探索性分析。`, next:`<b>下一步：</b>按冻结配置重跑 52 例，补齐版本、输入和审计链，产生可追溯的 formal_fresh 候选。` },
+  { sev:"critical", icon:"🚨", title:"52 例基线 zero formal_fresh，候选不能进入正式比较", why:`当前 ${K.generated_report_count || "—"} 份候选中 formal_fresh 为 0；真实外部 exploratory 结果现在可以进入探索性评估和排序，但 artifact、debug_fallback、mock 仍会被排除，任何 exploratory 结果都不能写成正式结论。`, next:`<b>下一步：</b>按冻结配置重跑 52 例，补齐版本、输入和审计链，产生可追溯的 formal_fresh 候选。` },
   { sev:"critical", icon:"🚨", title:"六项正式实验仍为 0 validated", why:`六项实验协议和门禁已存在，但当前没有任何 validated 结果；图表只能展示探索性状态。`, next:`<b>下一步：</b>完成 pilot10 reader 校准、formal_fresh 数据和主终点分析，再逐项点亮验证门禁。` },
   { sev:"warn", icon:"📋", title:"部位提示仍需持续审计（不再硬阻断）", why:`${wc.body_part_mismatch||0} 份报告带有 body_part_mismatch warning；三模态路由不会因部位词误报淘汰候选，但仍需在冻结集上监控真实部位质量。`, next:`<b>下一步：</b>保留 warning 统计，结合北川冻结集评估部位排序与文本质量。` },
   { sev:"warn", icon:"📋", title:"教学建议仍是模板句", why:`WF4 已能产出文件，但建议尚未引用医生的具体病例错误。`, next:`<b>下一步：</b>正式评估铺满 52 例后，将带临床理由的错误清单接入 education 角色。` },

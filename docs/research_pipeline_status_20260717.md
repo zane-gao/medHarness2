@@ -31,11 +31,13 @@
 - 新增 `research freeze-ocr-winner`：真实 OCR 两次 benchmark 完成后，要求全量运行质量通过、两次 winner 一致、覆盖完整，再把冻结模型和证据 hash 写回 OCR manifest；当前因 manifest 仍为 `blocked` 而按预期拒绝。
 - PaddleOCR baseline 现要求 `PaddleOCRVL` 和 Paddle runtime 同时可导入；sidecar 结构、空页、空文本、源 PDF hash 读取失败均 fail-closed，不会把“部分页面成功”升级为 OCR 通过。
 - 2026-07-17 已用 Yunwu `qwen3-vl-plus` 完成 1 例真实视觉链路探索（MR2605270001）：Tool 2 finding extraction、Tool 5 alignment audit、Tool 4 hazard 及报告生成均实际调用非 mock provider 且 `fallback_used=false`。产物位于 `/tmp/single_yunwu_vl_mr2605270001_retry5`，但整体仍标记为 exploratory，且该单例出现 `no_generated_reports` 级联错误，不能作为正式评测结果。
+- 2026-07-17 修复了单病例空生成占位符级联：空报告不再进入 Tool 1–6、ranking 或 pairwise。真实外部 `llm_fallback` 若返回非空文本，会标记为 `exploratory_fresh`，先过内容质量门禁后可用于探索性评估/排序；mock/debug fallback 仍 fail-closed，所有 exploratory 结果仍不能进入 formal gate。
+- Tool 2 现在向视觉模型提供 source-ordered evidence spans，并继续以原文 span 做最终 grounding；Tool 5 在 pairwise 中按每块最多 2 个错误请求，降低多模态 JSON 截断概率。真实 Qwen 单例仍需多次重试观察稳定性，不能把单次成功升级为 winner。
 
 | 工作线 | 状态 | 原因 |
 | --- | --- | --- |
 | 真实医生标注 | `not_started` | 尚未有真实 reader 输入 |
-| OCR winner | `blocked` | 已有可执行的双次运行器、benchmark 回写和 PaddleOCR adapter，但当前缺真实 provider/verifier 凭据或本地 PaddleOCR 运行时 |
+| OCR winner | `blocked` | 已有可执行的双次运行器、benchmark 回写和 PaddleOCR adapter，但当前 Yunwu 未暴露可确认的 Doubao OCR 模型，DMX 凭据 401，PaddleOCR-VL runtime 也未就绪 |
 | 论文 formal claim | `pending` | 只有实验设计，尚无 validated gate |
 
 ## 下一步

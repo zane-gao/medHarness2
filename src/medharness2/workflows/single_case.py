@@ -71,6 +71,7 @@ def run_single_case(
     generated = [
         apply_generation_quality_gate(report, modality=modality_key, body_part=body_part)
         for report in generated
+        if str(report.report or "").strip()
     ]
     human_evaluation = evaluate_single_report(
         report_text,
@@ -96,6 +97,9 @@ def run_single_case(
         evaluation["source"] = report.source
         evaluation["evidence_tier"] = report.evidence_tier
         evaluation["warnings"] = report.warnings
+        # Keep generation provenance on the evaluated row so ranking and
+        # downstream aggregates cannot lose fallback/mock evidence.
+        evaluation["metadata"] = {**(evaluation.get("metadata") or {}), **report.metadata}
         evaluation["quality_gate"] = report.metadata.get("quality_gate", {"passed": True})
         alignment = align_graphs(
             evaluation.get("finding_graph") or {},

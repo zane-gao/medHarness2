@@ -68,6 +68,7 @@ def generate_reports(
                 source=fallback_source,
                 report=text,
                 modality=modality,
+                evidence_tier=("mock" if cfg.llm.provider.lower() == "mock" else "exploratory_fresh"),
                 warnings=[
                     f"{fallback_source}_used",
                     "no_compatible_local_generator" if not selected_entries else "compatible_local_generator_returned_no_text",

@@ -83,6 +83,11 @@ def evaluate_pairwise(
                 auditor_options=alignment_auditor_options,
                 require_llm=True,
                 allow_fallback=False,
+                # Keep each audit response small enough for multimodal
+                # providers with bounded JSON output budgets. The bundle is
+                # still complete across chunks; this only limits per-call
+                # error judgements and avoids truncated JSON responses.
+                max_errors_per_call=2,
             )
 
         alignment_audit = _checkpointed(

@@ -23,7 +23,7 @@ _MODALITY_CONFLICTS = {
 
 def apply_generation_quality_gate(report: GeneratedReport, *, modality: str | None, body_part: str | None) -> GeneratedReport:
     result = check_generation_quality(report.report, modality=modality, body_part=body_part)
-    if _is_fallback_report(report):
+    if _is_blocking_fallback_report(report):
         result["passed"] = False
         result["warnings"] = ["fallback_generation", *result["warnings"]]
     report.metadata = {**report.metadata, "quality_gate": result}
@@ -46,6 +46,29 @@ def _is_fallback_report(report: GeneratedReport) -> bool:
         "fallback",
         "local_vlm_fallback",
     }
+
+
+def _is_blocking_fallback_report(report: GeneratedReport) -> bool:
+    """Block mock/debug fallbacks, but allow real external exploratory output
+    to proceed through content quality checks.
+
+    ``fallback_used`` is provenance, not by itself a content failure. A real
+    provider response must still be marked exploratory and remains ineligible
+    for formal gates, while mock/debug output cannot contaminate downstream
+    evaluation.
+    """
+
+    metadata = report.metadata or {}
+    source = str(report.source or "").lower()
+    tier = str(report.evidence_tier or "").lower()
+    fallback_used = metadata.get("fallback_used")
+    if fallback_used is not None and not isinstance(fallback_used, bool):
+        return True
+    if tier in {"mock", "debug_fallback"}:
+        return True
+    if source in {"mock", "mock_fallback", "fallback", "local_vlm_fallback"}:
+        return True
+    return fallback_used is True and tier != "exploratory_fresh"
 
 
 def check_generation_quality(text: str, *, modality: str | None, body_part: str | None) -> dict[str, Any]:

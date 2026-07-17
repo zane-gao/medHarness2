@@ -66,6 +66,7 @@ def freeze_ocr_winner(research_dir: str | Path) -> dict[str, Any]:
                 raise ValueError("frozen_manifest_status_invalid")
             _validate_ocr_run_coverage(manifest)
             _validate_freeze_metadata(manifest)
+            _validate_frozen_benchmark_bundle(manifest)
             benchmark_candidates = _declared_candidate_ids(manifest, key="benchmark_candidates")
             winner = manifest.get("winner_model")
             if not isinstance(winner, str) or winner.strip() not in benchmark_candidates:
@@ -107,26 +108,25 @@ def freeze_ocr_winner(research_dir: str | Path) -> dict[str, Any]:
         if (
             not _is_positive_int(evaluated_count)
             or not _is_positive_int(declared_case_count)
-            or declared_case_count != expected_case_count
-            or evaluated_count != expected_evaluated_count
+            or not _same_positive_int(declared_case_count, expected_case_count)
+            or not _same_positive_int(evaluated_count, expected_evaluated_count)
         ):
             raise ValueError(f"ocr_benchmark_repeat_{repeat}_coverage_missing")
         if model.strip() not in benchmark_candidates:
             raise ValueError(f"ocr_benchmark_repeat_{repeat}_winner_unknown")
+        if not _validated_benchmark_result(
+            result,
+            case_ids=expected_case_ids,
+            candidate_ids=benchmark_candidates,
+            winner_model=model.strip(),
+        ):
+            raise ValueError(f"ocr_benchmark_repeat_{repeat}_metrics_invalid")
         selections.append(model.strip())
         benchmark_payloads[str(repeat)] = result
     if selections[0] != selections[1]:
         raise ValueError("winner_model_disagreement")
     winner_model = selections[0]
-    freeze_payload = {
-        "manifest": manifest,
-        "benchmark_results": benchmark_payloads,
-        "winner_model": winner_model,
-        "freeze_version": OCR_WINNER_FREEZE_VERSION,
-    }
-    freeze_id = hashlib.sha256(
-        json.dumps(freeze_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).hexdigest()
+    freeze_id = _freeze_payload_id(manifest, benchmark_payloads, winner_model)
     manifest["winner_status"] = "frozen"
     manifest["winner_model"] = winner_model
     manifest["freeze_id"] = freeze_id
@@ -225,6 +225,38 @@ def _is_positive_int(value: Any) -> bool:
 
 def _is_nonnegative_int(value: Any) -> bool:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _same_positive_int(left: Any, right: Any) -> bool:
+    """Compare positive counts without accepting bool/float coercion."""
+    return _is_positive_int(left) and _is_positive_int(right) and left == right
+
+
+def _freeze_payload_id(
+    manifest: dict[str, Any],
+    benchmark_results: dict[str, dict[str, Any]],
+    winner_model: str,
+) -> str:
+    """Hash the exact pre-freeze manifest and complete benchmark evidence."""
+    normalized_manifest = dict(manifest)
+    for key in (
+        "winner_status",
+        "winner_model",
+        "freeze_id",
+        "freeze_version",
+        "freeze_evidence",
+        "benchmark_results",
+    ):
+        normalized_manifest.pop(key, None)
+    payload = {
+        "manifest": normalized_manifest,
+        "benchmark_results": benchmark_results,
+        "winner_model": winner_model,
+        "freeze_version": OCR_WINNER_FREEZE_VERSION,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
 
 
 def _declared_candidate_ids(manifest: dict[str, Any], *, key: str = "candidates") -> set[str]:
@@ -331,9 +363,45 @@ def _validate_freeze_metadata(manifest: dict[str, Any]) -> None:
         or set(embedded_results) != {"1", "2"}
         or any(not isinstance(embedded_results[key], dict) for key in ("1", "2"))
         or not _is_positive_int(case_count)
-        or any(counts[key] != expected_count for key in ("1", "2"))
+        or any(not _same_positive_int(counts[key], expected_count) for key in ("1", "2"))
     ):
         raise ValueError("freeze_evidence_invalid")
+
+
+def _validate_frozen_benchmark_bundle(manifest: dict[str, Any], *, strict: bool = True) -> bool:
+    """Validate embedded benchmark metrics and the freeze hash binding."""
+    try:
+        embedded = manifest.get("benchmark_results")
+        if not isinstance(embedded, dict) or set(embedded) != {"1", "2"}:
+            raise ValueError("frozen_benchmark_results_missing")
+        case_ids, run_candidate_ids = _validate_ocr_run_coverage(manifest)
+        candidates = _declared_candidate_ids(manifest, key="benchmark_candidates")
+        winner = manifest.get("winner_model")
+        if not isinstance(winner, str) or winner.strip() not in candidates:
+            raise ValueError("frozen_winner_invalid")
+        for repeat in ("1", "2"):
+            if not _validated_benchmark_result(
+                embedded[repeat],
+                case_ids=case_ids,
+                candidate_ids=candidates,
+                winner_model=winner.strip(),
+            ):
+                raise ValueError(f"frozen_benchmark_{repeat}_invalid")
+        if not candidates.issubset(run_candidate_ids):
+            raise ValueError("frozen_candidate_coverage_invalid")
+        # Reconstruct the same pre-freeze payload used by freeze_ocr_winner,
+        # excluding fields that are only written after the hash is computed.
+        base_manifest = dict(manifest)
+        for key in ("winner_status", "winner_model", "freeze_id", "freeze_version", "freeze_evidence", "benchmark_results"):
+            base_manifest.pop(key, None)
+        expected_id = _freeze_payload_id(base_manifest, embedded, winner.strip())
+        if manifest.get("freeze_id") != expected_id:
+            raise ValueError("freeze_id_mismatch")
+    except (TypeError, ValueError, KeyError):
+        if strict:
+            raise
+        return False
+    return True
 
 
 def _validation_errors(payload: dict[str, Any]) -> list[Any]:
@@ -362,11 +430,11 @@ def _validated_annotation_analysis(annotation: dict[str, Any]) -> bool:
     if (
         not _is_positive_int(case_count)
         or not _is_positive_int(complete_count)
-        or complete_count != case_count
+        or not _same_positive_int(complete_count, case_count)
         or not isinstance(validation, dict)
         or validation.get("status") != "complete"
-        or validation.get("case_count") != case_count
-        or validation.get("complete_case_count") != complete_count
+        or not _same_positive_int(validation.get("case_count"), case_count)
+        or not _same_positive_int(validation.get("complete_case_count"), complete_count)
         or validation.get("errors") != []
         or not isinstance(validation.get("warnings"), list)
     ):
@@ -374,14 +442,26 @@ def _validated_annotation_analysis(annotation: dict[str, Any]) -> bool:
     agreement = annotation.get("reader_agreement")
     if (
         not isinstance(agreement, dict)
-        or agreement.get("compared_case_count") != complete_count
+        or not _same_positive_int(agreement.get("compared_case_count"), complete_count)
         or not isinstance(annotation.get("disagreement_queue"), list)
         or annotation.get("formal_claim_allowed") is not False
     ):
         return False
     for field in ("case_exact_agreement", "finding_exact_agreement", "hazard_exact_agreement"):
         value = agreement.get(field)
-        if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)):
+        if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(float(value)) or not 0.0 <= float(value) <= 1.0:
+            return False
+    for field in ("finding_presence_kappa", "hazard_presence_kappa"):
+        value = agreement.get(field)
+        if not isinstance(value, dict):
+            return False
+        kappa = value.get("kappa")
+        if kappa is not None and (
+            not isinstance(kappa, (int, float))
+            or isinstance(kappa, bool)
+            or not math.isfinite(float(kappa))
+            or not -1.0 <= float(kappa) <= 1.0
+        ):
             return False
     return True
 
@@ -396,6 +476,7 @@ def _validated_experiments(rows: Any) -> bool:
         gates = item.get("validation_gates")
         if not isinstance(gates, list) or not gates:
             return False
+        gate_ids: set[str] = set()
         for gate in gates:
             if (
                 not isinstance(gate, dict)
@@ -404,11 +485,15 @@ def _validated_experiments(rows: Any) -> bool:
                 or gate.get("passed") is not True
             ):
                 return False
+            gate_id = gate["id"].strip()
+            if gate_id in gate_ids:
+                return False
+            gate_ids.add(gate_id)
         summary = item.get("gate_summary")
         if summary is not None:
             if not isinstance(summary, dict):
                 return False
-            if summary.get("total") != len(gates) or summary.get("passed") != len(gates):
+            if not _same_positive_int(summary.get("total"), len(gates)) or not _same_positive_int(summary.get("passed"), len(gates)):
                 return False
     return True
 
@@ -434,6 +519,7 @@ def _validated_ocr_winner(ocr: dict[str, Any], benchmark_results: Any) -> bool:
         case_ids, run_candidate_ids = _validate_ocr_run_coverage(ocr)
         _validate_freeze_metadata(ocr)
         benchmark_candidate_ids = _declared_candidate_ids(ocr, key="benchmark_candidates")
+        _validate_frozen_benchmark_bundle(ocr)
     except ValueError:
         return False
     if not benchmark_candidate_ids or not benchmark_candidate_ids.issubset(run_candidate_ids):
@@ -476,8 +562,8 @@ def _validated_benchmark_result(
         or result.get("artifact_type") != "ocr_candidate_benchmark"
         or result.get("status") != "succeeded"
         or result.get("blocked_items") != []
-        or result.get("case_count") != expected_count
-        or result.get("evaluated_count") != expected_rows
+        or not _same_positive_int(result.get("case_count"), expected_count)
+        or not _same_positive_int(result.get("evaluated_count"), expected_rows)
     ):
         return False
     selection = result.get("selection")
@@ -517,7 +603,7 @@ def _validated_benchmark_result(
         return False
     for model in candidate_ids:
         summary = by_model.get(model)
-        if not isinstance(summary, dict) or summary.get("case_count") != expected_count:
+        if not isinstance(summary, dict) or not _same_positive_int(summary.get("case_count"), expected_count):
             return False
         for field in ("clinical_cer_mean", "digit_token_accuracy_mean", "negation_token_accuracy_mean"):
             value = summary.get(field)
@@ -544,6 +630,11 @@ def run_ocr_research(
     """
     pilot = Path(pilot_dir)
     research = Path(research_dir)
+    existing_manifest = research / "ocr_manifest.json"
+    if existing_manifest.is_file() and not force:
+        existing = _read_json_object(existing_manifest)
+        if existing.get("winner_status") == "frozen":
+            raise ValueError("ocr_manifest_already_frozen")
     manifest_result = prepare_research_manifests(pilot, research)
     cfg = load_config(config_path) if config_path else load_config()
     root = Path(source_root) if source_root else PROJECT_ROOT.parent / "medHarness"
@@ -1324,7 +1415,7 @@ def _persist_ocr_run_state(
         }
     )
     manifest["route_readiness"] = _route_snapshot(config)
-    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _atomic_write_json(manifest_path, manifest)
 
 
 def _route_snapshot(config: AppConfig) -> dict[str, dict[str, str]]:

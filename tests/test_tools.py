@@ -351,6 +351,19 @@ def test_tool2_retry_prompt_requires_exact_source_order_for_grounding():
     assert "laterality must be exactly one of" in prompt
 
 
+def test_tool2_prompt_exposes_source_ordered_evidence_spans():
+    prompt = _extraction_prompt(
+        "脑室系统未见扩张，脑沟、裂、池稍增宽。中线结构居中。",
+        modality="mri",
+        candidate={"backend": "mri_rule", "findings": []},
+        previous_errors=[],
+    )
+
+    assert "<evidence_spans>" in prompt
+    assert "source-ordered excerpts" in prompt
+    assert "never concatenate, reorder" in prompt
+
+
 def test_tool5_retry_prompt_requires_pair_ids_for_match_issues():
     prompt = _audit_prompt(
         {"error_candidates": [], "candidate_findings": [], "reference_findings": []},
@@ -360,6 +373,7 @@ def test_tool5_retry_prompt_requires_pair_ids_for_match_issues():
 
     assert "candidate_id and reference_id are both mandatory" in prompt
     assert "copied exactly from the structured audit bundle" in prompt
+    assert "never use a description, synonym, or free-form explanation" in prompt
 
 
 def test_tool4_retry_prompt_requires_error_type_alignment():
@@ -1941,6 +1955,18 @@ def test_tool8_openai_fallback_is_marked_as_cloud():
     assert reports[0].metadata["fallback_used"] is True
 
 
+def test_tool8_real_external_fallback_is_exploratory_not_debug(tmp_path):
+    cfg = AppConfig(
+        llm=LLMConfig(provider="chat_completions", model="qwen3-vl-plus"),
+        generator=GeneratorConfig(cloud_fallback_enabled=True, default_models=[], local_models=[]),
+    )
+    reports = generate_reports("image.png", "mri", body_part="brain", config=cfg, llm_client=build_mock_client())
+
+    assert reports[0].source == "llm_fallback"
+    assert reports[0].evidence_tier == "exploratory_fresh"
+    assert reports[0].metadata["fallback_provider"] == "chat_completions"
+
+
 def test_quality_gate_allows_followup_ct_recommendation_for_cxr():
     result = check_generation_quality(
         "FINDINGS: Abdominal radiograph is unremarkable. IMPRESSION: Consider CT if symptoms persist.",
@@ -2067,6 +2093,20 @@ def test_tool9_and_tool10_exclude_mock_fallback_source_and_tier():
         },
     ]
     assert [row["model"] for row in select_top_k(rows, top_k=2)] == ["real"]
+
+
+def test_tool9_keeps_real_external_exploratory_fallback_with_quality_metrics():
+    rows = [
+        {
+            "model": "qwen3-vl-plus",
+            "source": "llm_fallback",
+            "evidence_tier": "exploratory_fresh",
+            "metadata": {"fallback_used": True, "fallback_provider": "chat_completions"},
+            "composite_inputs": {"likert_mean": 4.0, "structure_score": 0.8, "finding_coverage": 0.8},
+        }
+    ]
+
+    assert [row["model"] for row in select_top_k(rows, top_k=1)] == ["qwen3-vl-plus"]
 
 
 def test_tool9_keeps_near_cutoff_candidates_for_review():

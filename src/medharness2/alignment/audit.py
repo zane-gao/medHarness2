@@ -392,7 +392,9 @@ def _audit_prompt(
         f"\nPrevious validation errors: {json.dumps(previous_errors[-3:], ensure_ascii=False)}"
         "\nFix every error and return only valid JSON. For issues with issue_type=incorrect_match "
         "or missed_match, candidate_id and reference_id are both mandatory and must be copied "
-        "exactly from the structured audit bundle; do not omit either field."
+        "exactly from the structured audit bundle; do not omit either field. "
+        f"suggested_error_type may be only one of exactly [{allowed_error_types}] or null; "
+        "never use a description, synonym, or free-form explanation in that field."
         if previous_errors
         else ""
     )

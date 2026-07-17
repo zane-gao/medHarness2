@@ -471,6 +471,57 @@ def test_pairwise_routes_deterministic_alignment_through_llm_auditor():
     assert result["alignment_audit"]["primary_preserved"] is True
 
 
+def test_pairwise_limits_alignment_audit_chunk_size_for_bounded_json_models(monkeypatch):
+    captured = {}
+
+    def fake_audit(*args, **kwargs):
+        captured["max_errors_per_call"] = kwargs["max_errors_per_call"]
+        return {
+            "verdict": "pass",
+            "confidence": 0.97,
+            "summary": "ok",
+            "issues": [],
+            "error_judgements": [],
+            "primary_preserved": True,
+            "requires_adjudication": False,
+            "adjudicated_error_candidates": [],
+            "adjudication_summary": {
+                "deterministic_error_count": 0,
+                "retained_error_count": 0,
+                "rejected_error_count": 0,
+                "modified_error_count": 0,
+                "abstained_error_count": 0,
+                "complete": True,
+            },
+            "auditor_provenance": {
+                "provider": "chat_completions",
+                "model": "gpt-5.6-sol",
+                "role": "alignment_auditor",
+                "fallback_used": False,
+                "metadata": {},
+            },
+        }
+
+    monkeypatch.setattr("medharness2.modules.pairwise_report.audit_alignment", fake_audit)
+    cfg = AppConfig(
+        model_roles={
+            "alignment_auditor": ModelRoleConfig(
+                provider="chat_completions", model="gpt-5.6-sol", max_retries=1
+            )
+        }
+    )
+
+    evaluate_pairwise(
+        "FINDINGS: Clear lungs.",
+        "FINDINGS: Clear lungs.",
+        modality="cxr",
+        config=cfg,
+        llm_client=build_mock_client(),
+    )
+
+    assert captured["max_errors_per_call"] == 2
+
+
 def test_pairwise_hazard_judge_uses_t5_adjudicated_error_candidates():
     client = _SequenceClient(
         [
@@ -955,6 +1006,38 @@ def test_cli_single_case_preserves_explicit_case_id(tmp_path: Path):
     assert payload["input"]["case_id"] == "cli-explicit-case"
 
 
+def test_single_case_does_not_evaluate_empty_generation_placeholder(tmp_path: Path):
+    report = tmp_path / "human.txt"
+    image = tmp_path / "dummy.dcm"
+    output = tmp_path / "result.json"
+    report.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal.", encoding="utf-8")
+    image.write_text("dummy", encoding="utf-8")
+
+    result = run_single_case(
+        report,
+        image,
+        output,
+        modality="cxr",
+        precomputed_generated_reports=[
+            GeneratedReport(
+                model="none",
+                source="none",
+                report="",
+                modality="cxr",
+                warnings=["no_generation_backend_available"],
+            )
+        ],
+        llm_client=build_mock_client(),
+        config=load_config(),
+    )
+
+    assert result["generated_reports"] == []
+    assert result["generated_evaluations"] == []
+    assert result["rankings"] == []
+    assert result["pairwise_comparisons"] == []
+    assert result["errors"] == ["no_generated_reports"]
+
+
 def test_cli_benchmark_evaluate_uses_explicit_config_and_resume_flag(
     tmp_path: Path,
     monkeypatch,
@@ -1122,6 +1205,56 @@ def test_single_case_quality_gate_blocks_mock_fallback_report(tmp_path: Path):
     gated = apply_generation_quality_gate(report, modality="cxr", body_part="chest")
     assert gated.metadata["quality_gate"]["passed"] is False
     assert "fallback_generation" in gated.metadata["quality_gate"]["warnings"]
+
+
+def test_single_case_quality_gate_allows_real_external_fallback_for_exploration(tmp_path: Path):
+    from medharness2.schema import GeneratedReport
+    from medharness2.tools.quality_gate import apply_generation_quality_gate
+
+    report = GeneratedReport(
+        model="qwen3-vl-plus",
+        source="llm_fallback",
+        report="MRI brain demonstrates no acute infarction or mass effect.",
+        modality="mri",
+        evidence_tier="exploratory_fresh",
+        metadata={"fallback_used": True, "fallback_provider": "chat_completions"},
+    )
+
+    gated = apply_generation_quality_gate(report, modality="mri", body_part="brain")
+
+    assert gated.metadata["quality_gate"]["passed"] is True
+    assert "fallback_generation" not in gated.metadata["quality_gate"]["warnings"]
+
+
+def test_single_case_allows_external_exploratory_fallback_in_ranking(tmp_path: Path):
+    report = tmp_path / "human.txt"
+    image = tmp_path / "brain.nii.gz"
+    output = tmp_path / "result.json"
+    report.write_text("FINDINGS: No acute infarction. IMPRESSION: Normal.", encoding="utf-8")
+    image.write_text("dummy", encoding="utf-8")
+    generated = GeneratedReport(
+        model="qwen3-vl-plus",
+        source="llm_fallback",
+        report="FINDINGS: No acute infarction. IMPRESSION: Normal.",
+        modality="mri",
+        evidence_tier="exploratory_fresh",
+        metadata={"fallback_used": True, "fallback_provider": "chat_completions"},
+    )
+
+    result = run_single_case(
+        report_path=report,
+        image_path=image,
+        output_path=output,
+        modality="mri",
+        body_part="brain",
+        precomputed_generated_reports=[generated],
+        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        llm_client=build_mock_client(),
+    )
+
+    assert result["generated_evaluations"][0]["metadata"]["fallback_used"] is True
+    assert result["rankings"][0]["model"] == "qwen3-vl-plus"
+    assert len(result["pairwise_comparisons"]) == 1
 
 
 def test_quality_gate_blocks_malformed_fallback_provenance(tmp_path: Path):
