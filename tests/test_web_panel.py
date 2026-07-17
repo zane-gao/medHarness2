@@ -125,6 +125,50 @@ def test_dashboard_summary_rejects_malformed_list_items(field_path, label):
             _build_template_fragments(payload)
 
 
+@pytest.mark.parametrize(
+    ("field", "bad", "label"),
+    [
+        ("readers", ["bad"], "analysis_tables.readers"),
+        ("quality_gate_failures", ["bad"], "analysis_tables.quality_gate_failures"),
+    ],
+)
+def test_dashboard_render_rejects_malformed_analysis_table_rows(field, bad, label):
+    from medharness2.dashboard import _build_template_fragments
+
+    payload = {
+        "run_dir": ".",
+        "catalog": {"providers": {"model_roles": {}}, "tools": [], "models": [], "workflow_stages": []},
+        "experiments": {"experiments": []},
+        "experiment_protocol": {"experiments": []},
+        "run_summary": {"summary": {}, "validation": {}},
+        "analysis": {},
+        "analysis_tables": {field: bad},
+        "run_registry": {"entries": []},
+        "figures": {"figures": []},
+    }
+    with pytest.raises(ValueError, match=label):
+        _build_template_fragments(payload)
+
+
+def test_dashboard_render_rejects_malformed_provider_role():
+    from medharness2.dashboard import _build_template_fragments
+
+    payload = {
+        "run_dir": ".",
+        "catalog": {
+            "providers": {"model_roles": {"ocr_primary": "bad"}},
+            "tools": [], "models": [], "workflow_stages": [],
+        },
+        "experiments": {"experiments": []},
+        "experiment_protocol": {"experiments": []},
+        "run_summary": {"summary": {}, "validation": {}},
+        "analysis": {}, "analysis_tables": {},
+        "run_registry": {"entries": []}, "figures": {"figures": []},
+    }
+    with pytest.raises(ValueError, match="catalog.providers.model_roles"):
+        _build_template_fragments(payload)
+
+
 @pytest.mark.parametrize("field", ["passed", "total"])
 @pytest.mark.parametrize("bad", [True, 1.5, "2", -1])
 def test_dashboard_gate_status_rejects_invalid_counts(field, bad):

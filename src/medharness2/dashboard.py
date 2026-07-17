@@ -149,6 +149,12 @@ def _optional_mapping_list(value: dict[str, Any], key: str, *, prefix: str = "")
     return items
 
 
+def _mapping_values(value: dict[str, Any], *, label: str) -> dict[str, dict[str, Any]]:
+    if any(not isinstance(item, dict) for item in value.values()):
+        raise ValueError(f"{label} values must be objects")
+    return value  # type: ignore[return-value]
+
+
 def _first_present(*values: Any) -> Any:
     """Return the first non-None value, preserving explicit zeroes."""
     for value in values:
@@ -234,6 +240,9 @@ def _empty_row(colspan: int, message: str = "暂无数据") -> str:
 
 def _build_template_fragments(payload: dict[str, Any]) -> dict[str, str]:
     catalog = _optional_mapping(payload, "catalog")
+    providers = _optional_mapping(catalog, "providers", prefix="catalog")
+    model_roles = _optional_mapping(providers, "model_roles", prefix="catalog.providers")
+    model_roles = _mapping_values(model_roles, label="catalog.providers.model_roles")
     experiments = _optional_mapping(payload, "experiments")
     protocol = _optional_mapping(payload, "experiment_protocol")
     run_summary = _optional_mapping(payload, "run_summary")
@@ -253,17 +262,17 @@ def _build_template_fragments(payload: dict[str, Any]) -> dict[str, str]:
         "__MH2_GENERATED__": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
         "__MH2_KPI__": _render_kpis(summary, validation, analysis, catalog, experiments, figures),
         "__MH2_HEALTH__": _render_health_strip(validation, analysis),
-        "__MH2_READER_ROWS__": _render_reader_rows(_optional_list(tables, "readers", prefix="analysis_tables")),
-        "__MH2_MODBP_ROWS__": _render_modbp_rows(_optional_list(tables, "modality_body_part", prefix="analysis_tables")),
-        "__MH2_MODELSRC_ROWS__": _render_modelsrc_rows(_optional_list(tables, "model_source", prefix="analysis_tables")),
-        "__MH2_QGF_BLOCK__": _render_qgf_block(_optional_list(tables, "quality_gate_failures", prefix="analysis_tables")),
-        "__MH2_ROUTES_BLOCK__": _render_routes_block(_optional_list(tables, "case_routes", prefix="analysis_tables")),
+        "__MH2_READER_ROWS__": _render_reader_rows(_optional_mapping_list(tables, "readers", prefix="analysis_tables")),
+        "__MH2_MODBP_ROWS__": _render_modbp_rows(_optional_mapping_list(tables, "modality_body_part", prefix="analysis_tables")),
+        "__MH2_MODELSRC_ROWS__": _render_modelsrc_rows(_optional_mapping_list(tables, "model_source", prefix="analysis_tables")),
+        "__MH2_QGF_BLOCK__": _render_qgf_block(_optional_mapping_list(tables, "quality_gate_failures", prefix="analysis_tables")),
+        "__MH2_ROUTES_BLOCK__": _render_routes_block(_optional_mapping_list(tables, "case_routes", prefix="analysis_tables")),
         "__MH2_WORKFLOW_ROWS__": _render_workflow_rows(_optional_mapping_list(catalog, "workflow_stages", prefix="catalog")),
         "__MH2_TOOL_CARDS__": _render_tool_cards(_optional_mapping_list(catalog, "tools", prefix="catalog")),
         "__MH2_TOOL_TABLE_ROWS__": _render_tool_table_rows(_optional_mapping_list(catalog, "tools", prefix="catalog")),
         "__MH2_MODEL_COUNT__": str(len(_optional_mapping_list(catalog, "models", prefix="catalog"))),
         "__MH2_MODEL_ROWS__": _render_model_rows(_optional_mapping_list(catalog, "models", prefix="catalog")),
-        "__MH2_ROLE_CARDS__": _render_role_cards(catalog.get("providers") or {}),
+        "__MH2_ROLE_CARDS__": _render_role_cards({**providers, "model_roles": model_roles}),
         "__MH2_EXPERIMENT_CARDS__": _render_experiment_cards(_optional_mapping_list(experiments, "experiments", prefix="experiments")),
         "__MH2_PROTOCOL_CARDS__": _render_protocol_cards(_optional_mapping_list(protocol, "experiments", prefix="experiment_protocol")),
         "__MH2_FIGURE_GALLERY__": _render_figure_gallery(_optional_mapping_list(figures, "figures", prefix="figures")),
