@@ -22,6 +22,8 @@
 
 > **2026-07-17 preflight 路由计划收尾**：`preflight` 现在严格校验路由计划的 `cases` 为对象列表、`summary` 与 `paths` 为对象；损坏路由不会再被 `list/dict` 半合法化后影响 OCR readiness、fallback 计数和病例分母。preflight/主设计/CLI 回归 `154 passed`，全量回归更新为 `1147 passed, 20 warnings`。
 
+> **2026-07-17 配置入口收尾**：`load_config` 现在严格要求 `llm`、`extractor`、`generator`、`ranking`、`alignment`、`privacy`、`model_roles` 和 `modality_map` 为 YAML mapping；非法列表/字符串配置会在加载时明确失败，不再由 `dict()` 半合法化。配置/API/CLI 回归通过，全量回归更新为 `1151 passed, 20 warnings`。
+
 > **2026-07-15 执行增量**：已完成 OCR 逐页管线、可注入的 audit-only 多模态 verifier、三模态软部位路由、Likert 归一化、统计白名单/小样本区间、并列百分位、鲁棒 JSON 解析、fallback/mock 统计过滤、参考图 recall、seed/cache、Retry-After 和非 CXR observation slug 规范化。北川数据集按当前工程约定直接作为金标准数据源；API/敏感产物硬化按用户指示暂不作为本轮阻塞。以下清单仍保留原始审计事实，已修复项以当前代码和测试为准。
 
 > **修复状态**：H5、H9、H10、H11、H12、H14、H15、H17、M1、M2、M3、M6 已有代码与回归测试证据；Tool1 显式 mock judge 现在也标记 `fallback_used=true`，不会进入正式统计。H7 已完成小样本 t 区间；H8 已接入正式 benchmark summary 的 Welch+Holm 统计，但真实冻结结果仍需执行。H13 已把 seed/route 纳入 checkpoint 输入，并明确 checkpoint reuse 不等于重复实验；仍需真实重复运行验证。M7 已支持 hazard reviewer 的配置化重测摘要（原始 reviewer 保留、重测次数与一致率入合约并进入 checkpoint 指纹）；M10 的 hazardwise 汇总现在也过滤 fallback/mock hazard 行。M12 已提供 gated live judge smoke，但当前因缺少 `DMX_API_KEY` 返回 `blocked`；C1/H1-H4 按用户指示暂缓。
