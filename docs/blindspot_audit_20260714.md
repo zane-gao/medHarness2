@@ -2,6 +2,8 @@
 
 > 本文档是 2026-07-14 的历史审计快照，后续增量记录当前修复状态；原始发现保留用于追溯，不应直接当作当前代码事实。
 
+> **最新复核（2026-07-17）**：当前主分支回归为 `1768 passed, 20 warnings`。真实 `research run-ocr` 已核验 pilot10 的 10/10 源 PDF 映射，但在缺少 Doubao/Qwen 凭据和 PaddleOCR-VL 运行时的环境中保持 blocked；这不是 OCR winner 或临床标注完成证据。下文更早的 `1718 passed` 等数字均为历史快照。
+
 > **2026-07-17 manifest / reader 安全收口**：`validate_sample_run` 现在在读取 JSONL 时严格校验病例身份、模态/部位、报告路径、warnings、图像列表和对象字段；损坏值不会被 `str/list/dict` 半合法化，也不会因标量 warnings 直接抛出无上下文的 `TypeError`。`annotation import-reader` 额外绑定参考报告与指令版本，校验每个 annotation slot 的身份，并使用同目录暂存、备份和回滚完成多病例原子写回，拒绝空 manifest、路径穿越、病例集合/候选漂移和部分写入。新增专项回归后全量测试为 `1718 passed, 20 warnings`；真实 OCR 双次候选、verifier smoke 和 pilot10 医生标注仍保持 blocked/not_started，不以本地测试替代外部证据。
 
 > **2026-07-17 本轮实现收尾**：正式 benchmark 评估新增 `generated_report` 严格字段门禁；模型、来源、报告、模态、证据层必须是字符串，`warnings` 必须是字符串列表，`metadata` 必须是对象，损坏产物现在进入失败路径而不会被 `str/list/dict` 半合法化。`sample-full` 与 dry-run 路由的 `limit` 统一要求非负整数，避免负数切片悄悄改变病例分母。专项回归 `138 passed`，全量回归 `1117 passed, 20 warnings`。
