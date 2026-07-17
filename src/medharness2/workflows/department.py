@@ -16,10 +16,12 @@ def _nonnegative_count(value: Any, label: str) -> int:
 
 def run_department_comparison(batch_result_path: str | Path, output_path: str | Path) -> dict[str, Any]:
     batch = read_json(batch_result_path)
-    per_reader = dict(batch.get("per_reader") or {})
+    per_reader = _strict_object(batch.get("per_reader"), "per_reader")
     reader_scores: dict[str, float] = {}
     excluded_readers: dict[str, str] = {}
     for reader, payload in per_reader.items():
+        if not isinstance(payload, dict):
+            raise ValueError(f"per_reader.{reader} must be an object")
         raw_score = payload.get("overall_score")
         if raw_score is None or isinstance(raw_score, bool):
             excluded_readers[reader] = "missing_overall_score"
@@ -40,8 +42,18 @@ def run_department_comparison(batch_result_path: str | Path, output_path: str | 
         }
         for reader, score in reader_scores.items()
     }
-    model_group_rows = [case.get("modelwise_metrics") or {} for case in batch.get("cases") or [] if case.get("modelwise_metrics")]
-    denominator = dict(batch.get("denominator") or {})
+    cases = batch.get("cases") or []
+    if not isinstance(cases, list) or any(not isinstance(case, dict) for case in cases):
+        raise ValueError("cases must be a list of objects")
+    model_group_rows: list[dict[str, Any]] = []
+    for case in cases:
+        metrics = case.get("modelwise_metrics")
+        if metrics is None:
+            continue
+        if not isinstance(metrics, dict):
+            raise ValueError("cases.modelwise_metrics must be an object")
+        model_group_rows.append(dict(metrics))
+    denominator = _strict_object(batch.get("denominator"), "denominator")
     source_case_count = _nonnegative_count(
         _first_present(
             denominator.get("manifest_case_count"),
@@ -98,3 +110,11 @@ def _first_present(*values: Any) -> Any:
         if value is not None:
             return value
     return 0
+
+
+def _strict_object(value: Any, label: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return dict(value)

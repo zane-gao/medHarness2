@@ -484,6 +484,29 @@ def test_department_rejects_invalid_batch_counts(tmp_path: Path, bad):
         run_department_comparison(batch_path, tmp_path / "workflow3.json")
 
 
+@pytest.mark.parametrize("field,bad", [("per_reader", []), ("denominator", []), ("cases", "bad")])
+def test_department_rejects_non_object_aggregate_inputs(tmp_path: Path, field, bad):
+    payload = {
+        "case_count": 1,
+        "failed_case_count": 0,
+        "per_reader": {"reader": {"case_count": 1, "overall_score": 0.5}},
+        "cases": [{"modelwise_metrics": {"likert_mean": 3.0}}],
+        "denominator": {"manifest_case_count": 1, "successful_case_count": 1, "failed_case_count": 0},
+    }
+    payload[field] = bad
+    path = tmp_path / "workflow2.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=field):
+        run_department_comparison(path, tmp_path / "workflow3.json")
+
+
+def test_department_rejects_non_object_reader_payload(tmp_path: Path):
+    path = tmp_path / "workflow2.json"
+    path.write_text(json.dumps({"case_count": 1, "failed_case_count": 0, "per_reader": {"reader": []}, "cases": [], "denominator": {}}), encoding="utf-8")
+    with pytest.raises(ValueError, match="per_reader.reader"):
+        run_department_comparison(path, tmp_path / "workflow3.json")
+
+
 def test_batch_readers_batches_medharness_cli_generation(monkeypatch, tmp_path: Path):
     script = tmp_path / "run_report_generation.py"
     script.write_text("# fake legacy script\n", encoding="utf-8")
