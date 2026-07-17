@@ -278,10 +278,25 @@ def _read_workflow1(root: Path, value: str) -> dict[str, Any]:
 
 
 def _reader_rows(workflow2: dict[str, Any], workflow3: dict[str, Any]) -> list[dict[str, Any]]:
-    percentiles = dict(workflow3.get("reader_percentiles") or {})
+    raw_percentiles = workflow3.get("reader_percentiles")
+    # Empty list was emitted by an old no-case workflow; preserve that
+    # compatibility sentinel, but never stringify/coerce a non-empty list or
+    # scalar into a percentile mapping.
+    if raw_percentiles in (None, "", {} , []):
+        percentiles: dict[str, Any] = {}
+    elif not isinstance(raw_percentiles, dict):
+        raise ValueError("reader_percentiles must be an object")
+    else:
+        percentiles = raw_percentiles
     rows: list[dict[str, Any]] = []
     for reader, payload in sorted((workflow2.get("per_reader") or {}).items()):
-        percentile = dict(percentiles.get(reader) or {})
+        raw_percentile = percentiles.get(reader)
+        if raw_percentile in (None, "", {}):
+            percentile: dict[str, Any] = {}
+        elif not isinstance(raw_percentile, dict):
+            raise ValueError(f"reader_percentiles[{reader}] must be an object")
+        else:
+            percentile = raw_percentile
         rows.append(
             {
                 "reader": reader,

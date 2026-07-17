@@ -98,6 +98,18 @@ def test_cli_analyze_run_rejects_empty_workflow_inputs(tmp_path: Path):
     assert registry["entries"][-1]["status"] == "failed"
 
 
+@pytest.mark.parametrize("bad", [[{"reader": {}}], "bad", True, 1])
+def test_analyze_reader_summary_rejects_malformed_percentile_mapping(tmp_path: Path, bad):
+    run_dir = _write_run(tmp_path / "run")
+    workflow3_path = run_dir / "workflow3.json"
+    workflow3 = json.loads(workflow3_path.read_text(encoding="utf-8"))
+    workflow3["reader_percentiles"] = bad
+    workflow3_path.write_text(json.dumps(workflow3), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="reader_percentiles"):
+        analyze_run(run_dir, tmp_path / "analysis")
+
+
 def test_analyze_reader_summary_keeps_missing_overall_score_empty(tmp_path: Path):
     run_dir = _write_run(tmp_path / "run")
     workflow2 = json.loads((run_dir / "workflow2.json").read_text(encoding="utf-8"))
