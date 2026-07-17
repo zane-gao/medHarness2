@@ -15,7 +15,7 @@
 - 新增 `research run-ocr`：按 10 例 × 2 重复执行已冻结的 OCR 研究 manifest，逐病例写入带源 PDF hash、provider/model/role、候选键和质量状态的 sidecar，并自动生成两次 `ocr-benchmark` 结果。
 - 运行器无真实凭据、源 PDF 缺失、provider 异常或质量门禁失败时只写 `blocked` / `review_required`，不写伪造文本；当前 A40 实测 10/10 pilot 均能唯一映射真实源 PDF，60 个 sidecar 中 40 个因 Doubao/Qwen 凭据缺失、20 个因 PaddleOCR-VL 运行时缺失而阻塞。
 - 研究 manifest 会在执行后回写每次 sidecar 的状态、实际 model/provider/role、benchmark route provenance 和 repeat 结果；Qwen audit-only 不进入 OCR 候选排名，Paddle 运行时缺失不会被误报成仅缺 API key。
-- Doubao 是当前 primary OCR 候选；Qwen 仅作为 audit-only 多模态抽查，不进入 winner 比较；PaddleOCR-VL 已接入可选 baseline adapter，按官方 `PaddleOCRVL` 完整文档解析接口读取 Markdown 结果，未安装 `paddleocr[doc-parser]` 或匹配推理后端时明确为 `paddleocr_provider_unavailable`。
+- Doubao 是当前 primary OCR 候选；Qwen 仅作为 audit-only 多模态抽查，不进入 winner 比较；PaddleOCR-VL-1.6 已接入可选 baseline adapter，按官方 `PaddleOCRVL` 完整文档解析接口读取 Markdown 结果。provider 与 `paddle` runtime 分开检查，分别记录 `paddleocr_provider_unavailable` / `paddle_runtime_unavailable`；仅配置就绪不等于质量通过，必须有真实逐页 Qwen audit 且全部 `agree`。
 
 ## 当前证据状态
 
