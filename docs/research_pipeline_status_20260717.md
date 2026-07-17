@@ -26,6 +26,7 @@
 - `research prepare-manifests` 是准备阶段命令，即使生成的 OCR/论文 gate 初始为 `blocked/pending` 也返回 0；只有实际执行命令在证据缺失时返回非零，避免自动化把“清单已生成”误判成“执行失败”。
 - `annotation validate --package-dir annotation/pilot10` 返回 `not_started`、`0/10`，并以非零退出；没有把空标注包误报为完成。
 - 新增 `annotation analyze`：真实 reader 回收后自动生成完成数、双读 exact-set agreement、finding/hazard presence Cohen κ 和分歧队列；当前 pilot10 实测为 `blocked`、`0/10`，不生成虚假 ICC 或 formal claim。
+- 新增 `research paper-gate`：统一检查临床双读/OCR winner/正式实验三类证据；任一缺失都返回 `blocked`，只有三类均 validated 才允许 `formal_claim_allowed=true`。
 - PaddleOCR baseline 现要求 `PaddleOCRVL` 和 Paddle runtime 同时可导入；sidecar 结构、空页、空文本、源 PDF hash 读取失败均 fail-closed，不会把“部分页面成功”升级为 OCR 通过。
 
 | 工作线 | 状态 | 原因 |
@@ -39,6 +40,6 @@
 1. 将 10 例标注包交给真实 `reader_a` 与 `reader_b` 独立完成；
 2. 完成 adjudication，运行 `annotation validate` 和 `annotation analyze`，再进入正式一致性与 hazard 统计；
 3. 按 `research run-ocr` 在北川金标准上执行真实 OCR 候选双次比较；Qwen 只看 audit sidecar，不参与 winner 排名；
-4. 只有所有 evidence gate 通过后，才允许生成 OCR winner 或论文正式结果。
+4. 运行 `research paper-gate` 汇总三类证据；只有所有 evidence gate 通过后，才允许生成 OCR winner 或论文正式结果。
 
 合成草稿、模型输出和自动规则结果不会被标记为真实医生标注；北川参考报告是当前文本 benchmark gold，不等同于 reader adjudication。

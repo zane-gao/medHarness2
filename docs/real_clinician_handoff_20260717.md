@@ -80,6 +80,19 @@ PYTHONPATH=src .venv/bin/python -m medharness2.cli \
 在任意病例未完成时命令以非零退出并写入 `status=blocked`；不会填充 kappa、ICC、模型排名或论文正式结果。
 即使所有病例完成，该文件也只是正式统计协议的输入；`formal_claim_allowed` 仍保持 `false`，直到 OCR、模型、临床标签和论文实验门禁全部通过。
 
+论文总门禁命令：
+
+```bash
+PYTHONPATH=src .venv/bin/python -m medharness2.cli \
+  research paper-gate \
+  --research-dir outputs/research/20260717 \
+  --annotation-analysis outputs/research/20260717/pilot_annotation_analysis.json \
+  --experiment-results <validated-run>/experiments/results.json \
+  --output outputs/research/20260717/paper_evidence_gate.json
+```
+
+该命令只汇总证据，不替代医生 adjudication、OCR benchmark 或正式统计；当前任何缺失输入都会明确返回 `blocked`。
+
 ## 证据边界
 
 - 自动生成的候选、规则抽取和模型建议不是医生标注；

@@ -42,6 +42,65 @@ CURRENT_GOLD_SOURCE = "beichuan_reference_report"
 CURRENT_GOLD_STATUS = "available_for_current_benchmark"
 
 
+def evaluate_paper_evidence_gate(
+    research_dir: str | Path,
+    annotation_analysis_path: str | Path,
+    experiment_results_path: str | Path,
+    output_path: str | Path,
+) -> dict[str, Any]:
+    """Join clinical, OCR and experiment evidence into one fail-closed gate.
+
+    This gate never upgrades provisional or exploratory artifacts.  It only
+    reports whether each independent evidence family is complete and permits a
+    formal claim when all three are independently validated.
+    """
+    research = Path(research_dir)
+    annotation = _read_json_object(Path(annotation_analysis_path))
+    experiments = _read_json_object(Path(experiment_results_path))
+    ocr = _read_json_object(research / "ocr_manifest.json")
+    annotation_passed = annotation.get("status") == "complete" and int(annotation.get("complete_case_count") or 0) == int(annotation.get("case_count") or 0) and int(annotation.get("case_count") or 0) > 0
+    experiment_rows = experiments.get("experiments")
+    experiments_passed = isinstance(experiment_rows, list) and bool(experiment_rows) and all(
+        isinstance(item, dict) and item.get("status") == "validated" for item in experiment_rows
+    )
+    benchmark_results = ocr.get("benchmark_results")
+    ocr_passed = (
+        ocr.get("status") == "succeeded"
+        and ocr.get("winner_status") in {"validated", "frozen"}
+        and isinstance(benchmark_results, dict)
+        and set(benchmark_results) >= {"1", "2"}
+        and all(isinstance(value, dict) and value.get("status") == "succeeded" for value in benchmark_results.values())
+    )
+    checks = [
+        {"id": "clinical_reader_annotation", "passed": annotation_passed, "reason": "complete_double_read_and_adjudication" if annotation_passed else "annotation_analysis_missing_or_incomplete"},
+        {"id": "ocr_winner", "passed": ocr_passed, "reason": "validated_two_repeat_winner" if ocr_passed else "ocr_winner_missing_or_not_frozen"},
+        {"id": "formal_experiments", "passed": experiments_passed, "reason": "all_protocols_validated" if experiments_passed else "one_or_more_protocols_not_validated"},
+    ]
+    result = {
+        "schema_version": "1.0",
+        "artifact_type": "paper_evidence_gate",
+        "status": "passed" if all(item["passed"] for item in checks) else "blocked",
+        "formal_claim_allowed": all(item["passed"] for item in checks),
+        "checks": checks,
+        "research_dir": str(research),
+        "annotation_analysis": str(annotation_analysis_path),
+        "experiment_results": str(experiment_results_path),
+        "next_gate": "仅在三类证据均通过后冻结论文表格、图和正式结论",
+    }
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return result
+
+
+def _read_json_object(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def run_ocr_research(
     pilot_dir: str | Path,
     research_dir: str | Path,

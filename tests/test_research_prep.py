@@ -7,7 +7,11 @@ import pytest
 
 from medharness2.annotation.models import AnnotationCase, CandidateReportForAnnotation, ReaderAnnotation
 from medharness2.ocr_benchmark import evaluate_ocr_candidates
-from medharness2.research_prep import prepare_research_manifests, run_ocr_research
+from medharness2.research_prep import (
+    evaluate_paper_evidence_gate,
+    prepare_research_manifests,
+    run_ocr_research,
+)
 import medharness2.research_prep as research_prep
 from medharness2.annotation.analysis import analyze_pilot_annotations
 
@@ -287,6 +291,28 @@ def test_analyze_pilot_annotations_emits_reader_agreement_and_disagreement_queue
     assert result["formal_claim_allowed"] is False
     assert result["formal_claim_reason"] == "paper_evidence_gate_not_satisfied"
     assert result["reader_agreement"]["finding_presence_kappa"]["kappa"] == 1.0
+
+
+def test_evaluate_paper_evidence_gate_is_blocked_without_external_evidence(tmp_path: Path):
+    pilot = _pilot(
+        tmp_path,
+        [{"pilot_case_id": "pilot-001", "modality": "cxr", "annotation_path": "cases/pilot-001.json"}],
+    )
+    research = tmp_path / "research"
+    prepare_research_manifests(pilot, research)
+    result = evaluate_paper_evidence_gate(
+        research,
+        tmp_path / "missing-annotation-analysis.json",
+        tmp_path / "missing-experiment-results.json",
+        tmp_path / "paper-gate.json",
+    )
+    assert result["status"] == "blocked"
+    assert result["formal_claim_allowed"] is False
+    assert {item["id"] for item in result["checks"]} == {
+        "clinical_reader_annotation",
+        "ocr_winner",
+        "formal_experiments",
+    }
 
 
 def test_run_ocr_research_blocks_unreadable_source_pdf_hash(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

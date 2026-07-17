@@ -13,7 +13,7 @@ from medharness2.annotation import (
     validate_pilot_annotation_package,
     analyze_pilot_annotations,
 )
-from medharness2.research_prep import prepare_research_manifests, run_ocr_research
+from medharness2.research_prep import evaluate_paper_evidence_gate, prepare_research_manifests, run_ocr_research
 from medharness2.config import load_config
 from medharness2.contracts import export_json_schemas, migrate_run_case_artifacts
 from medharness2.dashboard import build_dashboard, build_dashboard_summary
@@ -117,6 +117,11 @@ def build_parser() -> argparse.ArgumentParser:
     research_run_ocr.add_argument("--config")
     research_run_ocr.add_argument("--source-root")
     research_run_ocr.add_argument("--force", action="store_true")
+    research_paper_gate = research_sub.add_parser("paper-gate")
+    research_paper_gate.add_argument("--research-dir", required=True)
+    research_paper_gate.add_argument("--annotation-analysis", required=True)
+    research_paper_gate.add_argument("--experiment-results", required=True)
+    research_paper_gate.add_argument("--output", required=True)
     benchmark = subparsers.add_parser("benchmark")
     benchmark_sub = benchmark.add_subparsers(dest="benchmark_command", required=True)
     benchmark_plan = benchmark_sub.add_parser("plan")
@@ -343,6 +348,19 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0 if result["status"] == "succeeded" else 2
+    if args.command == "research" and args.research_command == "paper-gate":
+        try:
+            result = evaluate_paper_evidence_gate(
+                args.research_dir,
+                args.annotation_analysis,
+                args.experiment_results,
+                args.output,
+            )
+        except Exception as exc:
+            print(f"medHarness2 research paper-gate failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 2
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["status"] == "passed" else 2
     if args.command == "benchmark" and args.benchmark_command == "plan":
         try:
             cfg = load_config(args.config) if args.config else load_config("config/formal_benchmark.yaml")
