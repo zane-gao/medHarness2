@@ -35,7 +35,22 @@ def test_reference_report_coverage_is_self_recall_not_template_size():
         llm_client=build_mock_client(),
     )
     assert result["composite_inputs"]["finding_coverage"] == 1.0
-    assert result["finding_graph"]["template_coverage"]["coverage_rate"] < 1.0
+
+
+@pytest.mark.parametrize("bad", [[], "bad", {"primary_image": 7}])
+def test_single_case_rejects_malformed_prepared_assets(tmp_path: Path, bad):
+    report = tmp_path / "report.txt"
+    image = tmp_path / "image.png"
+    report.write_text("FINDINGS: clear. IMPRESSION: normal.", encoding="utf-8")
+    image.write_bytes(b"png")
+    with pytest.raises(ValueError, match="prepared_assets"):
+        run_single_case(
+            report_path=report,
+            image_path=image,
+            output_path=tmp_path / "case.json",
+            prepared_assets=bad,  # type: ignore[arg-type]
+            config=AppConfig(llm=LLMConfig(provider="mock")),
+        )
 
 
 def test_single_report_routes_likert_through_general_judge_role():

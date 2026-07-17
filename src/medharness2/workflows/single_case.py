@@ -43,8 +43,9 @@ def run_single_case(
         if report_path is None:
             raise ValueError("Provide report_path or report_text.")
         report_text = read_text(report_path)
-    image = str((prepared_assets or {}).get("primary_image") or image_path)
-    generation_image = str((prepared_assets or {}).get("volume_path") or (prepared_assets or {}).get("primary_image") or image_path)
+    assets = _strict_prepared_assets(prepared_assets)
+    image = assets.get("primary_image") or str(image_path)
+    generation_image = assets.get("volume_path") or assets.get("primary_image") or str(image_path)
     modality_key = modality or recognize_modality(image, config=cfg, llm_client=client)
     generated = (
         list(precomputed_generated_reports)
@@ -165,4 +166,20 @@ def run_single_case(
     if not any(str(report.report or "").strip() for report in generated):
         result["errors"] = ["no_generated_reports"]
     write_json(output_path, result)
+    return result
+
+
+def _strict_prepared_assets(value: Any) -> dict[str, str]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError("prepared_assets must be an object")
+    result: dict[str, str] = {}
+    for key in ("primary_image", "volume_path"):
+        item = value.get(key)
+        if item is None or item == "":
+            continue
+        if not isinstance(item, str):
+            raise ValueError(f"prepared_assets.{key} must be a string")
+        result[key] = item
     return result
