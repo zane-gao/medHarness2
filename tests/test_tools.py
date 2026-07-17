@@ -639,6 +639,22 @@ def test_tool5_rejects_implicit_integer_controls(field, bad):
         audit_alignment(candidate, reference, alignment, require_llm=False, **{field: bad})
 
 
+@pytest.mark.parametrize("bad", ["0.5", 1, True])
+def test_tool5_audit_response_rejects_implicit_confidence_types(bad):
+    from medharness2.alignment.audit import _AuditResponse
+
+    with pytest.raises(Exception):
+        _AuditResponse.model_validate(
+            {
+                "verdict": "pass",
+                "confidence": bad,
+                "summary": "valid",
+                "issues": [],
+                "error_judgements": [],
+            }
+        )
+
+
 def test_tool5_llm_adjudication_removes_complete_unsupported_error_pairs():
     candidate = {
         "findings": [

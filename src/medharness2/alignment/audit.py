@@ -6,7 +6,7 @@ import json
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictFloat, field_validator
 
 from medharness2.contracts import (
     AlignmentAuditArtifact,
@@ -39,10 +39,24 @@ class _AuditResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     verdict: Literal["pass", "issues_found", "abstain"]
-    confidence: float = Field(ge=0, le=1)
+    confidence: StrictFloat = Field(ge=0, le=1)
     summary: str = Field(min_length=1)
     issues: list[AlignmentAuditIssue]
     error_judgements: list[AlignmentErrorJudgement] = Field(default_factory=list)
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _require_real_float(cls, value: Any) -> Any:
+        """Reject JSON number coercion for the LLM confidence contract.
+
+        Pydantic's ``StrictFloat`` still accepts an integer (``1``) and
+        converts it to ``1.0``.  LLM responses are an external contract, so
+        keep the distinction explicit: only an actual, non-boolean float is
+        valid here.
+        """
+        if isinstance(value, bool) or not isinstance(value, float):
+            raise TypeError("confidence must be a float")
+        return value
 
 
 def audit_alignment(
