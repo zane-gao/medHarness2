@@ -337,6 +337,23 @@ def test_migration_warning_lists_reject_non_string_items():
             }
         )
 
+
+@pytest.mark.parametrize("field", ["model", "source", "report", "modality"])
+@pytest.mark.parametrize("bad", [{"x": 1}, 7, True, ["x"]])
+def test_generated_report_migration_rejects_non_string_identity_and_text(field, bad):
+    from medharness2.contracts.migrations import migrate_generated_report_v1
+
+    with pytest.raises((TypeError, ValueError), match=field):
+        migrate_generated_report_v1({"model": "m", "source": "artifact_reuse", "report": "text", "modality": "cxr", field: bad})
+
+
+@pytest.mark.parametrize("bad", ["metadata", ["x"], 7, True])
+def test_generated_report_migration_rejects_non_object_metadata(bad):
+    from medharness2.contracts.migrations import migrate_generated_report_v1
+
+    with pytest.raises((TypeError, ValueError), match="metadata"):
+        migrate_generated_report_v1({"model": "m", "source": "artifact_reuse", "report": "text", "modality": "cxr", "metadata": bad})
+
 @pytest.mark.parametrize("field", ["generated_reports", "generated_evaluations", "pairwise_comparisons", "rankings"])
 @pytest.mark.parametrize("bad", ["not-a-list", {"x": 1}, ["bad-item"]])
 def test_case_migration_rejects_malformed_top_level_object_lists(field, bad):

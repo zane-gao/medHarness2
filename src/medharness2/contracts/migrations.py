@@ -114,8 +114,25 @@ def migrate_generated_report_v1(
     *,
     legacy_reference_assisted: bool = False,
 ) -> dict[str, Any]:
-    source = str(payload.get("source") or "unknown")
-    metadata = deepcopy(dict(payload.get("metadata") or {}))
+    if not isinstance(payload, dict):
+        raise TypeError("generated_report payload must be an object")
+
+    def _string_field(key: str, default: str) -> str:
+        value = payload.get(key)
+        if value is None:
+            return default
+        if not isinstance(value, str):
+            raise TypeError(f"generated_report.{key} must be a string")
+        return value
+
+    source = _string_field("source", "unknown")
+    metadata_value = payload.get("metadata")
+    if metadata_value is None:
+        metadata: dict[str, Any] = {}
+    elif not isinstance(metadata_value, dict):
+        raise TypeError("generated_report.metadata must be an object")
+    else:
+        metadata = deepcopy(metadata_value)
     warnings = _string_list(payload.get("warnings"), "generated_report.warnings")
     assumed_reference_assisted = legacy_reference_assisted and source == "medharness_cli"
     if assumed_reference_assisted:
@@ -123,10 +140,10 @@ def migrate_generated_report_v1(
         if "legacy_reference_assisted_generation_assumed" not in warnings:
             warnings.append("legacy_reference_assisted_generation_assumed")
     return GeneratedReportArtifact(
-        model=str(payload.get("model") or "unknown"),
+        model=_string_field("model", "unknown"),
         source=source,
-        report=str(payload.get("report") or ""),
-        modality=str(payload.get("modality") or "unknown"),
+        report=_string_field("report", ""),
+        modality=_string_field("modality", "unknown"),
         evidence_tier=(
             "debug_fallback"
             if assumed_reference_assisted
