@@ -41,6 +41,14 @@ def test_tool10_modelwise_weighted_uses_named_weights():
     assert "model_count" not in result
 
 
+def test_tool10_rejects_non_strict_weights_instead_of_coercing_them():
+    rows = [{"model": "a", "metrics": {"precision": 0.5}}]
+    with pytest.raises(ValueError, match="weights"):
+        modelwise_weighted(rows, weights={"a": "1.0"})
+    with pytest.raises(ValueError, match="weights"):
+        modelwise_weighted(rows, weights={"a": True})
+
+
 def test_tool10_excludes_fallback_rows_from_weighted_metrics():
     rows = [
         {"model": "real", "metrics": {"precision": 1.0}, "metadata": {"fallback_used": False}},
@@ -50,6 +58,16 @@ def test_tool10_excludes_fallback_rows_from_weighted_metrics():
     assert result["precision"] == pytest.approx(1.0)
     assert result["_provenance"]["eligible_count"] == 1
     assert result["_provenance"]["fallback_count"] == 1
+
+
+def test_tool12_excludes_malformed_fallback_provenance():
+    rows = [
+        {"score": 1.0, "metadata": {"fallback_used": "false"}},
+        {"score": 0.5, "metadata": {"fallback_used": False}},
+    ]
+    stats = calculate_statistics(rows)
+    assert stats["score"]["n"] == 1
+    assert stats["score"]["mean"] == pytest.approx(0.5)
 
 
 def test_tool11_applies_hazard_weights_to_numeric_metrics():
@@ -103,6 +121,15 @@ def test_tool11_excludes_fallback_hazard_rows():
     result = hazardwise_weighted(rows)
     assert len(result) == 1
     assert result[0]["metrics"]["error_rate"] == pytest.approx(0.25)
+
+
+def test_tool11_excludes_malformed_fallback_provenance():
+    result = hazardwise_weighted([
+        {"error_type": "false_finding", "hazard_level": 5, "metrics": {"error_rate": 0.1}, "metadata": {"fallback_used": 0}},
+        {"error_type": "false_finding", "hazard_level": 2, "metrics": {"error_rate": 0.2}, "metadata": {"fallback_used": False}},
+    ])
+    assert len(result) == 1
+    assert result[0]["hazard_level"] == 2
 
 
 @pytest.mark.parametrize("bad_value", [float("nan"), float("inf"), -float("inf")])

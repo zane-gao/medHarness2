@@ -241,8 +241,8 @@ def _reviewer_consistency(
         }
         for repeat in repeats
     ]
-    fallback_used = bool(primary.provenance.fallback_used) or any(
-        bool(item.get("fallback_used")) for item in retest_provenance
+    fallback_used = (primary.provenance.fallback_used is True) or any(
+        item.get("fallback_used") is not False for item in retest_provenance
     )
     base = {
         "runs": runs,
@@ -735,7 +735,7 @@ def _result(errors: list[dict[str, Any]], metadata: dict[str, Any]) -> dict[str,
             "version": "2.0",
             "role": str(metadata.get("role") or ""),
             "prompt_version": str(metadata.get("prompt_version") or ""),
-            "fallback_used": bool(metadata.get("fallback_used", False)),
+            "fallback_used": metadata.get("fallback_used") if isinstance(metadata.get("fallback_used"), bool) else True,
             "metadata": provenance_metadata,
         },
         "metadata": metadata,

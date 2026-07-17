@@ -22,6 +22,21 @@ from medharness2.workflows.benchmark_evaluation import (
 )
 
 
+def test_verified_provenance_rejects_non_boolean_fallback_flag():
+    with pytest.raises(ValueError, match="used a fallback"):
+        from medharness2.workflows.benchmark_evaluation import _normalize_verified_evidence
+
+        _normalize_verified_evidence(
+            {"provider": "real", "model": "m", "role": "r", "fallback_used": 0},
+            label="test",
+            role="r",
+            implementation_type="llm_assessment",
+            implementation_types={"llm_assessment"},
+            endpoint_host="example.com",
+            attempt_count=1,
+        )
+
+
 def test_benchmark_snapshots_include_role_retry_and_consistency_parameters():
     config = AppConfig(
         model_roles={

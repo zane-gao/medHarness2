@@ -543,7 +543,7 @@ def verify_real_llm_case_evaluation(
         f"{item['provider']}::{item['model']}::{item['endpoint_host']}"
         for item in evidence
     )
-    fallback_count = sum(1 for item in evidence if bool(item.get("fallback_used")))
+    fallback_count = sum(1 for item in evidence if item.get("fallback_used") is True)
     return {
         "passed": True,
         "evidence_count": len(evidence),
@@ -735,7 +735,7 @@ def _normalize_verified_evidence(
         raise ValueError(f"{label} did not record a real provider/model")
     if actual_role != role:
         raise ValueError(f"{label} role mismatch: {actual_role!r} != {role!r}")
-    if bool(source.get("fallback_used")):
+    if source.get("fallback_used") is not False:
         raise ValueError(f"{label} used a fallback")
     try:
         attempts = _strict_nonnegative_int(attempt_count, f"{label} attempt_count")

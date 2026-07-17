@@ -37,7 +37,9 @@ def _is_fallback_report(report: GeneratedReport) -> bool:
     metadata = report.metadata or {}
     source = str(report.source or "").lower()
     tier = str(report.evidence_tier or "").lower()
-    return bool(metadata.get("fallback_used")) or tier in {"mock", "debug_fallback"} or source in {
+    fallback_used = metadata.get("fallback_used")
+    malformed_fallback = fallback_used is not None and not isinstance(fallback_used, bool)
+    return malformed_fallback or fallback_used is True or tier in {"mock", "debug_fallback"} or source in {
         "mock",
         "mock_fallback",
         "fallback",

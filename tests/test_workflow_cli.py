@@ -978,6 +978,22 @@ def test_single_case_quality_gate_blocks_mock_fallback_report(tmp_path: Path):
     assert "fallback_generation" in gated.metadata["quality_gate"]["warnings"]
 
 
+def test_quality_gate_blocks_malformed_fallback_provenance(tmp_path: Path):
+    from medharness2.schema import GeneratedReport
+    from medharness2.tools.quality_gate import apply_generation_quality_gate
+
+    report = GeneratedReport(
+        model="candidate",
+        source="artifact_reuse",
+        report="FINDINGS: Clear lungs.",
+        modality="cxr",
+        metadata={"fallback_used": 0},
+    )
+    gated = apply_generation_quality_gate(report, modality="cxr", body_part="chest")
+    assert gated.metadata["quality_gate"]["passed"] is False
+    assert "fallback_generation" in gated.metadata["quality_gate"]["warnings"]
+
+
 def test_single_case_fallback_uses_primary_image_instead_of_volume(tmp_path: Path):
     report = tmp_path / "human.txt"
     primary = tmp_path / "contact_sheet.png"

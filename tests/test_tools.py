@@ -1898,6 +1898,17 @@ def test_tool9_excludes_fallback_rows_from_ranking():
     assert [row["model"] for row in ranked] == ["real"]
 
 
+def test_tool9_excludes_malformed_fallback_provenance():
+    ranked = select_top_k(
+        [
+            {"model": "malformed", "composite_inputs": {"likert_mean": 5, "structure_score": 1.0, "finding_coverage": 1.0}, "metadata": {"fallback_used": "false"}},
+            {"model": "real", "composite_inputs": {"likert_mean": 3, "structure_score": 0.5, "finding_coverage": 0.5}, "metadata": {"fallback_used": False}},
+        ],
+        top_k=2,
+    )
+    assert [row["model"] for row in ranked] == ["real"]
+
+
 def test_tool9_excludes_incomplete_metrics_instead_of_treating_missing_as_zero():
     ranked = select_top_k(
         [

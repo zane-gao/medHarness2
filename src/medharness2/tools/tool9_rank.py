@@ -230,7 +230,10 @@ def _likert01_or_none(value: Any) -> float | None:
 
 def _eligible_for_statistics(evaluation: dict[str, Any]) -> bool:
     metadata = evaluation.get("metadata") or evaluation.get("provenance") or {}
-    if bool(metadata.get("fallback_used")):
+    fallback_used = metadata.get("fallback_used")
+    if fallback_used is not None and not isinstance(fallback_used, bool):
+        return False
+    if fallback_used is True:
         return False
     if str(evaluation.get("evidence_tier") or "").lower() in {"debug_fallback", "mock"}:
         return False

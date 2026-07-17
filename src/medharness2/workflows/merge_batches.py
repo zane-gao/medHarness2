@@ -174,6 +174,11 @@ def _attach_human_provenance(item: dict[str, Any], workflow1_path: Path) -> None
         item["human_metrics"] = metrics
 
 
+def _fallback_flag(value: Any) -> bool:
+    """Treat only an explicit boolean False as non-fallback provenance."""
+    return value is not None and value is not False
+
+
 def _evaluation_metadata(evaluation: dict[str, Any]) -> dict[str, Any]:
     metadata: dict[str, Any] = {}
     fallback_seen = False
@@ -183,15 +188,15 @@ def _evaluation_metadata(evaluation: dict[str, Any]) -> dict[str, Any]:
             nested = value.get("_metadata") or value.get("metadata") or value.get("provenance")
             if isinstance(nested, dict):
                 metadata.update(nested)
-                fallback_seen = fallback_seen or bool(nested.get("fallback_used"))
+                fallback_seen = fallback_seen or _fallback_flag(nested.get("fallback_used"))
             if key == "finding_graph":
                 correction = (value.get("metadata") or {}).get("llm_correction")
                 if isinstance(correction, dict):
                     metadata.update(correction)
-                    fallback_seen = fallback_seen or bool(correction.get("fallback_used"))
+                    fallback_seen = fallback_seen or _fallback_flag(correction.get("fallback_used"))
     if isinstance(evaluation.get("metadata"), dict):
         metadata.update(evaluation["metadata"])
-        fallback_seen = fallback_seen or bool(evaluation["metadata"].get("fallback_used"))
+        fallback_seen = fallback_seen or _fallback_flag(evaluation["metadata"].get("fallback_used"))
     if fallback_seen:
         metadata["fallback_used"] = True
     return metadata

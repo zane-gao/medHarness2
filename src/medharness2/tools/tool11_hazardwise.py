@@ -52,7 +52,10 @@ def hazardwise_weighted(
 
 def _eligible(row: dict[str, Any]) -> bool:
     metadata = row.get("metadata") or row.get("provenance") or {}
-    if bool(metadata.get("fallback_used")):
+    fallback_used = metadata.get("fallback_used")
+    if fallback_used is not None and not isinstance(fallback_used, bool):
+        return False
+    if fallback_used is True:
         return False
     if str(row.get("evidence_tier") or "").lower() in {"mock", "debug_fallback"}:
         return False
