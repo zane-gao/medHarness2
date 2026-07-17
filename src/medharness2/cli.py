@@ -7,6 +7,7 @@ from pathlib import Path
 
 from medharness2.catalog import build_capability_catalog
 from medharness2.annotation import build_pilot_annotation_package, validate_pilot_annotation_package
+from medharness2.research_prep import prepare_research_manifests
 from medharness2.config import load_config
 from medharness2.contracts import export_json_schemas, migrate_run_case_artifacts
 from medharness2.dashboard import build_dashboard, build_dashboard_summary
@@ -88,6 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
     annotation_pilot.add_argument("--limit", type=int, default=10)
     annotation_validate = annotation_sub.add_parser("validate")
     annotation_validate.add_argument("--package-dir", required=True)
+    research = subparsers.add_parser("research")
+    research_sub = research.add_subparsers(dest="research_command", required=True)
+    research_prepare = research_sub.add_parser("prepare-manifests")
+    research_prepare.add_argument("--pilot-dir", required=True)
+    research_prepare.add_argument("--output-dir", required=True)
     benchmark = subparsers.add_parser("benchmark")
     benchmark_sub = benchmark.add_subparsers(dest="benchmark_command", required=True)
     benchmark_plan = benchmark_sub.add_parser("plan")
@@ -256,6 +262,14 @@ def main(argv: list[str] | None = None) -> int:
         if result["status"] == "blocked":
             return 2
         return 1
+    if args.command == "research" and args.research_command == "prepare-manifests":
+        try:
+            result = prepare_research_manifests(args.pilot_dir, args.output_dir)
+        except Exception as exc:
+            print(f"medHarness2 research prepare-manifests failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            return 1
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["status"] != "blocked" else 2
     if args.command == "benchmark" and args.benchmark_command == "plan":
         try:
             cfg = load_config(args.config) if args.config else load_config("config/formal_benchmark.yaml")

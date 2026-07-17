@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 from medharness2.annotation.models import AnnotationCase, CandidateReportForAnnotation, ReaderAnnotation
+from medharness2.modality import normalize_modality
+from medharness2.config import PROJECT_ROOT
 from medharness2.privacy import ExternalPayloadPolicy
 from medharness2.utils.io import read_json
 
@@ -41,6 +43,7 @@ def build_pilot_annotation_package(
     if not selected:
         raise ValueError("no_cases_discovered")
     manifest_rows = []
+    internal_maps: list[dict[str, Any]] = []
     for index, (source_case_id, payload) in enumerate(selected, start=1):
         pilot_case_id = f"pilot-{index:03d}"
         input_payload = dict(payload.get("input") or {})
@@ -84,12 +87,36 @@ def build_pilot_annotation_package(
                 "status": "not_started",
             }
         )
+        # Keep model identities out of the reader-facing case JSON.  This
+        # internal map is never referenced by the annotation UI/package
+        # validator and is intended only for later adjudication analysis.
+        internal_maps.append(
+            {
+                "pilot_case_id": pilot_case_id,
+                "source_case_sha256": annotation_case.source_case_sha256,
+                "candidates": [
+                    {
+                        "candidate_id": candidate.candidate_id,
+                        "blinded_model_id": candidate.blinded_model_id,
+                        "source_model": str(item.get("model") or "unknown"),
+                        "source": str(item.get("source") or "unknown"),
+                    }
+                    for candidate, item in zip(candidates, payload.get("generated_reports") or [])
+                ],
+            }
+        )
     (output / "manifest.jsonl").write_text(
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in manifest_rows),
         encoding="utf-8",
     )
     (output / "annotation.schema.json").write_text(
         json.dumps(AnnotationCase.model_json_schema(), ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    internal_dir = output / "internal"
+    internal_dir.mkdir(parents=True, exist_ok=True)
+    (internal_dir / "model_blinding_map.json").write_text(
+        json.dumps({"schema_version": "1.0", "maps": internal_maps}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     (output / "README.md").write_text(_package_readme(len(manifest_rows)), encoding="utf-8")
@@ -333,10 +360,20 @@ def _stratified_cases(rows: list[tuple[str, dict[str, Any]]], *, limit: int) -> 
     groups: dict[tuple[str, str], deque[tuple[str, dict[str, Any]]]] = defaultdict(deque)
     for row in sorted(rows, key=lambda item: item[0]):
         input_payload = row[1].get("input") or {}
-        key = (str(input_payload.get("modality") or "unknown"), str(input_payload.get("body_part") or "unknown"))
+        key = (normalize_modality(input_payload.get("modality")), str(input_payload.get("body_part") or "unknown").lower())
         groups[key].append(row)
-    selected = []
+    selected: list[tuple[str, dict[str, Any]]] = []
     keys = sorted(groups)
+    # Guarantee modality-family coverage whenever the source run contains all
+    # three families and the requested package is large enough.
+    family_keys: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for key in keys:
+        family_keys[key[0]].append(key)
+    families = [family for family in ("cxr", "ct", "mri") if family_keys.get(family)]
+    for family in families:
+        key = family_keys[family][0]
+        if len(selected) < limit and groups[key]:
+            selected.append(groups[key].popleft())
     while keys and len(selected) < min(limit, len(rows)):
         next_keys = []
         for key in keys:
@@ -360,8 +397,8 @@ def _reference_report(
     if not raw_report_path:
         raise ValueError(f"case {case_id} is missing input.report_path for clinical reference report")
     report_path = Path(raw_report_path)
-    if not report_path.is_absolute():
-        report_path = run_root / report_path
+    candidates = [report_path] if report_path.is_absolute() else [run_root / report_path, PROJECT_ROOT / report_path]
+    report_path = next((candidate for candidate in candidates if candidate.is_file()), candidates[0])
     if not report_path.is_file():
         raise ValueError(f"case {case_id} reference report does not exist: {report_path}")
     try:

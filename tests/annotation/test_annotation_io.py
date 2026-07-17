@@ -320,6 +320,19 @@ def test_build_pilot_annotation_package_rejects_missing_clinical_reference_repor
         raise AssertionError("missing clinical reference report must fail explicitly")
 
 
+def test_build_pilot_annotation_package_resolves_project_relative_reference_report(tmp_path: Path, monkeypatch):
+    run_dir = _write_run(tmp_path / "run")
+    case_path = next((run_dir / "workflow2_cases").glob("*.json"))
+    payload = json.loads(case_path.read_text(encoding="utf-8"))
+    report_path = Path(payload["input"]["report_path"])
+    payload["input"]["report_path"] = str(report_path.relative_to(tmp_path))
+    case_path.write_text(json.dumps(payload), encoding="utf-8")
+    monkeypatch.setattr("medharness2.annotation.pilot.PROJECT_ROOT", tmp_path)
+
+    result = build_pilot_annotation_package(run_dir, tmp_path / "pilot10", limit=1)
+    assert result["case_count"] == 1
+
+
 def test_build_pilot_annotation_package_rejects_empty_clinical_reference_report(tmp_path: Path):
     run_dir = _write_run(tmp_path / "run")
     empty_report = run_dir / "reports" / "empty.txt"
