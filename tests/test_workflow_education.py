@@ -76,6 +76,30 @@ def test_education_rejects_non_object_finding_and_hazard_lists():
         _report_suggestions(payload, None)  # type: ignore[arg-type]
 
 
+@pytest.mark.parametrize("field", ["human_evaluation", "likert", "finding_graph"])
+@pytest.mark.parametrize("bad", [True, 1, [], "bad"])
+def test_education_report_rejects_malformed_nested_objects(field, bad):
+    payload = _workflow1_payload()
+    if field == "human_evaluation":
+        payload[field] = bad
+    elif field in {"likert", "finding_graph"}:
+        payload["human_evaluation"][field] = bad
+    else:
+        payload[field] = bad
+
+    with pytest.raises(ValueError, match=field):
+        _report_suggestions(payload, None)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("bad", [True, 1, ["bad"], "bad"])
+def test_education_report_rejects_malformed_rankings(bad):
+    payload = _workflow1_payload()
+    payload["rankings"] = bad
+
+    with pytest.raises(ValueError, match="rankings"):
+        _report_suggestions(payload, None)  # type: ignore[arg-type]
+
+
 def test_run_education_suggestions_from_workflow1(tmp_path: Path):
     workflow1 = tmp_path / "workflow1.json"
     output = tmp_path / "education.json"

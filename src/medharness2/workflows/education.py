@@ -46,9 +46,11 @@ def run_education_suggestions(
 
 
 def _report_suggestions(payload: dict[str, Any], client: LLMClient) -> dict[str, Any]:
-    human = payload.get("human_evaluation") or {}
-    likert = human.get("likert") or {}
-    graph = human.get("finding_graph") or {}
+    if not isinstance(payload, dict):
+        raise ValueError("Workflow 1 result must be an object")
+    human = _object(payload.get("human_evaluation"), "human_evaluation")
+    likert = _object(human.get("likert"), "human_evaluation.likert")
+    graph = _object(human.get("finding_graph"), "human_evaluation.finding_graph")
     findings = _object_list(graph.get("findings"), "human_evaluation.finding_graph.findings")
     if not findings:
         raise ValueError("Workflow 1 result must contain human_evaluation.finding_graph.findings.")
@@ -75,7 +77,11 @@ def _report_suggestions(payload: dict[str, Any], client: LLMClient) -> dict[str,
         "general_suggestions": [_general_suggestion(weakest_metric, weakest_score, likert)],
         "metadata": {
             "source": "deterministic_or_llm",
-            "top_models": [item.get("model") for item in payload.get("rankings") or [] if item.get("selected_top_n")],
+            "top_models": [
+                item.get("model")
+                for item in _object_list(payload.get("rankings"), "rankings")
+                if item.get("selected_top_n")
+            ],
         },
     }
     return _try_llm_json(client, _report_prompt(payload, default), default)
@@ -268,22 +274,24 @@ def _blocked_report_result(reason: str) -> dict[str, Any]:
 def _hazards(payload: dict[str, Any]) -> list[dict[str, Any]]:
     hazards: list[dict[str, Any]] = []
     for item in _object_list(payload.get("pairwise_comparisons"), "pairwise_comparisons"):
-        comparison = item.get("comparison") or {}
-        if not isinstance(comparison, dict):
-            raise ValueError("pairwise_comparisons.comparison must be an object")
-        hazard_payload = comparison.get("hazards") or {}
-        if not isinstance(hazard_payload, dict):
-            raise ValueError("pairwise_comparisons.comparison.hazards must be an object")
+        comparison = _object(item.get("comparison"), "pairwise_comparisons.comparison")
+        hazard_payload = _object(comparison.get("hazards"), "pairwise_comparisons.comparison.hazards")
         hazards.extend(_object_list(hazard_payload.get("errors"), "hazards.errors"))
-        alignment = comparison.get("alignment") or {}
-        if not isinstance(alignment, dict):
-            raise ValueError("pairwise_comparisons.comparison.alignment must be an object")
+        alignment = _object(comparison.get("alignment"), "pairwise_comparisons.comparison.alignment")
         hazards.extend(_object_list(alignment.get("error_candidates"), "alignment.error_candidates"))
     return hazards
 
 
+def _object(value: Any, label: str) -> dict[str, Any]:
+    if value in (None, ""):
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return value
+
+
 def _object_list(value: Any, label: str) -> list[dict[str, Any]]:
-    if value is None:
+    if value in (None, ""):
         return []
     if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
         raise ValueError(f"{label} must be a list of objects")
