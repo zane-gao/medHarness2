@@ -46,9 +46,11 @@ def reevaluate_run(
     reused_generated_report_count = 0
 
     for case in workflow2.get("cases") or []:
-        case_id = str(case.get("case_id") or "")
-        reader = str(case.get("reader") or "unknown")
         try:
+            case_id = _case_string(case, "case_id", "")
+            reader = _case_string(case, "reader", "unknown")
+            modality = _case_string(case, "modality", "unknown")
+            body_part = _case_string(case, "body_part", "unknown")
             workflow1 = _read_workflow1(source, str(case.get("workflow1_output") or ""))
             generated = _generated_reports(workflow1)
             reused_generated_report_count += len(generated)
@@ -69,14 +71,16 @@ def reevaluate_run(
                 output_path=case_output,
                 case_id=case_id,
                 prepared_assets=dict(input_payload.get("prepared_assets") or {}),
-                modality=str(case.get("modality") or input_payload.get("modality") or "unknown"),
-                body_part=str(case.get("body_part") or input_payload.get("body_part") or "unknown"),
+                modality=modality if modality != "unknown" else _case_string(input_payload, "modality", "unknown"),
+                body_part=body_part if body_part != "unknown" else _case_string(input_payload, "body_part", "unknown"),
                 top_n=cfg.ranking.top_n,
                 precomputed_generated_reports=generated,
                 config=cfg,
                 llm_client=client,
             )
         except Exception as exc:
+            case_id = case.get("case_id") if isinstance(case.get("case_id"), str) else ""
+            reader = case.get("reader") if isinstance(case.get("reader"), str) else "unknown"
             failed_cases.append(
                 {
                     "case_id": case_id,
@@ -208,6 +212,15 @@ def _read_workflow1(source: Path, value: str) -> dict[str, Any]:
         if candidate.exists():
             return read_json(candidate)
     raise FileNotFoundError(value)
+
+
+def _case_string(payload: dict[str, Any], field: str, default: str) -> str:
+    value = payload.get(field)
+    if value is None:
+        return default
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string")
+    return value
 
 
 def _generated_reports(workflow1: dict[str, Any]) -> list[GeneratedReport]:

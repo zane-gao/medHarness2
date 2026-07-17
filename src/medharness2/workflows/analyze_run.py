@@ -33,10 +33,10 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
     quality_failed = 0
 
     for case in workflow2.get("cases") or []:
-        case_id = str(case.get("case_id") or "")
-        reader = str(case.get("reader") or "unknown")
-        modality = str(case.get("modality") or "unknown")
-        body_part = str(case.get("body_part") or "unknown")
+        case_id = _case_string(case, "case_id", "")
+        reader = _case_string(case, "reader", "unknown")
+        modality = _case_string(case, "modality", "unknown")
+        body_part = _case_string(case, "body_part", "unknown")
         workflow1 = _read_workflow1(root, str(case.get("workflow1_output") or ""))
         legacy_reference_assisted = str(workflow1.get("schema_version") or "") != "2.0"
         reports = _object_list(workflow1.get("generated_reports"), "generated_reports")
@@ -306,6 +306,15 @@ def _first_present(*values: Any) -> Any:
 def _strict_nonnegative_int(value: Any, label: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
+def _case_string(case: dict[str, Any], field: str, default: str) -> str:
+    value = case.get(field)
+    if value is None:
+        return default
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string")
     return value
 
 

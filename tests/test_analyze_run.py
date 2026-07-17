@@ -262,3 +262,16 @@ def test_analyze_run_rejects_malformed_workflow1_object_lists(tmp_path: Path, fi
 
     with pytest.raises(ValueError, match=field):
         analyze_run(run_dir, tmp_path / "analysis")
+
+
+@pytest.mark.parametrize("field", ["case_id", "reader", "modality", "body_part"])
+@pytest.mark.parametrize("bad", [{"x": 1}, 7, True, ["cxr"]])
+def test_analyze_run_rejects_non_string_case_identity_fields(tmp_path: Path, field, bad):
+    run_dir = _write_run(tmp_path / "run")
+    workflow2_path = run_dir / "workflow2.json"
+    workflow2 = json.loads(workflow2_path.read_text(encoding="utf-8"))
+    workflow2["cases"][0][field] = bad
+    workflow2_path.write_text(json.dumps(workflow2), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=field):
+        analyze_run(run_dir, tmp_path / "analysis")

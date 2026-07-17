@@ -47,6 +47,19 @@ def test_generated_reports_rejects_v2_report_without_evidence_tier():
         )
 
 
+@pytest.mark.parametrize("field", ["case_id", "reader", "modality", "body_part"])
+@pytest.mark.parametrize("bad", [{"x": 1}, 7, True, ["cxr"]])
+def test_reevaluate_rejects_non_string_case_identity_fields(tmp_path: Path, field, bad):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "workflow2.json").write_text(json.dumps({"cases": [{field: bad}]}), encoding="utf-8")
+    result = reevaluate_run(source, tmp_path / "out", config=AppConfig())
+    workflow2 = result["workflow2"]
+    assert workflow2["failed_case_count"] == 1
+    assert workflow2["failed_cases"][0]["error"].startswith("ValueError")
+    assert field in workflow2["failed_cases"][0]["error"]
+
+
 def test_reevaluate_run_reuses_generated_reports_without_generation(tmp_path: Path):
     source = tmp_path / "source_run"
     source_cases = source / "workflow2_cases"
