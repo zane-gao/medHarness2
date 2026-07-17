@@ -12,7 +12,7 @@ from medharness2.tools.tool11_hazardwise import hazardwise_weighted
 from medharness2.tools.tool12_statistics import calculate_statistics, percentile_rank, correct_pvalues_holm, compare_metric_groups
 from medharness2.tools.tool6_structure_diff import compare_structure
 from medharness2.tools.tool9_rank import select_top_k
-from medharness2.workflows.batch_readers import run_batch_readers
+from medharness2.workflows.batch_readers import _strict_object, run_batch_readers
 from medharness2.workflows.department import run_department_comparison
 from medharness2.workflows.batch_readers import _mean_score as batch_mean_score
 from medharness2.workflows.batch_readers import _evaluation_metadata
@@ -375,6 +375,12 @@ def test_batch_readers_rejects_invalid_limit(tmp_path: Path, bad):
     (tmp_path / "manifest.jsonl").write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="limit must be a non-negative integer"):
         run_batch_readers(tmp_path / "manifest.jsonl", tmp_path / "workflow2.json", limit=bad)
+
+
+@pytest.mark.parametrize("bad", [[], "bad", [["x", 1]], 7])
+def test_batch_reader_metric_objects_reject_implicit_coercion(bad):
+    with pytest.raises(ValueError, match="composite_inputs"):
+        _strict_object(bad, "human_evaluation.composite_inputs")
 
 
 def test_department_propagates_failed_case_denominator(tmp_path: Path):

@@ -86,14 +86,27 @@ def run_batch_readers(
             )
             continue
         human_evaluation = workflow1.get("human_evaluation") or {}
-        human_metrics = dict(human_evaluation.get("composite_inputs") or {})
+        if not isinstance(human_evaluation, dict):
+            raise ValueError("human_evaluation must be an object")
+        human_metrics = _strict_object(
+            human_evaluation.get("composite_inputs"),
+            "human_evaluation.composite_inputs",
+        )
         human_provenance = _evaluation_metadata(human_evaluation)
         if human_provenance:
             human_metrics["metadata"] = human_provenance
+        generated_evaluations = workflow1.get("generated_evaluations") or []
+        if not isinstance(generated_evaluations, list) or any(
+            not isinstance(item, dict) for item in generated_evaluations
+        ):
+            raise ValueError("generated_evaluations must be a list of objects")
         generated_metrics = [
             {
                 "model": item.get("model"),
-                "metrics": item.get("composite_inputs") or {},
+                "metrics": _strict_object(
+                    item.get("composite_inputs"),
+                    "generated_evaluations.composite_inputs",
+                ),
                 "metadata": _evaluation_metadata(item),
                 "source": item.get("source"),
                 "evidence_tier": item.get("evidence_tier"),
@@ -261,3 +274,11 @@ def _evaluation_metadata(evaluation: dict[str, Any]) -> dict[str, Any]:
     if fallback_seen:
         metadata["fallback_used"] = True
     return metadata
+
+
+def _strict_object(value: Any, label: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValueError(f"{label} must be an object")
+    return dict(value)
