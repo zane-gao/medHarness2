@@ -57,12 +57,24 @@ def merge_batch_results(
         batch_path = Path(batch_path_value)
         source_paths.append(str(batch_path))
         batch = read_json(batch_path)
-        for failed in batch.get("failed_cases") or []:
+        raw_failed_cases = batch.get("failed_cases") or []
+        if not isinstance(raw_failed_cases, list) or any(not isinstance(item, dict) for item in raw_failed_cases):
+            raise ValueError(f"failed_cases must be a list of objects:{batch_path}")
+        for failed in raw_failed_cases:
             item = dict(failed)
             item["source_batch_result"] = str(batch_path)
             failed_cases.append(item)
-        for case in batch.get("cases") or []:
-            case_id = str(case.get("case_id") or "")
+        raw_cases = batch.get("cases") or []
+        if not isinstance(raw_cases, list) or any(not isinstance(item, dict) for item in raw_cases):
+            raise ValueError(f"cases must be a list of objects:{batch_path}")
+        for case in raw_cases:
+            case_id = case.get("case_id")
+            if case_id is None or not isinstance(case_id, str):
+                raise ValueError(f"case_id must be a string:{batch_path}")
+            reader = case.get("reader")
+            if reader is not None and not isinstance(reader, str):
+                raise ValueError(f"reader must be a string:{batch_path}")
+            case_id = case_id.strip()
             if not case_id:
                 raise ValueError(f"missing_case_id:{batch_path}")
             if case_id in cases_by_id:

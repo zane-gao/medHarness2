@@ -130,6 +130,20 @@ def test_merge_report_summary_rejects_malformed_generated_report_fields(tmp_path
         _count_workflow1(path, Counter(), Counter(), Counter(), Counter())
 
 
+@pytest.mark.parametrize("field,bad", [("cases", "bad"), ("failed_cases", ["bad"]), ("case_id", 7), ("reader", ["reader"])])
+def test_merge_rejects_malformed_batch_case_identity(tmp_path: Path, field, bad):
+    batch = tmp_path / "batch.json"
+    case = {"case_id": "case1", "reader": "reader", "workflow1_output": ""}
+    payload = {"cases": [case], "failed_cases": [], "case_count": 1, "failed_case_count": 0}
+    if field in {"cases", "failed_cases"}:
+        payload[field] = bad
+    else:
+        payload["cases"][0][field] = bad
+    batch.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match=field):
+        merge_batch_results([batch], tmp_path / "merged")
+
+
 def _write_manifest(path: Path, case_ids: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = []
