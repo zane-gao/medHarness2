@@ -337,7 +337,9 @@ def _cache_is_compatible(
     }
     cached_verifier = meta.get("verifier") or {}
     expected_verifier_configured = bool(expected_verifier["provider"] or expected_verifier["model"])
-    cached_verifier_configured = bool(cached_verifier.get("configured"))
+    cached_verifier_configured = cached_verifier.get("configured", False)
+    if not isinstance(cached_verifier_configured, bool):
+        return False
     if cached_verifier_configured != expected_verifier_configured:
         return False
     if expected_verifier_configured and (

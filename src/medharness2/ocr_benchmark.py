@@ -156,6 +156,9 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
                 )
             )
         ]
+        for item in valid_items:
+            if not isinstance(item.get("possible_truncation"), bool):
+                raise ValueError("possible_truncation must be a boolean")
         if not valid_items:
             continue
         result[model] = {
@@ -163,7 +166,7 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
             "clinical_cer_mean": round(sum(float(x["clinical_cer"]) for x in valid_items) / len(valid_items), 6),
             "digit_token_accuracy_mean": round(sum(float(x["digit_token_accuracy"]) for x in valid_items) / len(valid_items), 6),
             "negation_token_accuracy_mean": round(sum(float(x["negation_token_accuracy"]) for x in valid_items) / len(valid_items), 6),
-            "truncation_count": sum(bool(x["possible_truncation"]) for x in valid_items),
+            "truncation_count": sum(x["possible_truncation"] for x in valid_items),
         }
     return result
 

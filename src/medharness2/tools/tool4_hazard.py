@@ -434,7 +434,7 @@ def adjudicate_hazard_disagreements(
         "decisions": decisions,
         "disagreement_count": len(disagreements),
         "resolved_count": sum(not item["abstain"] for item in decisions),
-        "abstained_count": sum(bool(item["abstain"]) for item in decisions),
+        "abstained_count": sum(item["abstain"] for item in decisions),
         "primary_preserved": True,
         "reviewer_preserved": True,
         "clinical_validation_required": True,

@@ -53,11 +53,50 @@ def test_ocr_aggregate_excludes_non_finite_metric_rows():
     }
 
 
+@pytest.mark.parametrize("bad", [1, 0, "false", [], {}])
+def test_ocr_aggregate_rejects_malformed_truncation_flag(bad):
+    with pytest.raises(ValueError, match="possible_truncation"):
+        _aggregate(
+            [{
+                "case_id": "case1",
+                "model": "model-a",
+                "clinical_cer": 0.2,
+                "digit_token_accuracy": 1.0,
+                "negation_token_accuracy": 1.0,
+                "possible_truncation": bad,
+            }]
+        )
+
+
 @pytest.mark.parametrize("field,bad", [("warnings", "bad"), ("verifier", []), ("quality_audit", "bad"), ("quality_status", "unknown")])
 def test_ocr_cache_sidecar_rejects_malformed_metadata(field, bad):
     payload = {"warnings": [], "verifier": {"configured": False}, "quality_audit": None, "quality_status": "passed"}
     payload[field] = bad
     assert _cache_metadata_valid(payload) is False
+
+
+def test_ocr_cache_compatibility_rejects_malformed_verifier_configured(tmp_path: Path):
+    from medharness2.ocr import _cache_is_compatible
+
+    assert _cache_is_compatible(
+        {
+            "source_pdf_sha256": "hash",
+            "case_id": "case",
+            "method": "vlm_ocr",
+            "provider": "local",
+            "model": "model",
+            "role": "ocr",
+            "prompt_version": "ocr-page-v2",
+            "verifier": {"configured": "false"},
+        },
+        case_id="case",
+        source_pdf_sha256="hash",
+        provider="local",
+        model="model",
+        role="ocr",
+        verifier_options={},
+        require_real=False,
+    ) is False
 
 
 @pytest.mark.parametrize(

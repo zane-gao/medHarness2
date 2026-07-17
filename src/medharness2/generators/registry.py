@@ -543,7 +543,12 @@ class ReportGeneratorRegistry:
                     cmd=cmd,
                 ) if include_failures else {}
             reports = self._read_legacy_output_map(entry, output_jsonl, cmd=cmd)
-            reference_by_case = {str(case["case_id"]): bool(case.get("reference_report")) for case in cases}
+            reference_by_case: dict[str, bool] = {}
+            for case in cases:
+                reference_report = case.get("reference_report")
+                if reference_report is not None and not isinstance(reference_report, str):
+                    raise ValueError("reference_report must be a string")
+                reference_by_case[str(case["case_id"])] = bool(reference_report)
             if include_failures:
                 missing_cases = [
                     case
