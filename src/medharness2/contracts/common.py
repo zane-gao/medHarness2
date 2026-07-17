@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, model_validator
 
 
 SCHEMA_VERSION = "2.0"
@@ -45,7 +45,7 @@ class ModelProvenance(ContractModel):
     version: str = ""
     role: str = ""
     prompt_version: str = ""
-    fallback_used: bool = False
+    fallback_used: StrictBool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

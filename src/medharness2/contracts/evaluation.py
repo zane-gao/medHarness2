@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import Field, StrictFloat, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictFloat, StrictInt, model_validator
 
 from medharness2.contracts.common import (
     SCHEMA_VERSION,
@@ -72,7 +72,7 @@ class HazardJudgement(ContractModel):
     recommended_action: str = Field(min_length=1)
     confidence: StrictFloat | None = Field(default=None, ge=0, le=1)
     evidence_ids: list[str] = Field(default_factory=list)
-    abstain: bool = False
+    abstain: StrictBool = False
     finding: dict[str, Any] | str | None = None
     candidate: dict[str, Any] | str | None = None
     reference: dict[str, Any] | str | None = None
@@ -106,7 +106,7 @@ class HazardDisagreement(ContractModel):
     primary_recommended_action: str = Field(min_length=1)
     reviewer_recommended_action: str = Field(min_length=1)
     disagreement_types: list[Literal["hazard_level", "recommended_action"]] = Field(default_factory=list)
-    requires_adjudication: bool = True
+    requires_adjudication: StrictBool = True
 
 
 class HazardReviewArtifact(ContractModel):
@@ -119,7 +119,7 @@ class HazardReviewArtifact(ContractModel):
     disagreements: list[HazardDisagreement] = Field(default_factory=list)
     agreement_summary: dict[str, Any] = Field(default_factory=dict)
     primary_preserved: Literal[True] = True
-    requires_adjudication: bool = False
+    requires_adjudication: StrictBool = False
 
 
 class HazardAdjudicationDecision(ContractModel):
@@ -130,7 +130,7 @@ class HazardAdjudicationDecision(ContractModel):
     explanation: str = Field(min_length=1)
     confidence: StrictFloat = Field(ge=0, le=1)
     evidence_ids: list[str] = Field(default_factory=list)
-    abstain: bool = False
+    abstain: StrictBool = False
     primary_hazard_level: StrictInt = Field(ge=1, le=5)
     reviewer_hazard_level: StrictInt = Field(ge=1, le=5)
     primary_recommended_action: str = Field(min_length=1)
@@ -223,7 +223,7 @@ class AlignmentAuditArtifact(ContractModel):
     adjudicated_error_candidates: list[dict[str, Any]] = Field(default_factory=list)
     adjudication_summary: dict[str, Any] = Field(default_factory=dict)
     primary_preserved: Literal[True] = True
-    requires_adjudication: bool = False
+    requires_adjudication: StrictBool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")
@@ -271,7 +271,7 @@ class StructureAuditArtifact(ContractModel):
     summary: str = Field(min_length=1)
     issues: list[StructureAuditIssue] = Field(default_factory=list)
     primary_preserved: Literal[True] = True
-    requires_review: bool = False
+    requires_review: StrictBool = False
     metadata: dict[str, Any] = Field(default_factory=dict)
 
     @model_validator(mode="after")

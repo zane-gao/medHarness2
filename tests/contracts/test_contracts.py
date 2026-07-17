@@ -142,3 +142,23 @@ def test_contract_float_fields_reject_boolean_and_string_coercion(bad):
         )
     with pytest.raises(ValidationError):
         DenominatorAggregate.model_validate({"success_rate": bad})
+
+
+@pytest.mark.parametrize("bad", [0, 1, "false", "true", [], {}])
+def test_contract_boolean_fields_reject_implicit_coercion(bad):
+    from medharness2.contracts import HazardJudgement, ModelProvenance
+
+    with pytest.raises(ValidationError):
+        HazardJudgement.model_validate(
+            {
+                "error_type": "other",
+                "hazard_level": 3,
+                "explanation": "x",
+                "recommended_action": "x",
+                "abstain": bad,
+            }
+        )
+    with pytest.raises(ValidationError):
+        ModelProvenance.model_validate(
+            {"implementation_type": "test", "fallback_used": bad}
+        )
