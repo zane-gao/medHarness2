@@ -148,18 +148,39 @@ class CaseManifest:
                     return value
             return default
 
+        def _optional_string_alias(default: str, label: str, *keys: str) -> str:
+            values = []
+            for key in keys:
+                if key in payload and payload[key] is not None:
+                    value = payload[key]
+                    if not isinstance(value, str):
+                        raise ValueError(f"{key} ({label}) must be a string")
+                    values.append(value)
+            for value in values:
+                if value:
+                    return value
+            return default
+
+        def _object_field(default: dict[str, Any], label: str) -> dict[str, Any]:
+            value = payload.get(label)
+            if value is None:
+                return dict(default)
+            if not isinstance(value, dict):
+                raise ValueError(f"{label} must be an object")
+            return dict(value)
+
         return cls(
             case_id=_string_alias("", "case identity", "case_id", "id"),
             reader=_string_alias("unknown", "reader identity", "reader", "radiologist_id"),
             modality=_string_alias("unknown", "modality", "modality"),
             body_part=_string_alias("unknown", "body part", "body_part"),
-            report_pdf=str(payload.get("report_pdf") or ""),
-            report_text=str(payload.get("report_text") or payload.get("report_text_path") or ""),
+            report_pdf=_optional_string_alias("", "report PDF path", "report_pdf"),
+            report_text=_optional_string_alias("", "report text", "report_text", "report_text_path"),
             image_paths=image_paths,
-            volume_path=str(payload["volume_path"]) if payload.get("volume_path") else None,
-            derived_assets=dict(payload.get("derived_assets") or {}),
+            volume_path=_optional_string_alias("", "volume path", "volume_path") or None,
+            derived_assets=_object_field({}, "derived_assets"),
             warnings=warnings,
-            metadata=dict(payload.get("metadata") or {}),
+            metadata=_object_field({}, "metadata"),
         )
 
 

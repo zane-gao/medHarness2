@@ -27,3 +27,17 @@ def test_case_manifest_preserves_string_lists():
 def test_case_manifest_rejects_non_string_identity_fields(field, bad):
     with pytest.raises(ValueError, match=field):
         CaseManifest.from_json({field: bad})
+
+
+@pytest.mark.parametrize("field", ["report_pdf", "report_text", "report_text_path", "volume_path"])
+@pytest.mark.parametrize("bad", [{"path": "x"}, 7, True, ["x"]])
+def test_case_manifest_rejects_non_string_path_fields(field, bad):
+    with pytest.raises(ValueError, match=field):
+        CaseManifest.from_json({field: bad})
+
+
+@pytest.mark.parametrize("field", ["derived_assets", "metadata"])
+@pytest.mark.parametrize("bad", ["not-an-object", ["x"], 7, True])
+def test_case_manifest_rejects_non_object_metadata_fields(field, bad):
+    with pytest.raises(ValueError, match=field):
+        CaseManifest.from_json({field: bad})
