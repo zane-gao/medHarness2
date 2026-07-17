@@ -78,18 +78,16 @@ def analyze_run(output_dir: str | Path, analysis_dir: str | Path | None = None) 
 
         selected_counter = Counter(selected_models)
         for report in reports:
-            model = str(report.get("model") or "unknown")
-            source = str(report.get("source") or "unknown")
-            evidence_tier = str(
-                report.get("evidence_tier")
-                or (
-                    "debug_fallback"
-                    if legacy_reference_assisted and source == "medharness_cli"
-                    else infer_evidence_tier(source, report.get("metadata") or {})
-                )
+            report = _normalize_generated_report(report, "generated_reports")
+            model = report.get("model") or "unknown"
+            source = report.get("source") or "unknown"
+            evidence_tier = report.get("evidence_tier") or (
+                "debug_fallback"
+                if legacy_reference_assisted and source == "medharness_cli"
+                else infer_evidence_tier(source, report["metadata"])
             )
-            warnings = [str(warning) for warning in report.get("warnings") or []]
-            quality_gate = (report.get("metadata") or {}).get("quality_gate") or {}
+            warnings = list(report["warnings"])
+            quality_gate = report["metadata"].get("quality_gate") or {}
             quality_status = "unknown"
             if quality_gate:
                 if quality_gate.get("passed"):
@@ -324,6 +322,23 @@ def _object_list(value: Any, label: str) -> list[dict[str, Any]]:
     if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
         raise ValueError(f"{label} must be a list of objects")
     return value
+
+
+def _normalize_generated_report(report: dict[str, Any], label: str) -> dict[str, Any]:
+    normalized = dict(report)
+    for field in ("model", "source", "report", "modality", "evidence_tier"):
+        value = normalized.get(field)
+        if value is not None and value != "" and not isinstance(value, str):
+            raise ValueError(f"{label}.{field} must be a string")
+    warnings = normalized.get("warnings", [])
+    if not isinstance(warnings, list) or any(not isinstance(item, str) for item in warnings):
+        raise ValueError(f"{label}.warnings must be a string list")
+    metadata = normalized.get("metadata", {})
+    if not isinstance(metadata, dict):
+        raise ValueError(f"{label}.metadata must be an object")
+    normalized["warnings"] = list(warnings)
+    normalized["metadata"] = dict(metadata)
+    return normalized
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:

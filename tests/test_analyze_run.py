@@ -275,3 +275,15 @@ def test_analyze_run_rejects_non_string_case_identity_fields(tmp_path: Path, fie
 
     with pytest.raises(ValueError, match=field):
         analyze_run(run_dir, tmp_path / "analysis")
+
+
+@pytest.mark.parametrize("field,bad", [("model", 7), ("source", ["artifact"]), ("warnings", "bad"), ("metadata", [])])
+def test_analyze_run_rejects_malformed_generated_report_fields(tmp_path: Path, field, bad):
+    run_dir = _write_run(tmp_path / "run")
+    workflow1_path = run_dir / "workflow2_cases" / "case1.json"
+    workflow1 = json.loads(workflow1_path.read_text(encoding="utf-8"))
+    workflow1["generated_reports"][0][field] = bad
+    workflow1_path.write_text(json.dumps(workflow1), encoding="utf-8")
+
+    with pytest.raises(ValueError, match=f"generated_reports.*{field}"):
+        analyze_run(run_dir, tmp_path / "analysis")
