@@ -1,5 +1,1019 @@
 {
   "$defs": {
+    "CandidateComparisonItem": {
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "minLength": 1,
+          "title": "Entity",
+          "type": "string"
+        },
+        "comparison_type": {
+          "enum": [
+            "agreement",
+            "observation_status",
+            "laterality",
+            "anatomy",
+            "measurement",
+            "severity",
+            "candidate_missing",
+            "internal_status"
+          ],
+          "title": "Comparison Type",
+          "type": "string"
+        },
+        "candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Candidate Ids",
+          "type": "array"
+        },
+        "candidate_values": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Candidate Values",
+          "type": "object"
+        },
+        "missing_candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Candidate Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entity",
+        "comparison_type"
+      ],
+      "title": "CandidateComparisonItem",
+      "type": "object"
+    },
+    "CandidateFailureArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "2.0",
+          "default": "2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "artifact_type": {
+          "const": "candidate_failure",
+          "default": "candidate_failure",
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "candidate_id": {
+          "minLength": 1,
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "route_tier": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route Tier"
+        },
+        "stage": {
+          "default": "generation",
+          "enum": [
+            "generation",
+            "quality_gate",
+            "structure"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "runtime_state": {
+          "default": "unavailable",
+          "title": "Runtime State",
+          "type": "string"
+        },
+        "validation_state": {
+          "default": "unvalidated",
+          "title": "Validation State",
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "model",
+        "source"
+      ],
+      "title": "CandidateFailureArtifact",
+      "type": "object"
+    },
+    "CandidateReportArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "2.0",
+          "default": "2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "artifact_type": {
+          "const": "generated_report",
+          "default": "generated_report",
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "report": {
+          "title": "Report",
+          "type": "string"
+        },
+        "modality": {
+          "minLength": 1,
+          "title": "Modality",
+          "type": "string"
+        },
+        "evidence_tier": {
+          "enum": [
+            "formal_fresh",
+            "exploratory_fresh",
+            "artifact",
+            "debug_fallback",
+            "mock"
+          ],
+          "title": "Evidence Tier",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "candidate_id": {
+          "minLength": 1,
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "route_tier": {
+          "enum": [
+            "exact_modality_body_part",
+            "same_modality",
+            "same_body_part_cross_modality",
+            "universal"
+          ],
+          "title": "Route Tier",
+          "type": "string"
+        },
+        "route_reason": {
+          "minLength": 1,
+          "title": "Route Reason",
+          "type": "string"
+        },
+        "runtime_state": {
+          "enum": [
+            "unavailable",
+            "preflight_only",
+            "runnable",
+            "smoke_verified"
+          ],
+          "title": "Runtime State",
+          "type": "string"
+        },
+        "validation_state": {
+          "enum": [
+            "unvalidated",
+            "engineering_smoke_only",
+            "exploratory",
+            "formal",
+            "quality_blocked"
+          ],
+          "title": "Validation State",
+          "type": "string"
+        },
+        "structure": {
+          "$ref": "#/$defs/CandidateReportStructure"
+        },
+        "candidate_metadata": {
+          "additionalProperties": true,
+          "title": "Candidate Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "model",
+        "source",
+        "report",
+        "modality",
+        "evidence_tier",
+        "candidate_id",
+        "route_tier",
+        "route_reason",
+        "runtime_state",
+        "validation_state",
+        "structure"
+      ],
+      "title": "CandidateReportArtifact",
+      "type": "object"
+    },
+    "CandidateReportStructure": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "2.0",
+          "default": "2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "artifact_type": {
+          "const": "candidate_report_structure",
+          "default": "candidate_report_structure",
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "structure_status": {
+          "enum": [
+            "succeeded",
+            "empty_report",
+            "failed"
+          ],
+          "title": "Structure Status",
+          "type": "string"
+        },
+        "structure_version": {
+          "const": "candidate-structure-v2",
+          "default": "candidate-structure-v2",
+          "title": "Structure Version",
+          "type": "string"
+        },
+        "modality": {
+          "minLength": 1,
+          "title": "Modality",
+          "type": "string"
+        },
+        "body_part": {
+          "minLength": 1,
+          "title": "Body Part",
+          "type": "string"
+        },
+        "sections": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Sections",
+          "type": "object"
+        },
+        "spans": {
+          "items": {
+            "$ref": "#/$defs/CandidateStructureSpan"
+          },
+          "title": "Spans",
+          "type": "array"
+        },
+        "entities": {
+          "items": {
+            "$ref": "#/$defs/CandidateStructureEntity"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "finding_graph": {
+          "$ref": "#/$defs/FindingGraph"
+        },
+        "template": {
+          "$ref": "#/$defs/StructureTemplateAttachment"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        }
+      },
+      "required": [
+        "structure_status",
+        "modality",
+        "body_part",
+        "finding_graph",
+        "template"
+      ],
+      "title": "CandidateReportStructure",
+      "type": "object"
+    },
+    "CandidateStructureComparison": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "2.0",
+          "default": "2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "artifact_type": {
+          "const": "candidate_structure_comparison",
+          "default": "candidate_structure_comparison",
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "structure_version": {
+          "const": "candidate-structure-v2",
+          "default": "candidate-structure-v2",
+          "title": "Structure Version",
+          "type": "string"
+        },
+        "candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Candidate Ids",
+          "type": "array"
+        },
+        "agreement_count": {
+          "minimum": 0,
+          "title": "Agreement Count",
+          "type": "integer"
+        },
+        "conflict_count": {
+          "minimum": 0,
+          "title": "Conflict Count",
+          "type": "integer"
+        },
+        "omission_count": {
+          "minimum": 0,
+          "title": "Omission Count",
+          "type": "integer"
+        },
+        "internal_conflict_count": {
+          "minimum": 0,
+          "title": "Internal Conflict Count",
+          "type": "integer"
+        },
+        "agreements": {
+          "items": {
+            "$ref": "#/$defs/CandidateComparisonItem"
+          },
+          "title": "Agreements",
+          "type": "array"
+        },
+        "conflicts": {
+          "items": {
+            "$ref": "#/$defs/CandidateComparisonItem"
+          },
+          "title": "Conflicts",
+          "type": "array"
+        },
+        "omissions": {
+          "items": {
+            "$ref": "#/$defs/CandidateComparisonItem"
+          },
+          "title": "Omissions",
+          "type": "array"
+        },
+        "internal_conflicts": {
+          "items": {
+            "$ref": "#/$defs/CandidateComparisonItem"
+          },
+          "title": "Internal Conflicts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "agreement_count",
+        "conflict_count",
+        "omission_count",
+        "internal_conflict_count"
+      ],
+      "title": "CandidateStructureComparison",
+      "type": "object"
+    },
+    "CandidateStructureEntity": {
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "minLength": 1,
+          "title": "Entity",
+          "type": "string"
+        },
+        "subject": {
+          "minLength": 1,
+          "title": "Subject",
+          "type": "string"
+        },
+        "anatomy_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Anatomy Code"
+        },
+        "location_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location Text"
+        },
+        "laterality": {
+          "default": "unknown",
+          "enum": [
+            "left",
+            "right",
+            "bilateral",
+            "midline",
+            "unknown"
+          ],
+          "title": "Laterality",
+          "type": "string"
+        },
+        "observation_status": {
+          "enum": [
+            "present",
+            "absent",
+            "uncertain"
+          ],
+          "title": "Observation Status",
+          "type": "string"
+        },
+        "certainty": {
+          "enum": [
+            "present",
+            "absent",
+            "uncertain"
+          ],
+          "title": "Certainty",
+          "type": "string"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "measurements": {
+          "items": {
+            "$ref": "#/$defs/Measurement"
+          },
+          "title": "Measurements",
+          "type": "array"
+        },
+        "attributes": {
+          "additionalProperties": true,
+          "title": "Attributes",
+          "type": "object"
+        },
+        "evidence_span_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Evidence Span Ids",
+          "type": "array"
+        },
+        "evidence_snippets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Evidence Snippets",
+          "type": "array"
+        },
+        "sections": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Sections",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entity",
+        "subject",
+        "observation_status",
+        "certainty"
+      ],
+      "title": "CandidateStructureEntity",
+      "type": "object"
+    },
+    "CandidateStructureSpan": {
+      "additionalProperties": false,
+      "properties": {
+        "span_id": {
+          "minimum": 0,
+          "title": "Span Id",
+          "type": "integer"
+        },
+        "subject": {
+          "minLength": 1,
+          "title": "Subject",
+          "type": "string"
+        },
+        "entity": {
+          "minLength": 1,
+          "title": "Entity",
+          "type": "string"
+        },
+        "anatomy_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Anatomy Code"
+        },
+        "location_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location Text"
+        },
+        "finding_id": {
+          "default": "",
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "attribute": {
+          "minLength": 1,
+          "title": "Attribute",
+          "type": "string"
+        },
+        "value_raw": {
+          "minLength": 1,
+          "title": "Value Raw",
+          "type": "string"
+        },
+        "observation_status": {
+          "enum": [
+            "present",
+            "absent",
+            "uncertain"
+          ],
+          "title": "Observation Status",
+          "type": "string"
+        },
+        "certainty": {
+          "enum": [
+            "present",
+            "absent",
+            "uncertain"
+          ],
+          "title": "Certainty",
+          "type": "string"
+        },
+        "laterality": {
+          "default": "unknown",
+          "enum": [
+            "left",
+            "right",
+            "bilateral",
+            "midline",
+            "unknown"
+          ],
+          "title": "Laterality",
+          "type": "string"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "measurements": {
+          "items": {
+            "$ref": "#/$defs/Measurement"
+          },
+          "title": "Measurements",
+          "type": "array"
+        },
+        "evidence_snippet": {
+          "minLength": 1,
+          "title": "Evidence Snippet",
+          "type": "string"
+        },
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "exclusiveMinimum": 0,
+          "title": "End",
+          "type": "integer"
+        },
+        "section": {
+          "minLength": 1,
+          "title": "Section",
+          "type": "string"
+        },
+        "attributes": {
+          "additionalProperties": true,
+          "title": "Attributes",
+          "type": "object"
+        }
+      },
+      "required": [
+        "span_id",
+        "subject",
+        "entity",
+        "attribute",
+        "value_raw",
+        "observation_status",
+        "certainty",
+        "evidence_snippet",
+        "start",
+        "end",
+        "section"
+      ],
+      "title": "CandidateStructureSpan",
+      "type": "object"
+    },
+    "Finding": {
+      "additionalProperties": false,
+      "properties": {
+        "finding_id": {
+          "minLength": 1,
+          "title": "Finding Id",
+          "type": "string"
+        },
+        "observation_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Code"
+        },
+        "observation_text": {
+          "minLength": 1,
+          "title": "Observation Text",
+          "type": "string"
+        },
+        "anatomy_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Anatomy Code"
+        },
+        "location_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location Text"
+        },
+        "laterality": {
+          "default": "unknown",
+          "enum": [
+            "left",
+            "right",
+            "bilateral",
+            "midline",
+            "unknown"
+          ],
+          "title": "Laterality",
+          "type": "string"
+        },
+        "certainty": {
+          "default": "present",
+          "enum": [
+            "present",
+            "absent",
+            "uncertain"
+          ],
+          "title": "Certainty",
+          "type": "string"
+        },
+        "severity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Severity"
+        },
+        "measurements": {
+          "items": {
+            "$ref": "#/$defs/Measurement"
+          },
+          "title": "Measurements",
+          "type": "array"
+        },
+        "source_span": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextSpan"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_text": {
+          "default": "",
+          "title": "Source Text",
+          "type": "string"
+        },
+        "extractor": {
+          "$ref": "#/$defs/ModelProvenance"
+        },
+        "attributes": {
+          "additionalProperties": true,
+          "title": "Attributes",
+          "type": "object"
+        }
+      },
+      "required": [
+        "finding_id",
+        "observation_text",
+        "extractor"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "FindingGraph": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "2.0",
+          "default": "2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "artifact_type": {
+          "const": "finding_graph",
+          "default": "finding_graph",
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "modality": {
+          "minLength": 1,
+          "title": "Modality",
+          "type": "string"
+        },
+        "backend": {
+          "minLength": 1,
+          "title": "Backend",
+          "type": "string"
+        },
+        "findings": {
+          "items": {
+            "$ref": "#/$defs/Finding"
+          },
+          "title": "Findings",
+          "type": "array"
+        },
+        "relations": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Relations",
+          "type": "array"
+        },
+        "missing": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing",
+          "type": "array"
+        },
+        "coverage": {
+          "default": 0.0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Coverage",
+          "type": "number"
+        },
+        "nodes": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Nodes",
+          "type": "array"
+        },
+        "template_coverage": {
+          "additionalProperties": true,
+          "title": "Template Coverage",
+          "type": "object"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "title": "Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "modality",
+        "backend"
+      ],
+      "title": "FindingGraph",
+      "type": "object"
+    },
+    "FusionReportArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "2.0",
+          "default": "2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "artifact_type": {
+          "const": "fusion_report",
+          "default": "fusion_report",
+          "title": "Artifact Type",
+          "type": "string"
+        },
+        "fusion_status": {
+          "enum": [
+            "disabled",
+            "no_candidates",
+            "role_not_configured",
+            "failed",
+            "empty_output",
+            "succeeded"
+          ],
+          "title": "Fusion Status",
+          "type": "string"
+        },
+        "fusion_model": {
+          "default": "",
+          "title": "Fusion Model",
+          "type": "string"
+        },
+        "report": {
+          "default": "",
+          "title": "Report",
+          "type": "string"
+        },
+        "input_candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Candidate Ids",
+          "type": "array"
+        },
+        "used_image_asset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Used Image Asset"
+        },
+        "structure_version": {
+          "default": "",
+          "title": "Structure Version",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        },
+        "provenance": {
+          "additionalProperties": true,
+          "title": "Provenance",
+          "type": "object"
+        }
+      },
+      "required": [
+        "fusion_status"
+      ],
+      "title": "FusionReportArtifact",
+      "type": "object"
+    },
     "GeneratedReportArtifact": {
       "additionalProperties": false,
       "properties": {
@@ -79,6 +1093,43 @@
       "title": "GeneratedReportArtifact",
       "type": "object"
     },
+    "Measurement": {
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "minimum": 0,
+          "title": "Value",
+          "type": "number"
+        },
+        "unit": {
+          "enum": [
+            "mm",
+            "cm"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "normalized_mm": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Normalized Mm"
+        }
+      },
+      "required": [
+        "value",
+        "unit"
+      ],
+      "title": "Measurement",
+      "type": "object"
+    },
     "ModelProvenance": {
       "additionalProperties": false,
       "properties": {
@@ -128,6 +1179,320 @@
       ],
       "title": "ModelProvenance",
       "type": "object"
+    },
+    "ReferenceFreeRankingArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "minLength": 1,
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "model": {
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "score": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Score",
+          "type": "number"
+        },
+        "ranking_mode": {
+          "enum": [
+            "production_reference_free",
+            "benchmark_reference_free",
+            "replay_reference_free"
+          ],
+          "title": "Ranking Mode",
+          "type": "string"
+        },
+        "metrics": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Metrics",
+          "type": "object"
+        },
+        "ranking_reason": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ranking Reason",
+          "type": "array"
+        },
+        "selected_top_k": {
+          "title": "Selected Top K",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "model",
+        "source",
+        "rank",
+        "score",
+        "ranking_mode",
+        "selected_top_k"
+      ],
+      "title": "ReferenceFreeRankingArtifact",
+      "type": "object"
+    },
+    "RoutePlanArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "normalized_modality": {
+          "minLength": 1,
+          "title": "Normalized Modality",
+          "type": "string"
+        },
+        "normalized_body_part": {
+          "minLength": 1,
+          "title": "Normalized Body Part",
+          "type": "string"
+        },
+        "case_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Case Id"
+        },
+        "generation_mode": {
+          "enum": [
+            "production",
+            "benchmark",
+            "replay"
+          ],
+          "title": "Generation Mode",
+          "type": "string"
+        },
+        "available_input_capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Available Input Capabilities",
+          "type": "array"
+        },
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/RoutePlanEntryArtifact"
+          },
+          "title": "Entries",
+          "type": "array"
+        },
+        "candidate_model_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Candidate Model Keys",
+          "type": "array"
+        }
+      },
+      "required": [
+        "normalized_modality",
+        "normalized_body_part",
+        "generation_mode"
+      ],
+      "title": "RoutePlanArtifact",
+      "type": "object"
+    },
+    "RoutePlanEntryArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "model_key": {
+          "minLength": 1,
+          "title": "Model Key",
+          "type": "string"
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "runtime_state": {
+          "enum": [
+            "unavailable",
+            "preflight_only",
+            "runnable",
+            "smoke_verified"
+          ],
+          "title": "Runtime State",
+          "type": "string"
+        },
+        "validation_state": {
+          "enum": [
+            "unvalidated",
+            "engineering_smoke_only",
+            "exploratory",
+            "formal",
+            "quality_blocked"
+          ],
+          "title": "Validation State",
+          "type": "string"
+        },
+        "route_tier": {
+          "anyOf": [
+            {
+              "enum": [
+                "exact_modality_body_part",
+                "same_modality",
+                "same_body_part_cross_modality",
+                "universal"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route Tier"
+        },
+        "route_reason": {
+          "default": "",
+          "title": "Route Reason",
+          "type": "string"
+        },
+        "eligible": {
+          "title": "Eligible",
+          "type": "boolean"
+        },
+        "excluded_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Excluded Reason"
+        },
+        "input_capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Capabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "model_key",
+        "source",
+        "runtime_state",
+        "validation_state",
+        "eligible"
+      ],
+      "title": "RoutePlanEntryArtifact",
+      "type": "object"
+    },
+    "StructureTemplateAttachment": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "matched",
+            "generic_fallback"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "template_id": {
+          "minLength": 1,
+          "title": "Template Id",
+          "type": "string"
+        },
+        "template_version": {
+          "minLength": 1,
+          "title": "Template Version",
+          "type": "string"
+        },
+        "template_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Template Sha256",
+          "type": "string"
+        },
+        "registry_version": {
+          "minLength": 1,
+          "title": "Registry Version",
+          "type": "string"
+        },
+        "registry_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Registry Sha256",
+          "type": "string"
+        },
+        "matched_on": {
+          "enum": [
+            "exact_modality_body_part",
+            "generic_fallback"
+          ],
+          "title": "Matched On",
+          "type": "string"
+        },
+        "reason": {
+          "default": "",
+          "title": "Reason",
+          "type": "string"
+        },
+        "anatomy_sections": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Anatomy Sections",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "template_id",
+        "template_version",
+        "template_sha256",
+        "registry_version",
+        "registry_sha256",
+        "matched_on"
+      ],
+      "title": "StructureTemplateAttachment",
+      "type": "object"
+    },
+    "TextSpan": {
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "minimum": 0,
+          "title": "Start",
+          "type": "integer"
+        },
+        "end": {
+          "minimum": 0,
+          "title": "End",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "TextSpan",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -154,10 +1519,87 @@
       "title": "Input",
       "type": "object"
     },
+    "generation_mode": {
+      "anyOf": [
+        {
+          "enum": [
+            "benchmark",
+            "replay"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Generation Mode"
+    },
+    "route_plan": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RoutePlanArtifact"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "candidate_reports": {
+      "items": {
+        "$ref": "#/$defs/CandidateReportArtifact"
+      },
+      "title": "Candidate Reports",
+      "type": "array"
+    },
+    "candidate_failures": {
+      "items": {
+        "$ref": "#/$defs/CandidateFailureArtifact"
+      },
+      "title": "Candidate Failures",
+      "type": "array"
+    },
+    "candidate_structure_comparison": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CandidateStructureComparison"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "top_k_reports": {
+      "items": {
+        "$ref": "#/$defs/ReferenceFreeRankingArtifact"
+      },
+      "title": "Top K Reports",
+      "type": "array"
+    },
+    "fusion_report": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FusionReportArtifact"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "human_evaluation": {
-      "additionalProperties": true,
-      "title": "Human Evaluation",
-      "type": "object"
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Human Evaluation"
     },
     "generated_reports": {
       "items": {
@@ -188,6 +1630,13 @@
         "type": "object"
       },
       "title": "Pairwise Comparisons",
+      "type": "array"
+    },
+    "errors": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Errors",
       "type": "array"
     },
     "migration_warnings": {

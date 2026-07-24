@@ -70,9 +70,12 @@ class SingleCaseRequest(BaseModel):
     image_path: str
     output_path: str
     modality: str | None = None
+    body_part: str | None = None
+    generation_mode: str = "benchmark"
     top_n: StrictInt | None = None
     model_keys: list[str] | None = None
     model_sources: list[str] | None = None
+    prepared_assets: dict[str, str] | None = None
     config_path: str | None = None
 
 
@@ -107,6 +110,8 @@ class BatchReadersRequest(BaseModel):
     model_keys: list[str] | None = None
     model_sources: list[str] | None = None
     limit: StrictInt | None = None
+    generation_mode: str = "benchmark"
+    top_n: StrictInt | None = None
     config_path: str | None = None
 
 
@@ -275,15 +280,33 @@ def catalog_tools(config_path: str | None = None) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=f"catalog_tools_failed:{type(exc).__name__}") from exc
 
 
+@app.get("/catalog/models")
+def catalog_models(config_path: str | None = None) -> dict[str, Any]:
+    try:
+        cfg = load_config(config_path) if config_path else load_config()
+        catalog = build_capability_catalog(cfg)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"catalog_models_failed:{type(exc).__name__}") from exc
+    return {
+        "schema_version": catalog.get("schema_version"),
+        "models": catalog.get("models") or [],
+        "model_statuses": catalog.get("model_statuses") or [],
+        "model_status_summary": catalog.get("model_status_summary") or {},
+    }
+
+
 @app.post("/workflow/single-case")
 def single_case(request: SingleCaseRequest) -> dict[str, Any]:
-    if bool(request.report_text) == bool(request.report_path):
+    if request.generation_mode not in {"benchmark", "replay", "production"}:
+        raise HTTPException(status_code=400, detail="generation_mode must be benchmark, replay, or production.")
+    if request.generation_mode != "production" and bool(request.report_text) == bool(request.report_path):
         raise HTTPException(status_code=400, detail="Provide exactly one of report_text or report_path.")
     try:
         cfg = load_config(request.config_path) if request.config_path else load_config()
         with tempfile.TemporaryDirectory(prefix="medharness2_api_") as tmpdir:
-            report_path = Path(request.report_path) if request.report_path else Path(tmpdir) / "report.txt"
-            if request.report_text is not None:
+            report_path = Path(request.report_path) if request.report_path else None
+            if request.generation_mode != "production" and request.report_text is not None:
+                report_path = Path(tmpdir) / "report.txt"
                 report_path.write_text(request.report_text, encoding="utf-8")
             result = run_single_case(
                 report_path=report_path,
@@ -291,24 +314,43 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
                 output_path=Path(request.output_path),
                 case_id=request.case_id,
                 modality=request.modality,
+                body_part=request.body_part,
                 top_n=request.top_n,
                 model_keys=request.model_keys,
                 model_sources=request.model_sources,
+                prepared_assets=request.prepared_assets,
                 config=cfg,
+                generation_mode=request.generation_mode,
             )
         result = _result_mapping(result, "single_case.result")
         _result_mapping(result.get("input"), "single_case.input")
         _result_string_list(result.get("errors"), "single_case.errors")
-        for field in ("generated_reports", "generated_evaluations", "rankings", "pairwise_comparisons"):
+        for field in (
+            "generated_reports",
+            "generated_evaluations",
+            "rankings",
+            "pairwise_comparisons",
+            "candidate_reports",
+            "candidate_failures",
+            "top_k_reports",
+        ):
             value = result.get(field)
             if value is not None and not isinstance(value, list):
                 raise ValueError(f"single_case.{field} must be a list")
+        fusion = result.get("fusion_report")
+        if fusion is not None and not isinstance(fusion, dict):
+            raise ValueError("single_case.fusion_report must be an object")
     except Exception as exc:
         _record_registry(
             Path(request.output_path).parent,
             stage="workflow.single-case",
             status="failed",
-            inputs={"output_path": request.output_path, "case_id": request.case_id or ""},
+            inputs={
+                "output_path": request.output_path,
+                "case_id": request.case_id or "",
+                "body_part": request.body_part or "",
+                "generation_mode": request.generation_mode,
+            },
             outputs={"result": request.output_path},
             metrics={"error_count": 1},
             warnings=[f"{type(exc).__name__}: {exc}"],
@@ -320,13 +362,27 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
     generated_evaluations = result.get("generated_evaluations") or []
     rankings = result.get("rankings") or []
     pairwise_comparisons = result.get("pairwise_comparisons") or []
+    candidate_reports = result.get("candidate_reports") or []
+    top_k_reports = result.get("top_k_reports") or []
+    fusion_report = result.get("fusion_report") or {}
     _record_registry(
         Path(request.output_path).parent,
         stage="workflow.single-case",
         status="failed" if result_errors else "passed",
-        inputs={"output_path": request.output_path, "case_id": request.case_id or ""},
+        inputs={
+            "output_path": request.output_path,
+            "case_id": request.case_id or "",
+            "body_part": request.body_part or "",
+            "generation_mode": request.generation_mode,
+        },
         outputs={"result": request.output_path},
-        metrics={"generated_report_count": len(generated_reports), "error_count": len(result_errors)},
+        metrics={
+            "generated_report_count": len(generated_reports),
+            "candidate_report_count": len(candidate_reports),
+            "top_k_report_count": len(top_k_reports),
+            "fusion_succeeded": fusion_report.get("fusion_status") == "succeeded",
+            "error_count": len(result_errors),
+        },
         warnings=result_errors,
     )
     return {
@@ -334,6 +390,9 @@ def single_case(request: SingleCaseRequest) -> dict[str, Any]:
         "summary": {
             "modality": result_input.get("modality"),
             "generated_reports": len(generated_reports),
+            "candidate_reports": len(candidate_reports),
+            "top_k_reports": len(top_k_reports),
+            "fusion_status": fusion_report.get("fusion_status"),
             "pairwise_comparisons": len(pairwise_comparisons),
             "rankings": len(rankings),
             "errors": result_errors,
@@ -607,6 +666,8 @@ def sample_full(request: SampleFullRequest) -> dict[str, Any]:
 
 @app.post("/workflow/batch-readers")
 def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
+    if request.generation_mode not in {"benchmark", "replay", "production"}:
+        raise HTTPException(status_code=400, detail="generation_mode must be benchmark, replay, or production.")
     try:
         cfg = load_config(request.config_path) if request.config_path else load_config()
         result = run_batch_readers(
@@ -615,6 +676,8 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
             model_keys=request.model_keys,
             model_sources=request.model_sources,
             limit=request.limit,
+            generation_mode=request.generation_mode,
+            top_n=request.top_n,
             config=cfg,
         )
         result = _result_mapping(result, "batch_readers.result")
@@ -627,7 +690,11 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
             Path(request.output_path).parent,
             stage="workflow.batch-readers",
             status="failed",
-            inputs={"manifest": request.manifest_path},
+            inputs={
+                "manifest": request.manifest_path,
+                "generation_mode": request.generation_mode,
+                "top_n": request.top_n,
+            },
             outputs={"workflow2": request.output_path},
             metrics={"error_count": 1},
             warnings=[f"{type(exc).__name__}: {exc}"],
@@ -637,14 +704,32 @@ def batch_readers(request: BatchReadersRequest) -> dict[str, Any]:
         Path(request.output_path).parent,
         stage="workflow.batch-readers",
         status="failed" if errors or failed_case_count else "passed",
-        inputs={"manifest": request.manifest_path},
+        inputs={
+            "manifest": request.manifest_path,
+            "generation_mode": request.generation_mode,
+            "top_n": request.top_n,
+        },
         outputs={"workflow2": request.output_path},
-        metrics={"case_count": case_count, "failed_case_count": failed_case_count, "reader_count": len(per_reader)},
+        metrics={
+            "case_count": case_count,
+            "failed_case_count": failed_case_count,
+            "reader_count": len(per_reader),
+            **(
+                _result_mapping(result.get("production_summary"), "batch_readers.production_summary")
+                if request.generation_mode == "production"
+                else {}
+            ),
+        },
         warnings=errors,
     )
     return {
         "output_path": request.output_path,
-        "summary": {"cases": case_count, "readers": len(per_reader), "errors": errors},
+        "summary": {
+            "cases": case_count,
+            "readers": len(per_reader),
+            "generation_mode": request.generation_mode,
+            "errors": errors,
+        },
         "result": result,
     }
 

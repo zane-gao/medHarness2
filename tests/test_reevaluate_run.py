@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from medharness2.cli import main
 from medharness2.config import AppConfig, ExtractorConfig, GeneratorConfig, LLMConfig
@@ -101,7 +102,7 @@ def test_reevaluate_run_reuses_generated_reports_without_generation(tmp_path: Pa
     report = tmp_path / "human.txt"
     image = tmp_path / "image.png"
     report.write_text("检查所见：右上肺见8mm结节影。未见气胸。诊断印象：右上肺结节。", encoding="utf-8")
-    image.write_bytes(b"\x89PNG\r\n\x1a\n")
+    Image.new("L", (4, 4), color=0).save(image)
     _write_json(
         source / "workflow2.json",
         {
@@ -142,11 +143,17 @@ def test_reevaluate_run_reuses_generated_reports_without_generation(tmp_path: Pa
             "generated_reports": [
                 {
                     "model": "existing_model",
-                    "source": "artifact_reuse",
+                    "source": "local",
                     "report": "FINDINGS: Right upper lung nodule measuring 8 mm. No pneumothorax.",
                     "modality": "cxr",
                     "warnings": [],
-                    "metadata": {"quality_gate": {"passed": True}},
+                    "metadata": {
+                        "generator_key": "existing_model",
+                        "case_id": "case1",
+                        "reference_report_used": False,
+                        "fresh_inference": True,
+                        "quality_gate": {"passed": True},
+                    },
                 }
             ],
             "generated_evaluations": [],
@@ -158,7 +165,22 @@ def test_reevaluate_run_reuses_generated_reports_without_generation(tmp_path: Pa
     cfg = AppConfig(
         llm=LLMConfig(provider="mock"),
         extractor=ExtractorConfig(backend="cxr_rule"),
-        generator=GeneratorConfig(default_models=[], local_models=[], include_legacy_ready_models=False),
+        generator=GeneratorConfig(
+            default_models=["existing_model"],
+            include_legacy_ready_models=False,
+            local_models=[
+                {
+                    "key": "existing_model",
+                    "source": "local",
+                    "supported_modalities": ["cxr"],
+                    "supported_body_parts": ["chest"],
+                    "ready": True,
+                    "runtime_state": "runnable",
+                    "validation_state": "engineering_smoke_only",
+                    "input_capabilities": ["image_2d"],
+                }
+            ],
+        ),
     )
 
     result = reevaluate_run(source, output, config=cfg)

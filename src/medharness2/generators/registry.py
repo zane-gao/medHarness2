@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -12,17 +14,15 @@ import yaml
 
 from medharness2.config import AppConfig, resolve_existing_path
 from medharness2.contracts import infer_evidence_tier
+from medharness2.generators.assets import (
+    available_input_capabilities as _asset_input_capabilities,
+    looks_like_volume as _asset_looks_like_volume,
+)
+from medharness2.generators.routing import RoutePlan, build_route_plan
 from medharness2.modality import normalize_modality
 from medharness2.schema import FORMAL_FRESH_SOURCES, GeneratedReport
+from medharness2.utils.processes import run_isolated_process
 
-
-_LEGACY_FORMAL_ROUTE_EXCLUDE = {
-    "chexagent_srrg_findings",
-    "chexagent_srrg_impression",
-    "lingshu_srrg_findings",
-    "histgen",
-    "pathgenic",
-}
 
 _GENERATION_PARAMETER_FIELDS = {
     "do_sample",
@@ -31,6 +31,13 @@ _GENERATION_PARAMETER_FIELDS = {
     "top_p",
     "top_k",
     "repetition_penalty",
+}
+_VALIDATION_STATES = {
+    "unvalidated",
+    "engineering_smoke_only",
+    "exploratory",
+    "formal",
+    "quality_blocked",
 }
 
 
@@ -105,12 +112,30 @@ class GeneratorEntry:
     prompt_version: str = ""
     preprocessing_version: str = ""
     formal_validation_id: str = ""
+    runtime_state: str = ""
+    validation_state: str = "unvalidated"
+    input_capabilities: list[str] = field(default_factory=list)
+    cross_modality_allowed: bool = False
+    is_universal: bool = False
+    resource_status: str = ""
+    quality_gate_blocked: bool = False
+    blocked_reason: str = ""
+    latest_evidence: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.max_new_tokens = _strict_positive_int(self.max_new_tokens, "max_new_tokens", 160)
         self.timeout_sec = _strict_positive_int(self.timeout_sec, "timeout_sec", 1800)
         if not self.evidence_tier:
             self.evidence_tier = infer_evidence_tier(self.source)
+        if not self.runtime_state:
+            self.runtime_state = "runnable" if self.ready else "unavailable"
+        if self.runtime_state not in {"unavailable", "preflight_only", "runnable", "smoke_verified"}:
+            raise ValueError(f"Unsupported runtime_state: {self.runtime_state}")
+        self.ready = self.runtime_state in {"runnable", "smoke_verified"}
+        if not self.resource_status:
+            self.resource_status = "ready" if self.ready else self.runtime_state
+        if self.validation_state not in _VALIDATION_STATES:
+            raise ValueError(f"Unsupported validation_state: {self.validation_state}")
 
     def readiness_metadata(self) -> dict[str, Any]:
         return {
@@ -119,6 +144,15 @@ class GeneratorEntry:
             "report_training": self.report_training,
             "fresh_inference": self.fresh_inference,
             "ready": self.ready,
+            "runtime_state": self.runtime_state,
+            "validation_state": self.validation_state,
+            "input_capabilities": list(self.input_capabilities),
+            "cross_modality_allowed": self.cross_modality_allowed,
+            "is_universal": self.is_universal,
+            "resource_status": self.resource_status,
+            "quality_gate_blocked": self.quality_gate_blocked,
+            "blocked_reason": self.blocked_reason,
+            "latest_evidence": dict(self.latest_evidence),
             "source": self.source,
             "evidence_tier": self.evidence_tier,
             "route_role": self.route_role,
@@ -145,7 +179,7 @@ class GeneratorEntry:
 
     @property
     def route_role(self) -> str:
-        if self.report_trained and self.fresh_inference:
+        if self.report_trained and self.ready and self.source != "artifact_reuse":
             return "fresh_report_trained_local"
         if self.report_trained and self.source == "artifact_reuse":
             return "artifact_report_trained_local"
@@ -159,7 +193,27 @@ class ReportGeneratorRegistry:
         self.config = config
         entries = self._load_entries(config.generator.local_models)
         if config.generator.include_legacy_ready_models:
-            entries.extend(self._load_legacy_entries(config.generator.legacy_config_path))
+            entries.extend(
+                self._load_legacy_entries(
+                    config.generator.legacy_config_path,
+                    default_python_bin=config.llm.local_cli_python_bin,
+                )
+            )
+        if config.generator.external_vlm_enabled:
+            entries.append(
+                GeneratorEntry(
+                    key=config.generator.external_vlm_key,
+                    title=config.generator.external_vlm_title,
+                    source="external_vlm",
+                    supported_modalities=["unknown"],
+                    supported_body_parts=["unknown"],
+                    runtime_state="runnable",
+                    validation_state="unvalidated",
+                    input_capabilities=list(config.generator.external_vlm_input_capabilities),
+                    is_universal=True,
+                    generation_parameters={"model_role": config.generator.external_vlm_model_role},
+                )
+            )
         self.entries = {}
         for entry in entries:
             self.entries.setdefault(entry.key, entry)
@@ -170,24 +224,59 @@ class ReportGeneratorRegistry:
         requested: list[str] | None = None,
         body_part: str | None = None,
         sources: set[str] | None = None,
+        *,
+        image_path: str | None = None,
+        prepared_assets: dict[str, Any] | None = None,
+        case_id: str | None = None,
+        generation_mode: str = "production",
     ) -> list[GeneratorEntry]:
-        modality_key = _normalize_route_modality(modality)
-        if (requested and "*" in requested) or (requested is None and "*" in self.config.generator.default_models):
-            return self.compatible_entries(modality_key, body_part=body_part, sources=sources)
-        keys = requested or self.config.generator.default_models
-        selected: list[GeneratorEntry] = []
-        for key in keys:
-            entry = self.entries.get(key)
-            if not entry:
-                continue
-            if sources and entry.source not in sources:
-                continue
-            supported = {m.lower() for m in entry.supported_modalities}
-            body_supported = {part.lower() for part in entry.supported_body_parts}
-            modality_ok = "unknown" in supported or modality_key in {_normalize_route_modality(item) for item in supported}
-            if modality_ok:
-                selected.append(entry)
-        return selected
+        return list(
+            self.plan_routes(
+                modality,
+                body_part=body_part,
+                requested=requested,
+                sources=sources,
+                image_path=image_path,
+                prepared_assets=prepared_assets,
+                case_id=case_id,
+                generation_mode=generation_mode,
+            ).candidate_entries
+        )
+
+    def plan_routes(
+        self,
+        modality: str,
+        *,
+        body_part: str | None = None,
+        requested: list[str] | None = None,
+        sources: set[str] | None = None,
+        image_path: str | None = None,
+        prepared_assets: dict[str, Any] | None = None,
+        case_id: str | None = None,
+        generation_mode: str = "production",
+    ) -> RoutePlan:
+        keys = list(requested) if requested is not None else list(self.config.generator.default_models)
+        requested_filter = set(keys) if keys else {"__no_models_requested__"}
+        if "*" in requested_filter:
+            requested_filter = set()
+        artifact_excluded_reasons = {
+            entry.key: reason
+            for entry in self.entries.values()
+            if entry.source == "artifact_reuse"
+            for reason in [_artifact_route_excluded_reason(entry, case_id, generation_mode)]
+            if reason is not None
+        }
+        return build_route_plan(
+            self.entries.values(),
+            modality=modality,
+            body_part=body_part,
+            case_id=case_id,
+            generation_mode=generation_mode,
+            available_input_capabilities=_available_input_capabilities(image_path, prepared_assets),
+            requested=requested_filter,
+            sources=sources,
+            entry_excluded_reasons=artifact_excluded_reasons,
+        )
 
     def compatible_entries(
         self,
@@ -199,6 +288,8 @@ class ReportGeneratorRegistry:
         result: list[GeneratorEntry] = []
         for entry in self.entries.values():
             if sources and entry.source not in sources:
+                continue
+            if not entry.ready or entry.validation_state == "quality_blocked":
                 continue
             supported = {m.lower() for m in entry.supported_modalities}
             body_supported = {part.lower() for part in entry.supported_body_parts}
@@ -222,6 +313,7 @@ class ReportGeneratorRegistry:
         reference_report: str | None = None,
         body_part: str | None = None,
         case_id: str | None = None,
+        generation_mode: str = "production",
     ) -> GeneratedReport:
         if entry.source == "artifact_reuse":
             result = self._generate_artifact(
@@ -229,6 +321,7 @@ class ReportGeneratorRegistry:
                 image_path=image_path,
                 modality=modality,
                 case_id=case_id,
+                generation_mode=generation_mode,
             )
         elif entry.source == "medharness_cli":
             result = self._generate_medharness_cli(
@@ -279,22 +372,58 @@ class ReportGeneratorRegistry:
         image_path: str,
         modality: str,
         case_id: str | None = None,
+        generation_mode: str = "production",
     ) -> GeneratedReport:
-        source = resolve_existing_path(entry.source_generation_jsonl) if entry.source_generation_jsonl else Path("")
-        if not source.exists():
+        if generation_mode not in {"benchmark", "replay"}:
             return GeneratedReport(
                 model=entry.key,
                 source=entry.source,
                 report="",
                 modality=modality,
-                warnings=["artifact_missing", str(source)],
+                warnings=["artifact_mode_not_enabled"],
+                metadata={"generation_mode": generation_mode, "image_path": image_path},
             )
-        fallback_row: dict[str, Any] | None = None
+        if not case_id:
+            return GeneratedReport(
+                model=entry.key,
+                source=entry.source,
+                report="",
+                modality=modality,
+                warnings=["artifact_case_id_required"],
+                metadata={"generation_mode": generation_mode, "image_path": image_path},
+            )
+        source = resolve_existing_path(entry.source_generation_jsonl) if entry.source_generation_jsonl else None
+        artifact_reason = _artifact_route_excluded_reason(entry, case_id, generation_mode)
+        if artifact_reason is not None:
+            return GeneratedReport(
+                model=entry.key,
+                source=entry.source,
+                report="",
+                modality=modality,
+                warnings=[artifact_reason],
+                metadata={
+                    "source_generation_jsonl": str(source or ""),
+                    "image_path": image_path,
+                    "generation_mode": generation_mode,
+                    "case_id": case_id,
+                },
+            )
+        assert source is not None
+        matched_rows: list[dict[str, Any]] = []
         with source.open("r", encoding="utf-8") as f:
             for line in f:
                 if not line.strip():
                     continue
-                row = json.loads(line)
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    return GeneratedReport(
+                        model=entry.key,
+                        source=entry.source,
+                        report="",
+                        modality=modality,
+                        warnings=["artifact_invalid_jsonl"],
+                    )
                 if not isinstance(row, dict):
                     return GeneratedReport(
                         model=entry.key,
@@ -303,10 +432,8 @@ class ReportGeneratorRegistry:
                         modality=modality,
                         warnings=["artifact_invalid_row"],
                     )
-                if fallback_row is None:
-                    fallback_row = row
-                raw_case_id = row.get("case_id") if "case_id" in row else row.get("sample_id")
-                if raw_case_id is not None and not isinstance(raw_case_id, str):
+                raw_case_id = row.get("case_id")
+                if not isinstance(raw_case_id, str) or not raw_case_id:
                     return GeneratedReport(
                         model=entry.key,
                         source=entry.source,
@@ -314,53 +441,10 @@ class ReportGeneratorRegistry:
                         modality=modality,
                         warnings=["artifact_invalid_case_id"],
                     )
-                row_case_id = raw_case_id or ""
-                if case_id and row_case_id and row_case_id != str(case_id):
+                if raw_case_id != str(case_id):
                     continue
-                if case_id and not row_case_id:
-                    # A legacy single-row artifact has no case identity; keep
-                    # it compatible only when the file is unambiguously one row.
-                    remainder = [item for item in f if item.strip()]
-                    if remainder:
-                        return GeneratedReport(
-                            model=entry.key,
-                            source=entry.source,
-                            report="",
-                            modality=modality,
-                            warnings=["artifact_case_id_missing_for_multi_case_artifact"],
-                            metadata={"source_generation_jsonl": str(source), "image_path": image_path},
-                        )
-                raw_report = row.get("generated_text") or row.get("generated_report") or row.get("prediction_text") or row.get("Pred") or ""
-                if not isinstance(raw_report, str):
-                    return GeneratedReport(
-                        model=entry.key,
-                        source=entry.source,
-                        report="",
-                        modality=modality,
-                        warnings=["artifact_invalid_report_text"],
-                    )
-                raw_modality = row.get("modality")
-                if raw_modality is not None and not isinstance(raw_modality, str):
-                    return GeneratedReport(
-                        model=entry.key,
-                        source=entry.source,
-                        report="",
-                        modality=modality,
-                        warnings=["artifact_invalid_modality"],
-                    )
-                return GeneratedReport(
-                    model=entry.key,
-                    source=entry.source,
-                    report=raw_report,
-                    modality=raw_modality or modality,
-                    warnings=["artifact_reuse_not_fresh_inference"],
-                    metadata={
-                        "case_id": row.get("case_id") or row.get("sample_id"),
-                        "source_generation_jsonl": str(source),
-                        "image_path": image_path,
-                    },
-                )
-        if case_id:
+                matched_rows.append(row)
+        if not matched_rows:
             return GeneratedReport(
                 model=entry.key,
                 source=entry.source,
@@ -369,27 +453,35 @@ class ReportGeneratorRegistry:
                 warnings=["artifact_case_not_found", str(case_id)],
                 metadata={"source_generation_jsonl": str(source), "image_path": image_path},
             )
-        if fallback_row is not None:
-            row = fallback_row
-            raw_report = row.get("generated_text") or row.get("generated_report") or row.get("prediction_text") or row.get("Pred") or ""
-            if not isinstance(raw_report, str):
-                return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["artifact_invalid_report_text"])
-            raw_modality = row.get("modality")
-            if raw_modality is not None and not isinstance(raw_modality, str):
-                return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["artifact_invalid_modality"])
+        if len(matched_rows) > 1:
             return GeneratedReport(
                 model=entry.key,
                 source=entry.source,
-                report=raw_report,
-                modality=raw_modality or modality,
-                warnings=["artifact_reuse_not_fresh_inference"],
-                metadata={
-                    "case_id": row.get("case_id") or row.get("sample_id"),
-                    "source_generation_jsonl": str(source),
-                    "image_path": image_path,
-                },
+                report="",
+                modality=modality,
+                warnings=["artifact_case_id_ambiguous", str(case_id)],
+                metadata={"source_generation_jsonl": str(source), "image_path": image_path},
             )
-        return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["artifact_empty"])
+        row = matched_rows[0]
+        raw_report = row.get("generated_text") or row.get("generated_report") or row.get("prediction_text") or row.get("Pred") or ""
+        if not isinstance(raw_report, str):
+            return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["artifact_invalid_report_text"])
+        raw_modality = row.get("modality")
+        if raw_modality is not None and not isinstance(raw_modality, str):
+            return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["artifact_invalid_modality"])
+        return GeneratedReport(
+            model=entry.key,
+            source=entry.source,
+            report=raw_report,
+            modality=raw_modality or modality,
+            warnings=["artifact_reuse_not_fresh_inference"],
+            metadata={
+                "case_id": row.get("case_id"),
+                "source_generation_jsonl": str(source),
+                "image_path": image_path,
+                "generation_mode": generation_mode,
+            },
+        )
 
     def _generate_medharness_cli(
         self,
@@ -439,7 +531,7 @@ class ReportGeneratorRegistry:
                 str(entry.max_new_tokens),
             ]
             try:
-                _run_legacy_subprocess(cmd, entry)
+                completed = _run_legacy_subprocess(cmd, entry)
             except subprocess.CalledProcessError as exc:
                 return GeneratedReport(
                     model=entry.key,
@@ -447,18 +539,30 @@ class ReportGeneratorRegistry:
                     report="",
                     modality=modality,
                     warnings=["legacy_generation_failed", (exc.stderr or exc.stdout)[-1000:]],
-                    metadata={"cmd": _redacted_cmd(cmd)},
+                    metadata={
+                        "cmd": _redacted_cmd(cmd),
+                        **_exception_process_metadata(exc),
+                    },
                 )
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired as exc:
                 return GeneratedReport(
                     model=entry.key,
                     source=entry.source,
                     report="",
                     modality=modality,
                     warnings=["legacy_generation_timeout"],
-                    metadata={"cmd": _redacted_cmd(cmd)},
+                    metadata={
+                        "cmd": _redacted_cmd(cmd),
+                        **_exception_process_metadata(exc),
+                    },
                 )
-            return self._read_legacy_output(entry, output_jsonl, modality=modality, cmd=cmd)
+            return self._read_legacy_output(
+                entry,
+                output_jsonl,
+                modality=modality,
+                cmd=cmd,
+                process_provenance=_completed_process_provenance(completed),
+            )
 
     def generate_batch(
         self,
@@ -525,7 +629,7 @@ class ReportGeneratorRegistry:
                 str(entry.max_new_tokens),
             ]
             try:
-                _run_legacy_subprocess(cmd, entry)
+                completed = _run_legacy_subprocess(cmd, entry)
             except subprocess.CalledProcessError as exc:
                 detail = (exc.stderr or exc.stdout or "")[-1000:]
                 return self._batch_failure_reports(
@@ -534,16 +638,24 @@ class ReportGeneratorRegistry:
                     warning="legacy_batch_generation_failed",
                     detail=detail,
                     cmd=cmd,
+                    process_provenance=_value_process_provenance(exc),
                 ) if include_failures else {}
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired as exc:
                 return self._batch_failure_reports(
                     entry,
                     cases,
                     warning="legacy_batch_generation_timeout",
                     detail=f"timeout_sec:{entry.timeout_sec}",
                     cmd=cmd,
+                    process_provenance=_value_process_provenance(exc),
                 ) if include_failures else {}
-            reports = self._read_legacy_output_map(entry, output_jsonl, cmd=cmd)
+            process_provenance = _completed_process_provenance(completed)
+            reports = self._read_legacy_output_map(
+                entry,
+                output_jsonl,
+                cmd=cmd,
+                process_provenance=process_provenance,
+            )
             reference_by_case: dict[str, bool] = {}
             for case in cases:
                 reference_report = case.get("reference_report")
@@ -563,6 +675,7 @@ class ReportGeneratorRegistry:
                         warning="legacy_batch_output_missing",
                         detail="No output row was returned for this case.",
                         cmd=cmd,
+                        process_provenance=process_provenance,
                     )
                 )
             for case_id, report in reports.items():
@@ -582,6 +695,7 @@ class ReportGeneratorRegistry:
         warning: str,
         detail: str,
         cmd: list[str] | None = None,
+        process_provenance: dict[str, Any] | None = None,
     ) -> dict[str, GeneratedReport]:
         reports: dict[str, GeneratedReport] = {}
         for case in cases:
@@ -597,6 +711,11 @@ class ReportGeneratorRegistry:
                     "batch_error": detail,
                     "reference_report_used": False,
                     **({"cmd": _redacted_cmd(cmd)} if cmd else {}),
+                    **(
+                        {"process_provenance": process_provenance}
+                        if process_provenance is not None
+                        else {}
+                    ),
                 },
             )
             cls._apply_entry_metadata(entry, report)
@@ -651,9 +770,24 @@ class ReportGeneratorRegistry:
         return output_path
 
     @staticmethod
-    def _read_legacy_output(entry: GeneratorEntry, output_jsonl: Path, *, modality: str, cmd: list[str]) -> GeneratedReport:
+    def _read_legacy_output(
+        entry: GeneratorEntry,
+        output_jsonl: Path,
+        *,
+        modality: str,
+        cmd: list[str],
+        process_provenance: dict[str, Any] | None = None,
+    ) -> GeneratedReport:
         if not output_jsonl.exists():
-            return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["legacy_output_missing"])
+            return GeneratedReport(
+                model=entry.key,
+                source=entry.source,
+                report="",
+                modality=modality,
+                warnings=["legacy_output_missing"],
+                metadata=_legacy_output_metadata({}, cmd, process_provenance),
+                evidence_tier=entry.evidence_tier,
+            )
         with output_jsonl.open("r", encoding="utf-8") as f:
             for line in f:
                 if not line.strip():
@@ -666,13 +800,27 @@ class ReportGeneratorRegistry:
                     report=str(report),
                     modality=str(row.get("modality") or modality),
                     warnings=_string_list(row.get("warnings"), "warnings"),
-                    metadata=_legacy_output_metadata(row, cmd),
+                    metadata=_legacy_output_metadata(row, cmd, process_provenance),
                     evidence_tier=entry.evidence_tier,
                 )
-        return GeneratedReport(model=entry.key, source=entry.source, report="", modality=modality, warnings=["legacy_output_empty"])
+        return GeneratedReport(
+            model=entry.key,
+            source=entry.source,
+            report="",
+            modality=modality,
+            warnings=["legacy_output_empty"],
+            metadata=_legacy_output_metadata({}, cmd, process_provenance),
+            evidence_tier=entry.evidence_tier,
+        )
 
     @staticmethod
-    def _read_legacy_output_map(entry: GeneratorEntry, output_jsonl: Path, *, cmd: list[str]) -> dict[str, GeneratedReport]:
+    def _read_legacy_output_map(
+        entry: GeneratorEntry,
+        output_jsonl: Path,
+        *,
+        cmd: list[str],
+        process_provenance: dict[str, Any] | None = None,
+    ) -> dict[str, GeneratedReport]:
         if not output_jsonl.exists():
             return {}
         reports: dict[str, GeneratedReport] = {}
@@ -691,7 +839,7 @@ class ReportGeneratorRegistry:
                     report=str(report),
                     modality=str(row.get("modality") or ""),
                     warnings=_strict_string_list(row.get("warnings"), "warnings"),
-                    metadata=_legacy_output_metadata(row, cmd),
+                    metadata=_legacy_output_metadata(row, cmd, process_provenance),
                     evidence_tier=entry.evidence_tier,
                 )
         return reports
@@ -700,18 +848,27 @@ class ReportGeneratorRegistry:
     def _load_entries(rows: list[dict[str, Any]]) -> list[GeneratorEntry]:
         entries: list[GeneratorEntry] = []
         for row in rows:
+            source = str(row.get("source") or "local")
+            ready = _strict_bool(row.get("ready"), "ready", False)
+            runtime_state = str(row.get("runtime_state") or "")
+            if not runtime_state:
+                if source == "artifact_reuse":
+                    artifact_path = _resolved_path_text(row.get("source_generation_jsonl") or "")
+                    runtime_state = "runnable" if artifact_path and Path(artifact_path).is_file() else "unavailable"
+                else:
+                    runtime_state = "runnable" if ready else "unavailable"
             entries.append(
                 GeneratorEntry(
                     key=str(row.get("key") or row.get("name") or ""),
                     title=str(row.get("title") or row.get("key") or ""),
-                    source=str(row.get("source") or "local"),
+                    source=source,
                     supported_modalities=_string_list(row.get("supported_modalities"), "supported_modalities", ["unknown"]),
                     supported_body_parts=_string_list(row.get("supported_body_parts"), "supported_body_parts", ["unknown"]),
-                    ready=_strict_bool(row.get("ready"), "ready", str(row.get("source") or "") == "artifact_reuse"),
-                    category=str(row.get("category") or _default_category(str(row.get("source") or "local"))),
-                    report_trained=_strict_bool(row.get("report_trained"), "report_trained", _default_report_trained(str(row.get("source") or ""))),
+                    ready=ready,
+                    category=str(row.get("category") or _default_category(source)),
+                    report_trained=_strict_bool(row.get("report_trained"), "report_trained", _default_report_trained(source)),
                     report_training=str(row.get("report_training") or ""),
-                    fresh_inference=_strict_bool(row.get("fresh_inference"), "fresh_inference", str(row.get("source") or "") == "medharness_cli"),
+                    fresh_inference=_strict_bool(row.get("fresh_inference"), "fresh_inference", False),
                     notes=str(row.get("notes") or ""),
                     source_generation_jsonl=_resolved_path_text(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(row.get("medharness_model_key") or row.get("model_key") or ""),
@@ -733,12 +890,29 @@ class ReportGeneratorRegistry:
                     prompt_version=str(row.get("prompt_version") or ""),
                     preprocessing_version=str(row.get("preprocessing_version") or ""),
                     formal_validation_id=str(row.get("formal_validation_id") or ""),
+                    runtime_state=runtime_state,
+                    validation_state=str(row.get("validation_state") or "unvalidated"),
+                    input_capabilities=_strict_string_list(row.get("input_capabilities"), "input_capabilities"),
+                    cross_modality_allowed=_strict_bool(row.get("cross_modality_allowed"), "cross_modality_allowed", False),
+                    is_universal=_strict_bool(row.get("is_universal"), "is_universal", False),
+                    resource_status=str(row.get("resource_status") or row.get("status") or ""),
+                    quality_gate_blocked=_strict_bool(
+                        row.get("quality_gate_blocked"), "quality_gate_blocked", False
+                    ),
+                    blocked_reason=str(row.get("blocked_reason") or ""),
+                    latest_evidence=_strict_mapping(
+                        row.get("latest_evidence"), "latest_evidence"
+                    ),
                 )
             )
         return [entry for entry in entries if entry.key]
 
     @staticmethod
-    def _load_legacy_entries(config_path: str | Path) -> list[GeneratorEntry]:
+    def _load_legacy_entries(
+        config_path: str | Path,
+        *,
+        default_python_bin: str = "python",
+    ) -> list[GeneratorEntry]:
         path = resolve_existing_path(config_path)
         if not path.exists():
             return []
@@ -750,6 +924,7 @@ class ReportGeneratorRegistry:
         if not isinstance(models, dict):
             return []
         entries: list[GeneratorEntry] = []
+        status_map = _load_legacy_status_map(path)
         for key, row in models.items():
             if not isinstance(row, dict):
                 continue
@@ -757,10 +932,16 @@ class ReportGeneratorRegistry:
             # values such as ``0``/``"false"`` could be silently treated as an
             # ineligible model instead of surfacing malformed configuration.
             report_trained = _strict_bool(row.get("report_trained"), "report_trained", False)
-            if not _is_legacy_report_generator_ready(str(key), {**row, "report_trained": report_trained}):
+            status_payload = status_map.get(str(key), {})
+            if not _is_legacy_report_generator_ready(
+                str(key),
+                {**row, "report_trained": report_trained},
+                status_payload=status_payload,
+            ):
                 continue
             adapter = str(row.get("adapter") or "")
             source = "artifact_reuse" if adapter == "artifact_reuse" else "medharness_cli"
+            runtime_state = str(status_payload.get("runtime_state") or row.get("runtime_state") or "unavailable")
             modalities = _normalize_modalities(
                 _strict_string_list(row.get("supported_modalities"), "supported_modalities", ["unknown"])
             )
@@ -777,15 +958,23 @@ class ReportGeneratorRegistry:
                     source=source,
                     supported_modalities=modalities,
                     supported_body_parts=body_parts,
-                    ready=True,
+                    ready=runtime_state in {"runnable", "smoke_verified"},
                     category=str(row.get("category") or ""),
                     report_trained=report_trained,
                     report_training=str(row.get("report_training") or ""),
-                    fresh_inference=source != "artifact_reuse",
+                    fresh_inference=_strict_bool(
+                        status_payload.get("fresh_inference", row.get("fresh_inference")),
+                        "fresh_inference",
+                        False,
+                    ),
                     notes=str(row.get("notes") or ""),
                     source_generation_jsonl=_resolved_path_text(row.get("source_generation_jsonl") or ""),
                     medharness_model_key=str(key),
-                    python_bin=str(row.get("python_bin") or "python"),
+                    python_bin=str(
+                        default_python_bin
+                        if str(row.get("python_bin") or "python") == "python"
+                        else row.get("python_bin")
+                    ),
                     python_paths=_strict_string_list(row.get("python_paths"), "python_paths"),
                     script_path=_resolved_path_text("/data/isbi/gzp/medHarness/scripts/run_report_generation.py"),
                     config_path=str(path),
@@ -800,6 +989,32 @@ class ReportGeneratorRegistry:
                     prompt_version=str(row.get("prompt_version") or ""),
                     preprocessing_version=str(row.get("preprocessing_version") or ""),
                     formal_validation_id=str(row.get("formal_validation_id") or ""),
+                    runtime_state=runtime_state,
+                    validation_state=str(status_payload.get("validation_state") or row.get("validation_state") or "unvalidated"),
+                    input_capabilities=_strict_string_list(
+                        status_payload.get("input_capabilities", row.get("input_capabilities")),
+                        "input_capabilities",
+                    ),
+                    cross_modality_allowed=_strict_bool(
+                        status_payload.get("cross_modality_allowed", row.get("cross_modality_allowed")),
+                        "cross_modality_allowed",
+                        False,
+                    ),
+                    is_universal=_strict_bool(
+                        status_payload.get("is_universal", row.get("is_universal")),
+                        "is_universal",
+                        False,
+                    ),
+                    resource_status=str(status_payload.get("status") or ""),
+                    quality_gate_blocked=_strict_bool(
+                        status_payload.get("quality_gate_blocked"),
+                        "quality_gate_blocked",
+                        False,
+                    ),
+                    blocked_reason=str(status_payload.get("blocked_reason") or ""),
+                    latest_evidence=_strict_mapping(
+                        status_payload.get("latest_evidence"), "latest_evidence"
+                    ),
                 )
             )
         return entries
@@ -809,6 +1024,65 @@ def _resolved_path_text(path: Any) -> str:
     if not path:
         return ""
     return str(resolve_existing_path(str(path)))
+
+
+def _artifact_route_excluded_reason(
+    entry: GeneratorEntry,
+    case_id: str | None,
+    generation_mode: str,
+) -> str | None:
+    if generation_mode not in {"benchmark", "replay"} or not case_id:
+        return None
+    if not entry.source_generation_jsonl:
+        return "artifact_missing"
+    source = resolve_existing_path(entry.source_generation_jsonl)
+    if not source.is_file():
+        return "artifact_missing"
+    try:
+        stat = source.stat()
+        counts, invalid_reason = _artifact_case_index_cached(
+            str(source.resolve()),
+            stat.st_mtime_ns,
+            stat.st_size,
+        )
+    except OSError:
+        return "artifact_missing"
+    if invalid_reason is not None:
+        return invalid_reason
+    count = counts.get(str(case_id), 0)
+    if count == 0:
+        return "artifact_case_not_found"
+    if count > 1:
+        return "artifact_case_id_ambiguous"
+    return None
+
+
+@lru_cache(maxsize=64)
+def _artifact_case_index_cached(
+    source_path: str,
+    mtime_ns: int,
+    size: int,
+) -> tuple[dict[str, int], str | None]:
+    del mtime_ns, size
+    counts: dict[str, int] = {}
+    try:
+        with Path(source_path).open("r", encoding="utf-8") as stream:
+            for line in stream:
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    return {}, "artifact_invalid_jsonl"
+                if not isinstance(row, dict):
+                    return {}, "artifact_invalid_row"
+                row_case_id = row.get("case_id")
+                if not isinstance(row_case_id, str) or not row_case_id:
+                    return {}, "artifact_invalid_case_id"
+                counts[row_case_id] = counts.get(row_case_id, 0) + 1
+    except OSError:
+        return {}, "artifact_missing"
+    return counts, None
 
 
 def _runtime_python_bin(value: str) -> str:
@@ -839,7 +1113,7 @@ def _run_legacy_subprocess(
             resolved_paths.append(existing)
         env["PYTHONPATH"] = os.pathsep.join(resolved_paths)
         kwargs["env"] = env
-    return subprocess.run(cmd, **kwargs)
+    return run_isolated_process(cmd, **kwargs)
 
 
 def _rewrite_existing_legacy_paths(value: Any) -> Any:
@@ -866,6 +1140,7 @@ def _redacted_cmd(cmd: list[str]) -> list[str]:
 def _legacy_output_metadata(
     row: dict[str, Any],
     cmd: list[str],
+    process_provenance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     metadata: dict[str, Any] = {
         "cmd": _redacted_cmd(cmd),
@@ -885,7 +1160,25 @@ def _legacy_output_metadata(
         metadata["adapter_case_id"] = str(row.get("case_id"))
     if row.get("body_part") is not None:
         metadata["adapter_body_part"] = str(row.get("body_part"))
+    if process_provenance is not None:
+        metadata["process_provenance"] = process_provenance
     return metadata
+
+
+def _completed_process_provenance(
+    completed: subprocess.CompletedProcess[Any],
+) -> dict[str, Any] | None:
+    return _value_process_provenance(completed)
+
+
+def _value_process_provenance(value: Any) -> dict[str, Any] | None:
+    provenance = getattr(value, "process_provenance", None)
+    return dict(provenance) if isinstance(provenance, dict) else None
+
+
+def _exception_process_metadata(exc: BaseException) -> dict[str, Any]:
+    provenance = _value_process_provenance(exc)
+    return {"process_provenance": provenance} if provenance is not None else {}
 
 
 def _legacy_input_row(
@@ -939,7 +1232,14 @@ def _legacy_prompt(
 
 
 def _looks_like_volume(path: str) -> bool:
-    return str(path).endswith((".nii", ".nii.gz", ".npy", ".npz"))
+    return _asset_looks_like_volume(path)
+
+
+def _available_input_capabilities(
+    image_path: str | None,
+    prepared_assets: dict[str, Any] | None,
+) -> set[str] | None:
+    return _asset_input_capabilities(image_path, prepared_assets)
 
 
 def _default_body_part(modality: str) -> str:
@@ -951,24 +1251,62 @@ def _default_body_part(modality: str) -> str:
     return "chest"
 
 
-def _is_legacy_report_generator_ready(key: str, row: dict[str, Any]) -> bool:
-    if key in _LEGACY_FORMAL_ROUTE_EXCLUDE:
-        return False
+def _is_legacy_report_generator_ready(
+    key: str,
+    row: dict[str, Any],
+    *,
+    status_payload: dict[str, Any] | None = None,
+) -> bool:
     report_trained = row.get("report_trained", False)
     if not isinstance(report_trained, bool):
         raise ValueError("report_trained must be a boolean")
     if not report_trained:
         return False
     category = str(row.get("category") or "")
-    if category not in {"ready_or_artifact", "report_trained_target"}:
-        return False
     adapter = str(row.get("adapter") or "")
     if adapter == "artifact_reuse":
         source_generation_jsonl = row.get("source_generation_jsonl", "")
         if source_generation_jsonl is not None and not isinstance(source_generation_jsonl, str):
             raise ValueError("source_generation_jsonl must be a string")
         return bool(source_generation_jsonl)
-    return adapter not in {"source_audit_only", "blocked_no_public_weights", "gated_waitlist", ""}
+    if adapter in {"source_audit_only", "blocked_no_public_weights", "gated_waitlist", ""}:
+        return False
+    if status_payload:
+        runtime_state = str(status_payload.get("runtime_state") or "unavailable")
+        return runtime_state in {"preflight_only", "runnable", "smoke_verified"}
+    return category in {"ready_or_artifact", "report_trained_target"}
+
+
+def _load_legacy_status_map(config_path: Path) -> dict[str, dict[str, Any]]:
+    payload = load_legacy_status_export(config_path)
+    models = payload.get("models") or []
+    if not isinstance(models, list):
+        return {}
+    return {
+        str(row.get("model_key")): row
+        for row in models
+        if isinstance(row, dict) and row.get("model_key")
+    }
+
+
+def load_legacy_status_export(config_path: str | Path) -> dict[str, Any]:
+    path = resolve_existing_path(config_path)
+    if not path.is_file():
+        return {}
+    source_root = path.parent.parent / "src"
+    inserted = False
+    if source_root.is_dir() and str(source_root) not in sys.path:
+        sys.path.insert(0, str(source_root))
+        inserted = True
+    try:
+        from medharness.reportgen.status_export import build_status_export
+
+        return build_status_export(path)
+    except (ImportError, OSError, ValueError, yaml.YAMLError):
+        return {}
+    finally:
+        if inserted:
+            sys.path.remove(str(source_root))
 
 
 def _normalize_modalities(values: list[Any]) -> list[str]:

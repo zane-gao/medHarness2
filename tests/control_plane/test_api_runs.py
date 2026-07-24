@@ -31,6 +31,9 @@ def test_run_control_api_and_dynamic_panel(monkeypatch, tmp_path):
     assert "fetch('/runs')" in panel.text
     assert "Experiment Gates" in panel.text
     assert "Model/API Routing" in panel.text
+    assert "Model Status" in panel.text
+    assert "fetch('/catalog/models?config_path=config/dmx_strong.yaml')" in panel.text
+    assert "modelStatuses" in panel.text
     assert "Run Details" in panel.text
 
 

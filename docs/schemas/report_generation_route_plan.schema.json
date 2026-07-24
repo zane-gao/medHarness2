@@ -1,0 +1,157 @@
+{
+  "$defs": {
+    "RoutePlanEntryArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "model_key": {
+          "minLength": 1,
+          "title": "Model Key",
+          "type": "string"
+        },
+        "source": {
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "runtime_state": {
+          "enum": [
+            "unavailable",
+            "preflight_only",
+            "runnable",
+            "smoke_verified"
+          ],
+          "title": "Runtime State",
+          "type": "string"
+        },
+        "validation_state": {
+          "enum": [
+            "unvalidated",
+            "engineering_smoke_only",
+            "exploratory",
+            "formal",
+            "quality_blocked"
+          ],
+          "title": "Validation State",
+          "type": "string"
+        },
+        "route_tier": {
+          "anyOf": [
+            {
+              "enum": [
+                "exact_modality_body_part",
+                "same_modality",
+                "same_body_part_cross_modality",
+                "universal"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Route Tier"
+        },
+        "route_reason": {
+          "default": "",
+          "title": "Route Reason",
+          "type": "string"
+        },
+        "eligible": {
+          "title": "Eligible",
+          "type": "boolean"
+        },
+        "excluded_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Excluded Reason"
+        },
+        "input_capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Input Capabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "model_key",
+        "source",
+        "runtime_state",
+        "validation_state",
+        "eligible"
+      ],
+      "title": "RoutePlanEntryArtifact",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "normalized_modality": {
+      "minLength": 1,
+      "title": "Normalized Modality",
+      "type": "string"
+    },
+    "normalized_body_part": {
+      "minLength": 1,
+      "title": "Normalized Body Part",
+      "type": "string"
+    },
+    "case_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Case Id"
+    },
+    "generation_mode": {
+      "enum": [
+        "production",
+        "benchmark",
+        "replay"
+      ],
+      "title": "Generation Mode",
+      "type": "string"
+    },
+    "available_input_capabilities": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Available Input Capabilities",
+      "type": "array"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/RoutePlanEntryArtifact"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "candidate_model_keys": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Candidate Model Keys",
+      "type": "array"
+    }
+  },
+  "required": [
+    "normalized_modality",
+    "normalized_body_part",
+    "generation_mode"
+  ],
+  "title": "RoutePlanArtifact",
+  "type": "object"
+}

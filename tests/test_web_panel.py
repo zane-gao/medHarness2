@@ -496,13 +496,14 @@ def test_panel_uses_canonical_pilot10_status_labels():
     assert 'blocked:"已阻断"' in template
 
 
-def test_panel_describes_modality_first_soft_body_part_routing():
+def test_panel_describes_four_tier_union_report_generation_routing():
     template = Path("web/panel_template.html").read_text(encoding="utf-8")
 
-    assert "三种主模态" in template
-    assert "部位只参与候选排序" in template
-    assert "部位冲突保留为可审计 warning" in template
-    assert "按「模态 + 部位」路由" not in template
+    assert "模态 + 部位精确匹配" in template
+    assert "所有同模态" in template
+    assert "仅显式跨模态或通用模型" in template
+    assert "各层命中取并集" in template
+    assert "部位只参与候选排序" not in template
 
 
 def test_extract_blindspot_audit_parses_heading_and_medium_issue_formats():

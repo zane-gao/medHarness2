@@ -13,12 +13,14 @@ import tempfile
 from datetime import timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from threading import local
 from typing import Any
 
 import requests
 
 from medharness2.config import AppConfig, LLMConfig, load_config, resolve_existing_path
 from medharness2.privacy import ExternalPayloadPolicy
+from medharness2.utils.processes import run_isolated_process
 
 
 class LLMClientError(RuntimeError):
@@ -48,6 +50,17 @@ class LLMClient:
         self.config = config or load_config()
         self.privacy_policy = ExternalPayloadPolicy(self.config.privacy)
         self._local_hf_cache: dict[tuple[str, str, str], tuple[Any, Any]] = {}
+        self._process_provenance_state = local()
+        self.last_process_provenance = None
+
+    @property
+    def last_process_provenance(self) -> dict[str, Any] | None:
+        value = getattr(self._process_provenance_state, "value", None)
+        return dict(value) if isinstance(value, dict) else None
+
+    @last_process_provenance.setter
+    def last_process_provenance(self, value: dict[str, Any] | None) -> None:
+        self._process_provenance_state.value = dict(value) if isinstance(value, dict) else None
 
     def call(self, prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
         provider = str(kwargs.pop("provider", None) or self.config.llm.provider).lower()
@@ -231,13 +244,13 @@ class LLMClient:
     def _build_chat_content(prompt: str, image_path: str | None) -> Any:
         """chat/completions 的 content：有可读图像时用多模态 image_url，否则纯文本。"""
         if image_path:
-            path = Path(image_path)
-            if path.exists() and path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
-                return [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": _file_data_url(path)}},
-                ]
-            return f"{prompt}\n\nAssociated image or volume path: {image_path}"
+            path = _require_nonempty_file(image_path)
+            if path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+                raise LLMClientError(f"image asset format is unsupported for chat completions: {path}")
+            return [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": _file_data_url(path)}},
+            ]
         return prompt
 
     @staticmethod
@@ -297,8 +310,9 @@ class LLMClient:
                 "--max-new-tokens",
                 str(_strict_call_int(kwargs.get("max_new_tokens", llm.local_cli_max_new_tokens), "max_new_tokens")),
             ]
+            self.last_process_provenance = None
             try:
-                subprocess.run(
+                completed = run_isolated_process(
                     cmd,
                     check=True,
                     capture_output=True,
@@ -306,10 +320,13 @@ class LLMClient:
                     timeout=llm.local_cli_timeout_sec,
                 )
             except subprocess.CalledProcessError as exc:
+                self.last_process_provenance = _process_provenance(exc)
                 detail = (exc.stderr or exc.stdout or "")[-1000:]
                 raise LLMClientError(f"Local VLM CLI call failed: {detail}") from exc
             except subprocess.TimeoutExpired as exc:
+                self.last_process_provenance = _process_provenance(exc)
                 raise LLMClientError("Local VLM CLI call timed out") from exc
+            self.last_process_provenance = _process_provenance(completed)
             return self._read_local_vlm_output(output_jsonl)
 
     def _call_local_hf_vlm(self, prompt: str, image_path: str | None = None, **kwargs: Any) -> str:
@@ -325,8 +342,8 @@ class LLMClient:
     @staticmethod
     def _build_input(prompt: str, image_path: str | None) -> str | list[dict[str, Any]]:
         if image_path:
-            path = Path(image_path)
-            if path.exists() and path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
+            path = _require_nonempty_file(image_path)
+            if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".gif"}:
                 return [
                     {
                         "role": "user",
@@ -336,7 +353,7 @@ class LLMClient:
                         ],
                     }
                 ]
-            if path.exists() and path.is_file() and path.suffix.lower() == ".pdf":
+            if path.suffix.lower() == ".pdf":
                 return [
                     {
                         "role": "user",
@@ -346,7 +363,7 @@ class LLMClient:
                         ],
                     }
                 ]
-            return f"{prompt}\n\nAssociated image or volume path: {image_path}"
+            raise LLMClientError(f"image asset format is unsupported for OpenAI Responses: {path}")
         return prompt
 
     @staticmethod
@@ -366,16 +383,16 @@ class LLMClient:
     def _local_vlm_image_paths(self, image_path: str | None, tmp: Path) -> list[str]:
         if not image_path:
             return []
-        path = Path(image_path).expanduser()
-        if path.exists() and path.suffix.lower() == ".pdf":
+        path = _require_nonempty_file(image_path)
+        if path.suffix.lower() == ".pdf":
             return self._render_pdf_pages(path, tmp)
         return [str(path.resolve())]
 
     def _local_hf_image_paths(self, image_path: str | None, tmp: Path) -> list[str]:
         if not image_path:
             return []
-        path = Path(image_path).expanduser()
-        if path.exists() and path.suffix.lower() == ".pdf":
+        path = _require_nonempty_file(image_path)
+        if path.suffix.lower() == ".pdf":
             return self._render_pdf_pages(path, tmp, max_pages=self.config.llm.local_hf_pdf_max_pages)
         return [str(path.resolve())]
 
@@ -530,6 +547,16 @@ def _file_data_url(path: Path) -> str:
     return f"data:{mime};base64,{data}"
 
 
+def _require_nonempty_file(value: str) -> Path:
+    path = Path(value).expanduser()
+    try:
+        if path.is_file() and path.stat().st_size > 0:
+            return path
+    except OSError:
+        pass
+    raise LLMClientError(f"image asset is missing, empty, or not a file: {path}")
+
+
 def _structured_provider_error(response: Any) -> str:
     try:
         status_code = int(getattr(response, "status_code", 200))
@@ -580,6 +607,11 @@ def _safe_provider_error_text(value: Any) -> str:
         text,
     )
     return text[:500]
+
+
+def _process_provenance(value: Any) -> dict[str, Any] | None:
+    provenance = getattr(value, "process_provenance", None)
+    return dict(provenance) if isinstance(provenance, dict) else None
 
 
 def _strip_prompt(decoded: str, prompt: str) -> str:

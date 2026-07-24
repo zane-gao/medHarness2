@@ -1,0 +1,142 @@
+{
+  "$defs": {
+    "CandidateComparisonItem": {
+      "additionalProperties": false,
+      "properties": {
+        "entity": {
+          "minLength": 1,
+          "title": "Entity",
+          "type": "string"
+        },
+        "comparison_type": {
+          "enum": [
+            "agreement",
+            "observation_status",
+            "laterality",
+            "anatomy",
+            "measurement",
+            "severity",
+            "candidate_missing",
+            "internal_status"
+          ],
+          "title": "Comparison Type",
+          "type": "string"
+        },
+        "candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Candidate Ids",
+          "type": "array"
+        },
+        "candidate_values": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Candidate Values",
+          "type": "object"
+        },
+        "missing_candidate_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Missing Candidate Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "entity",
+        "comparison_type"
+      ],
+      "title": "CandidateComparisonItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_type": {
+      "const": "candidate_structure_comparison",
+      "default": "candidate_structure_comparison",
+      "title": "Artifact Type",
+      "type": "string"
+    },
+    "structure_version": {
+      "const": "candidate-structure-v2",
+      "default": "candidate-structure-v2",
+      "title": "Structure Version",
+      "type": "string"
+    },
+    "candidate_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Candidate Ids",
+      "type": "array"
+    },
+    "agreement_count": {
+      "minimum": 0,
+      "title": "Agreement Count",
+      "type": "integer"
+    },
+    "conflict_count": {
+      "minimum": 0,
+      "title": "Conflict Count",
+      "type": "integer"
+    },
+    "omission_count": {
+      "minimum": 0,
+      "title": "Omission Count",
+      "type": "integer"
+    },
+    "internal_conflict_count": {
+      "minimum": 0,
+      "title": "Internal Conflict Count",
+      "type": "integer"
+    },
+    "agreements": {
+      "items": {
+        "$ref": "#/$defs/CandidateComparisonItem"
+      },
+      "title": "Agreements",
+      "type": "array"
+    },
+    "conflicts": {
+      "items": {
+        "$ref": "#/$defs/CandidateComparisonItem"
+      },
+      "title": "Conflicts",
+      "type": "array"
+    },
+    "omissions": {
+      "items": {
+        "$ref": "#/$defs/CandidateComparisonItem"
+      },
+      "title": "Omissions",
+      "type": "array"
+    },
+    "internal_conflicts": {
+      "items": {
+        "$ref": "#/$defs/CandidateComparisonItem"
+      },
+      "title": "Internal Conflicts",
+      "type": "array"
+    }
+  },
+  "required": [
+    "agreement_count",
+    "conflict_count",
+    "omission_count",
+    "internal_conflict_count"
+  ],
+  "title": "CandidateStructureComparison",
+  "type": "object"
+}

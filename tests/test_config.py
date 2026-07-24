@@ -15,6 +15,33 @@ def test_loads_default_config():
     assert cfg.ranking.top_n == 3
 
 
+def test_default_config_is_a_yunwu_backed_production_profile():
+    cfg = load_config()
+
+    assert cfg.generator.default_models == [
+        "maira_2",
+        "chexagent_srrg_findings_full",
+        "chexagent_srrg_impression_full",
+        "medgemma_srrg_findings",
+        "medgemma_srrg_impression",
+        "lingshu_srrg_impression",
+        "medmo_4b",
+        "merlin_fresh",
+        "medmo_4b_next",
+        "qwen25vl_med_grpo_report_generation",
+        "qwen25vl_med_grpo_report_generation_v2",
+        "qwen25vl_flare2025_lora",
+        "radiology_infer_mini",
+        "yunwu_general",
+    ]
+    assert cfg.generator.external_vlm_enabled is True
+    assert cfg.generator.fusion_enabled is True
+    assert cfg.generator.external_vlm_model_role == "report_generation"
+    assert cfg.generator.fusion_model_role == "report_fusion"
+    assert cfg.model_roles["report_generation"].provider == "chat_completions"
+    assert cfg.model_roles["report_fusion"].provider == "chat_completions"
+
+
 def test_loads_override_config(tmp_path: Path):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -176,11 +203,21 @@ def test_dmx_strong_profile_routes_every_llm_backed_tool_to_verified_strong_mode
 
 def test_yunwu_profile_is_an_explicit_nonautomatic_backup():
     cfg = load_config(Path("config/yunwu_strong.yaml"))
+    default_cfg = load_config()
 
     assert cfg.model_roles["general_judge"].base_url == "https://yunwu.ai/v1"
     assert cfg.model_roles["general_judge"].api_key_env == "YUNWU_API_KEY"
     assert cfg.model_roles["general_judge"].model == "gpt-5.6-terra"
     assert cfg.model_roles["hazard_reviewer"].model == "claude-opus-4-8"
+    assert cfg.model_roles["report_generation"].model == "qwen3-vl-plus"
+    assert cfg.model_roles["report_generation"].api_key_env == "YUNWU_API_KEY"
+    assert cfg.model_roles["report_fusion"].model == "gpt-5.6-terra"
+    assert cfg.generator.external_vlm_enabled is True
+    assert cfg.generator.external_vlm_model_role == "report_generation"
+    assert cfg.generator.fusion_enabled is True
+    assert cfg.generator.fusion_model_role == "report_fusion"
+    assert cfg.generator.default_models == default_cfg.generator.default_models
+    assert "*" not in cfg.generator.default_models
 
 
 def test_codex_proxy_profile_uses_separate_gpt_and_claude_credentials():
@@ -270,6 +307,7 @@ def test_codex_yunwu_hybrid_profile_uses_independent_working_reviewer_route():
 
 def test_yunwu_codex_profile_routes_by_verified_workload_strength():
     cfg = load_config(Path("config/yunwu_codex_strong.yaml"))
+    default_cfg = load_config()
 
     for role in {"general_judge", "finding_extractor", "education"}:
         route = cfg.model_roles[role]
@@ -292,6 +330,14 @@ def test_yunwu_codex_profile_routes_by_verified_workload_strength():
     assert adjudicator.base_url == "https://yunwu.ai/v1"
     assert adjudicator.model == "gpt-5.6-terra-ultra"
     assert adjudicator.api_key_env == "YUNWU_API_KEY"
+    assert cfg.model_roles["report_generation"].model == "qwen3-vl-plus"
+    assert cfg.model_roles["report_generation"].base_url == "https://yunwu.ai/v1"
+    assert cfg.model_roles["report_fusion"].model == "gpt-5.6-terra"
+    assert cfg.model_roles["report_fusion"].base_url == "https://yunwu.ai/v1"
+    assert cfg.generator.external_vlm_enabled is True
+    assert cfg.generator.fusion_enabled is True
+    assert cfg.generator.default_models == default_cfg.generator.default_models
+    assert "*" not in cfg.generator.default_models
     for route in cfg.model_roles.values():
         assert route.schema_attempts(default=9) == 2
         assert route.as_call_options()["max_retries"] == 1

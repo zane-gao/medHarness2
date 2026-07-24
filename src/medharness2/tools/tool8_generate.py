@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
-
 from medharness2.config import AppConfig, load_config
+from medharness2.generators.orchestrator import CandidateGenerationResult, generate_candidates
 from medharness2.generators.registry import ReportGeneratorRegistry
 from medharness2.llm_client import LLMClient
 from medharness2.modality import canonical_modality
@@ -16,44 +15,36 @@ def generate_reports(
     model_keys: list[str] | None = None,
     model_sources: list[str] | None = None,
     body_part: str | None = None,
+    prepared_assets: dict[str, object] | None = None,
     fallback_image_path: str | None = None,
     config: AppConfig | None = None,
     llm_client: LLMClient | None = None,
     case_id: str | None = None,
+    generation_mode: str = "production",
 ) -> list[GeneratedReport]:
     cfg = config or load_config()
     client = llm_client or LLMClient(cfg)
     modality = canonical_modality(modality)
-    registry = ReportGeneratorRegistry(cfg)
-    generation_reference = reference_report if cfg.generator.reference_assisted_generation else None
-    reports: list[GeneratedReport] = []
-    selected_entries = registry.select(
-        modality,
-        requested=model_keys,
-        body_part=body_part,
-        sources=set(model_sources or []),
+    generation_reference = (
+        reference_report
+        if cfg.generator.reference_assisted_generation and generation_mode in {"benchmark", "replay"}
+        else None
     )
-    failed_attempts: list[dict[str, object]] = []
-    for entry in selected_entries:
-        generated = registry.generate(
-            entry,
-            image_path,
-            modality,
-            reference_report=generation_reference,
-            body_part=body_part,
-            case_id=case_id,
-        )
-        if generated.report:
-            reports.append(generated)
-        else:
-            failed_attempts.append(
-                {
-                    "model": generated.model or entry.key,
-                    "source": generated.source or entry.source,
-                    "warnings": generated.warnings,
-                    "metadata": generated.metadata,
-                }
-            )
+    generated = generate_candidate_reports(
+        image_path=image_path,
+        modality=modality,
+        body_part=body_part,
+        reference_report=generation_reference,
+        model_keys=model_keys,
+        model_sources=model_sources,
+        case_id=case_id,
+        generation_mode=generation_mode,
+        prepared_assets=prepared_assets,
+        config=cfg,
+        llm_client=client,
+    )
+    reports = list(generated.reports)
+    failed_attempts = _failed_attempts(generated)
     if not reports and cfg.generator.cloud_fallback_enabled:
         prompt = f"Generate a concise radiology report for modality={modality}, body_part={body_part or 'unknown'}."
         if generation_reference:
@@ -71,10 +62,12 @@ def generate_reports(
                 report=text,
                 modality=modality,
                 evidence_tier=("mock" if cfg.llm.provider.lower() == "mock" else "exploratory_fresh"),
-                warnings=[
-                    f"{fallback_source}_used",
-                    "no_compatible_local_generator" if not selected_entries else "compatible_local_generator_returned_no_text",
-                ],
+                    warnings=[
+                        f"{fallback_source}_used",
+                        "no_compatible_local_generator"
+                        if not generated.route_plan.candidates
+                        else "compatible_local_generator_returned_no_text",
+                    ],
                 metadata={
                     "body_part": body_part,
                     "reference_report_used": bool(generation_reference),
@@ -88,6 +81,8 @@ def generate_reports(
             )
         )
     if not reports:
+        reports.extend(_failed_reports(generated, modality=modality))
+    if not reports:
         reports.append(
             GeneratedReport(
                 model="none",
@@ -98,6 +93,105 @@ def generate_reports(
             )
         )
     return reports
+
+
+def generate_candidate_reports(
+    image_path: str,
+    modality: str,
+    reference_report: str | None = None,
+    model_keys: list[str] | None = None,
+    model_sources: list[str] | None = None,
+    body_part: str | None = None,
+    prepared_assets: dict[str, object] | None = None,
+    config: AppConfig | None = None,
+    llm_client: LLMClient | None = None,
+    case_id: str | None = None,
+    generation_mode: str = "production",
+) -> CandidateGenerationResult:
+    cfg = config or load_config()
+    client = llm_client or LLMClient(cfg)
+    registry = ReportGeneratorRegistry(cfg)
+    return generate_candidates(
+        registry,
+        image_path=image_path,
+        modality=canonical_modality(modality),
+        body_part=body_part,
+        case_id=case_id,
+        reference_report=(
+            reference_report
+            if cfg.generator.reference_assisted_generation and generation_mode in {"benchmark", "replay"}
+            else None
+        ),
+        generation_mode=generation_mode,
+        model_keys=model_keys,
+        model_sources=set(model_sources or []),
+        prepared_assets=prepared_assets,
+        llm_client=client,
+    )
+
+
+def _failed_attempts(generated: CandidateGenerationResult) -> list[dict[str, object]]:
+    attempts = [
+        {
+            "model": failure.model,
+            "source": failure.source,
+            "warnings": list(failure.warnings),
+            "metadata": dict(failure.metadata),
+        }
+        for failure in generated.failures
+    ]
+    for decision in generated.route_plan.entries:
+        if decision.eligible or decision.excluded_reason in {None, "requested_model_filter", "requested_source_filter"}:
+            continue
+        attempts.append(
+            {
+                "model": decision.model_key,
+                "source": decision.source,
+                "warnings": [decision.excluded_reason],
+                "metadata": {
+                    "route_tier": decision.route_tier,
+                    "route_reason": decision.route_reason,
+                    "runtime_state": decision.runtime_state,
+                    "validation_state": decision.validation_state,
+                },
+            }
+        )
+    return attempts
+
+
+def _failed_reports(generated: CandidateGenerationResult, *, modality: str) -> list[GeneratedReport]:
+    reports = [
+        GeneratedReport(
+            model=failure.model,
+            source=failure.source,
+            report="",
+            modality=modality,
+            warnings=list(failure.warnings),
+            metadata=dict(failure.metadata),
+        )
+        for failure in generated.failures
+    ]
+    if reports:
+        return reports
+    for decision in generated.route_plan.entries:
+        if decision.eligible or decision.excluded_reason in {None, "requested_model_filter", "requested_source_filter"}:
+            continue
+        return [
+            GeneratedReport(
+                model=decision.model_key,
+                source=decision.source,
+                report="",
+                modality=modality,
+                warnings=[decision.excluded_reason],
+                metadata={
+                    "route_tier": decision.route_tier,
+                    "route_reason": decision.route_reason,
+                    "runtime_state": decision.runtime_state,
+                    "validation_state": decision.validation_state,
+                },
+            )
+        ]
+    return []
 
 
 def _fallback_source(provider: str) -> str:

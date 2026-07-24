@@ -145,6 +145,25 @@ class GeneratorConfig:
     local_models: list[dict[str, Any]] = field(default_factory=list)
     include_legacy_ready_models: bool = True
     legacy_config_path: str = "/data/isbi/gzp/medHarness/configs/reportgen_models.yaml"
+    candidate_max_workers: int = 4
+    local_max_workers: int = 1
+    external_vlm_enabled: bool = False
+    external_vlm_key: str = "yunwu_general"
+    external_vlm_title: str = "Yunwu General Imaging Candidate"
+    external_vlm_model_role: str = "report_generation"
+    external_vlm_input_capabilities: list[str] = field(default_factory=lambda: ["image_2d"])
+    fusion_enabled: bool = False
+    fusion_model_role: str = "report_fusion"
+
+    def __post_init__(self) -> None:
+        for field_name in ("candidate_max_workers", "local_max_workers"):
+            value = getattr(self, field_name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise ValueError(f"{field_name} must be a positive integer")
+        if not isinstance(self.external_vlm_input_capabilities, list) or any(
+            not isinstance(item, str) or not item.strip() for item in self.external_vlm_input_capabilities
+        ):
+            raise ValueError("external_vlm_input_capabilities must be a list of non-empty strings")
 
 
 @dataclass

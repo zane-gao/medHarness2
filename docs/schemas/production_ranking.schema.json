@@ -1,0 +1,65 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "candidate_id": {
+      "minLength": 1,
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "model": {
+      "minLength": 1,
+      "title": "Model",
+      "type": "string"
+    },
+    "source": {
+      "minLength": 1,
+      "title": "Source",
+      "type": "string"
+    },
+    "rank": {
+      "minimum": 1,
+      "title": "Rank",
+      "type": "integer"
+    },
+    "score": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Score",
+      "type": "number"
+    },
+    "ranking_mode": {
+      "const": "production_reference_free",
+      "default": "production_reference_free",
+      "title": "Ranking Mode",
+      "type": "string"
+    },
+    "metrics": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "title": "Metrics",
+      "type": "object"
+    },
+    "ranking_reason": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Ranking Reason",
+      "type": "array"
+    },
+    "selected_top_k": {
+      "title": "Selected Top K",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "model",
+    "source",
+    "rank",
+    "score",
+    "selected_top_k"
+  ],
+  "title": "ProductionRankingArtifact",
+  "type": "object"
+}

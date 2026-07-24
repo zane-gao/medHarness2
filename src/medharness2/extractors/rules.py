@@ -19,6 +19,12 @@ CONTRAST_BOUNDARY_RE = re.compile(
 
 SENTENCE_BOUNDARY_RE = re.compile(r"[。；;\n]|(?<!\d)\.(?!\d)")
 
+SECTION_HEADER_RE = re.compile(
+    r"(?:findings?|impression|clinical\s+history|history|检查所见|影像所见|所见|"
+    r"诊断印象|诊断意见|印象|结论|临床资料|病史)\s*[:：]",
+    re.I,
+)
+
 SEVERITY_ALIASES: dict[str, list[str]] = {
     "severe": ["severe", "marked", "重度", "大量", "显著", "明显"],
     "moderate": ["moderate", "中度", "中等量"],
@@ -71,7 +77,7 @@ class RuleFindingExtractor:
                     "attributes": attributes,
                 }
             )
-        findings = _deduplicate_findings(findings)
+        findings = _deduplicate_findings(findings, report_text=report_text)
         warnings = []
         if not findings and report_text.strip() and self.fallback_reported_finding:
             findings = [_reported_finding(report_text, self.backend)]
@@ -137,14 +143,18 @@ def _reported_finding(text: str, backend: str) -> dict[str, Any]:
     }
 
 
-def _deduplicate_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _deduplicate_findings(
+    findings: list[dict[str, Any]],
+    *,
+    report_text: str | None = None,
+) -> list[dict[str, Any]]:
     selected: list[dict[str, Any]] = []
     for finding in findings:
         duplicate_index = next(
             (
                 index
                 for index, existing in enumerate(selected)
-                if _same_finding_context(existing, finding)
+                if _same_finding_context(existing, finding, report_text=report_text)
                 and _measurements_can_merge(existing.get("measurements") or [], finding.get("measurements") or [])
             ),
             None,
@@ -153,16 +163,59 @@ def _deduplicate_findings(findings: list[dict[str, Any]]) -> list[dict[str, Any]
             selected.append(finding)
             continue
         existing = selected[duplicate_index]
-        if not existing.get("measurements") and finding.get("measurements"):
-            selected[duplicate_index] = finding
+        selected[duplicate_index] = _more_complete_finding(existing, finding)
     for index, finding in enumerate(selected, start=1):
         finding["finding_id"] = f"f{index}"
     return selected
 
 
-def _same_finding_context(a: dict[str, Any], b: dict[str, Any]) -> bool:
-    fields = ("observation_code", "anatomy_code", "laterality", "certainty", "source_text")
-    return all(a.get(field) == b.get(field) for field in fields)
+def _same_finding_context(
+    a: dict[str, Any],
+    b: dict[str, Any],
+    *,
+    report_text: str | None = None,
+) -> bool:
+    fields = ("observation_code", "anatomy_code", "laterality", "certainty")
+    if not all(a.get(field) == b.get(field) for field in fields):
+        return False
+    if a.get("source_text") == b.get("source_text"):
+        return True
+    if not report_text:
+        return False
+    return {_finding_section(report_text, a), _finding_section(report_text, b)} == {"findings", "impression"}
+
+
+def _finding_section(report_text: str, finding: dict[str, Any]) -> str | None:
+    source_span = finding.get("source_span") or {}
+    try:
+        start = int(source_span["start"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    section = "findings"
+    for match in SECTION_HEADER_RE.finditer(report_text):
+        if match.start() > start:
+            break
+        label = match.group(0).split(":", 1)[0].split("：", 1)[0].strip().casefold()
+        if label in {"impression", "诊断印象", "诊断意见", "印象", "结论"}:
+            section = "impression"
+        elif label in {"clinical history", "history", "临床资料", "病史"}:
+            section = "clinical_history"
+        else:
+            section = "findings"
+    return section
+
+
+def _more_complete_finding(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    return b if _finding_completeness(b) > _finding_completeness(a) else a
+
+
+def _finding_completeness(finding: dict[str, Any]) -> int:
+    score = 4 if finding.get("measurements") else 0
+    score += 2 if finding.get("anatomy_code") else 0
+    score += 1 if finding.get("laterality") not in {None, "", "unknown"} else 0
+    score += 1 if finding.get("severity") not in {None, "", "unspecified"} else 0
+    score += 1 if finding.get("attributes") else 0
+    return score
 
 
 def _measurements_can_merge(a: list[dict[str, Any]], b: list[dict[str, Any]]) -> bool:
@@ -173,14 +226,30 @@ def _measurements_can_merge(a: list[dict[str, Any]], b: list[dict[str, Any]]) ->
 
 def _measurement_signature(
     measurements: list[dict[str, Any]],
-) -> tuple[tuple[float | None, str], ...]:
-    return tuple(
-        (
-            _optional_float(item.get("normalized_mm")),
-            str(item.get("unit") or ""),
-        )
-        for item in measurements
-    )
+) -> tuple[float | None, ...]:
+    return tuple(_measurement_value_mm(item) for item in measurements)
+
+
+def _measurement_value_mm(measurement: dict[str, Any]) -> float | None:
+    normalized = _optional_float(measurement.get("normalized_mm"))
+    if normalized is not None:
+        return normalized
+    raw_value = measurement.get("value")
+    unit = str(measurement.get("unit") or "").strip().lower()
+    if isinstance(raw_value, str):
+        match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(cm|mm|厘米|毫米)?\s*", raw_value, re.I)
+        if not match:
+            return None
+        raw_value = match.group(1)
+        unit = unit or str(match.group(2) or "").lower()
+    value = _optional_float(raw_value)
+    if value is None:
+        return None
+    if unit in {"cm", "厘米"}:
+        return value * 10.0
+    if unit in {"mm", "毫米"}:
+        return value
+    return None
 
 
 def _optional_float(value: Any) -> float | None:
@@ -258,8 +327,9 @@ def _nearest_measurement(text: str, start: int, measurements: list[dict[str, Any
     if not measurements:
         return None
     same_sentence = [item for item in measurements if not _has_sentence_boundary(text, int(item["end"]), start)]
-    candidates = same_sentence or measurements
-    nearest = min(candidates, key=lambda item: abs(int(item["start"]) - start))
+    if not same_sentence:
+        return None
+    nearest = min(same_sentence, key=lambda item: abs(int(item["start"]) - start))
     return str(nearest["value"]) if abs(int(nearest["start"]) - start) <= 64 else None
 
 

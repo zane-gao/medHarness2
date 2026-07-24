@@ -5,9 +5,11 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
+import medharness2.validation.preflight as preflight_module
 from medharness2.config import AppConfig, LLMConfig, ModelRoleConfig
-from medharness2.validation.preflight import run_sample_preflight
+from medharness2.validation.preflight import _run_local_vlm_dry_run, run_sample_preflight
 
 
 def test_preflight_rejects_invalid_fallback_count(monkeypatch, tmp_path: Path):
@@ -254,9 +256,10 @@ def test_preflight_reports_missing_local_vlm_ocr_model(monkeypatch, tmp_path: Pa
     legacy_config = tmp_path / "reportgen_models.yaml"
     legacy_config.write_text("models: {}\n", encoding="utf-8")
 
-    def fake_run(cmd, check, capture_output, text, timeout):
+    def fake_run(cmd, check, capture_output, text, timeout, context):
         assert "--dry-run" in cmd
-        return subprocess.CompletedProcess(
+        assert context == {"requested_device": "cuda:0"}
+        completed = subprocess.CompletedProcess(
             cmd,
             2,
             stdout=json.dumps(
@@ -268,8 +271,10 @@ def test_preflight_reports_missing_local_vlm_ocr_model(monkeypatch, tmp_path: Pa
             ),
             stderr="",
         )
+        completed.process_provenance = {"pid": 103, "pgid": 103}
+        return completed
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(preflight_module, "run_isolated_process", fake_run)
     result = run_sample_preflight(
         sample_root,
         output,
@@ -290,6 +295,62 @@ def test_preflight_reports_missing_local_vlm_ocr_model(monkeypatch, tmp_path: Pa
     assert "local_vlm_cli_model_unavailable" in result["blockers"]
     assert result["ocr"]["provider"] == "local_vlm_cli"
     assert result["ocr"]["dry_run"]["status"] == "debug_asset_missing"
+    assert result["ocr"]["dry_run"]["process_provenance"] == {"pid": 103, "pgid": 103}
+
+
+def test_preflight_local_vlm_timeout_contract_is_unchanged(monkeypatch, tmp_path: Path):
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# fake runner\n", encoding="utf-8")
+    legacy_config = tmp_path / "reportgen_models.yaml"
+    legacy_config.write_text("models: {}\n", encoding="utf-8")
+
+    def fake_run(cmd, check, capture_output, text, timeout, context):
+        assert context == {"requested_device": "cuda:0"}
+        raise subprocess.TimeoutExpired(cmd, timeout)
+
+    monkeypatch.setattr(preflight_module, "run_isolated_process", fake_run)
+    result = _run_local_vlm_dry_run(
+        AppConfig(
+            llm=LLMConfig(
+                provider="local_vlm_cli",
+                model="qwen25vl_7b_instruct",
+                local_cli_script=str(script),
+                local_cli_config_path=str(legacy_config),
+                local_cli_timeout_sec=30,
+            )
+        )
+    )
+
+    assert result == {"status": "dry_run_timeout"}
+
+
+def test_preflight_local_vlm_failure_preserves_process_provenance(monkeypatch, tmp_path: Path):
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# fake runner\n", encoding="utf-8")
+    legacy_config = tmp_path / "reportgen_models.yaml"
+    legacy_config.write_text("models: {}\n", encoding="utf-8")
+
+    def fake_run(cmd, check, capture_output, text, timeout, context):
+        exc = RuntimeError("synthetic dry-run failure")
+        exc.process_provenance = {"pid": 109, "pgid": 109}
+        raise exc
+
+    monkeypatch.setattr(preflight_module, "run_isolated_process", fake_run)
+
+    result = _run_local_vlm_dry_run(
+        AppConfig(
+            llm=LLMConfig(
+                provider="local_vlm_cli",
+                model="qwen25vl_7b_instruct",
+                local_cli_script=str(script),
+                local_cli_config_path=str(legacy_config),
+                local_cli_timeout_sec=30,
+            )
+        )
+    )
+
+    assert result["status"] == "dry_run_failed"
+    assert result["process_provenance"] == {"pid": 109, "pgid": 109}
 
 
 def test_preflight_accepts_present_local_hf_vlm_ocr_model(tmp_path: Path):
@@ -323,6 +384,6 @@ def _write_minimal_sample(tmp_path: Path) -> Path:
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
     case_dir.mkdir(parents=True)
-    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    Image.new("L", (4, 4), color=0).save(case_dir / "Y1.png")
     (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
     return sample_root

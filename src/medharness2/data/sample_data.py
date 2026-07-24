@@ -244,4 +244,6 @@ def _normalize_body_part(value: str | None, *, modality_key: str) -> str:
         return mapping[key]
     if modality_key == "mri":
         return "brain"
+    if modality_key == "cxr":
+        return "chest"
     return key.lower() if key else "unknown"

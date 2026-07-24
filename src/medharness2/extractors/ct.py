@@ -2,6 +2,7 @@ from medharness2.extractors.rules import RuleFindingExtractor
 
 
 CT_OBSERVATIONS = {
+    "ground_glass_opacity": ["ground-glass opacity", "ground glass opacity", "磨玻璃影", "磨玻璃密度影"],
     "low_density_lesion": ["hypodense lesion", "low-density lesion", "低密度灶", "低密度影"],
     "high_density_lesion": ["hyperdense lesion", "high-density lesion", "高密度灶", "高密度影"],
     "nodule": ["nodule", "nodules", "结节", "结节影"],
@@ -34,9 +35,9 @@ CT_LOCATIONS = {
     "peritoneum": ["peritoneal", "peritoneum", "腹腔"],
     "brain": ["brain", "cerebral", "颅脑", "脑"],
     "right upper lobe": ["right upper lobe", "右肺上叶"],
-    "right lower lobe": ["right lower lobe", "右肺下叶"],
+    "right lower lobe": ["right lower lobe", "右肺下叶", "右下肺"],
     "left upper lobe": ["left upper lobe", "左肺上叶"],
-    "left lower lobe": ["left lower lobe", "左肺下叶"],
+    "left lower lobe": ["left lower lobe", "左肺下叶", "左下肺"],
     "bilateral lungs": ["both lungs", "bilateral lungs", "双肺"],
     "mediastinum": ["mediastinum", "纵隔"],
     "bone": ["bone", "osseous", "骨质", "骨"],

@@ -50,8 +50,8 @@ def _normalize_modality_token(text: str) -> str:
     if not raw:
         return ""
     canonical = canonical_modality(raw)
-    if canonical in {"cxr", "ct", "mri"}:
-        return {"cxr": "DX", "ct": "CT", "mri": "MR"}[canonical]
+    if canonical != "unknown":
+        return {"cxr": "DX", "ct": "CT", "mri": "MR"}.get(canonical, canonical)
     compact = raw.replace("-", "").replace("_", "")
     for token in ("MRI", "MRA", "MR", "CT", "XRAY", "X RAY", "X-RAY", "DX", "CR", "XR"):
         if token.replace("-", "").replace(" ", "") in compact:

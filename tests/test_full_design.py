@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import json
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
+import medharness2.generators.registry as registry_module
 from medharness2.config import AppConfig, GeneratorConfig, LLMConfig, ModelRoleConfig
+from medharness2.generators.registry import ReportGeneratorRegistry
+from medharness2.schema import GeneratedReport
 from medharness2.tools.tool10_modelwise import modelwise_weighted
 from medharness2.tools.tool11_hazardwise import hazardwise_weighted
 from medharness2.tools.tool12_statistics import calculate_statistics, percentile_rank, correct_pvalues_holm, compare_metric_groups
@@ -19,6 +25,27 @@ from medharness2.workflows.batch_readers import _evaluation_metadata
 from medharness2.workflows.reevaluate_run import _mean_score as reevaluate_mean_score
 from medharness2.workflows.merge_batches import _mean_score as merge_mean_score
 from medharness2.workflows.sample_full import plan_sample_full_routes, run_sample_full, _strict_nonnegative_int
+
+
+def _write_png(path: Path) -> None:
+    Image.new("L", (4, 4), color=0).save(path)
+
+
+def _reference_free_generation_config() -> AppConfig:
+    return AppConfig(
+        llm=LLMConfig(provider="mock"),
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            include_legacy_ready_models=False,
+            default_models=["*"],
+            external_vlm_enabled=True,
+        ),
+        model_roles={
+            "report_generation": ModelRoleConfig(
+                provider="mock", model="yunwu-candidate", max_tokens=256
+            ),
+        },
+    )
 
 
 def test_tool6_compares_report_structure():
@@ -376,12 +403,12 @@ def test_workflow_mean_scores_ignore_non_finite_metrics():
 def test_batch_readers_and_department_workflows(tmp_path: Path):
     report1 = tmp_path / "r1.txt"
     report2 = tmp_path / "r2.txt"
-    image1 = tmp_path / "i1.dcm"
-    image2 = tmp_path / "i2.dcm"
+    image1 = tmp_path / "i1.png"
+    image2 = tmp_path / "i2.png"
     report1.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal.", encoding="utf-8")
     report2.write_text("FINDINGS: Mild right lung opacity. IMPRESSION: Opacity.", encoding="utf-8")
-    image1.write_text("dummy", encoding="utf-8")
-    image2.write_text("dummy", encoding="utf-8")
+    _write_png(image1)
+    _write_png(image2)
     manifest = tmp_path / "manifest.jsonl"
     rows = [
         {
@@ -406,10 +433,7 @@ def test_batch_readers_and_department_workflows(tmp_path: Path):
         },
     ]
     manifest.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
-    cfg = AppConfig(
-        llm=LLMConfig(provider="mock"),
-        generator=GeneratorConfig(cloud_fallback_enabled=True, default_models=[], local_models=[]),
-    )
+    cfg = _reference_free_generation_config()
     batch_output = tmp_path / "workflow2.json"
     batch = run_batch_readers(manifest, batch_output, limit=2, config=cfg)
     assert batch_output.exists()
@@ -635,7 +659,7 @@ def test_batch_readers_batches_medharness_cli_generation(monkeypatch, tmp_path: 
         )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
     cfg = AppConfig(
         llm=LLMConfig(provider="mock"),
         generator=GeneratorConfig(
@@ -666,13 +690,104 @@ def test_batch_readers_batches_medharness_cli_generation(monkeypatch, tmp_path: 
         assert workflow1["generated_reports"][0]["source"] == "medharness_cli"
 
 
+def test_batch_readers_runs_model_groups_in_parallel_on_distinct_devices(monkeypatch, tmp_path: Path):
+    report = tmp_path / "report.txt"
+    image = tmp_path / "image.png"
+    manifest = tmp_path / "manifest.jsonl"
+    report.write_text("FINDINGS: Clear lungs. IMPRESSION: Normal chest.", encoding="utf-8")
+    Image.new("L", (4, 4), color=0).save(image)
+    manifest.write_text(
+        json.dumps(
+            {
+                "case_id": "case-parallel",
+                "reader": "doc_a",
+                "modality": "cxr",
+                "body_part": "chest",
+                "report_text": str(report),
+                "image_paths": [str(image)],
+                "derived_assets": {"primary_image": str(image)},
+                "warnings": [],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            include_legacy_ready_models=False,
+            default_models=["*"],
+            candidate_max_workers=2,
+            local_max_workers=1,
+            local_models=[
+                {
+                    "key": "cuda-zero-model",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["cxr"],
+                    "supported_body_parts": ["chest"],
+                    "device": "cuda:0",
+                    "ready": True,
+                },
+                {
+                    "key": "cuda-one-model",
+                    "source": "medharness_cli",
+                    "supported_modalities": ["cxr"],
+                    "supported_body_parts": ["chest"],
+                    "device": "cuda:1",
+                    "ready": True,
+                },
+            ],
+        ),
+    )
+    lock = threading.Lock()
+    active = 0
+    peak_active = 0
+
+    def fake_generate_batch(self, entry, cases, *, include_failures=False):
+        nonlocal active, peak_active
+        assert include_failures is True
+        with lock:
+            active += 1
+            peak_active = max(peak_active, active)
+        time.sleep(0.08)
+        with lock:
+            active -= 1
+        return {
+            str(case["case_id"]): GeneratedReport(
+                model=entry.key,
+                source=entry.source,
+                report="FINDINGS: Clear lungs. IMPRESSION: Normal chest.",
+                modality=str(case["modality"]),
+            )
+            for case in cases
+        }
+
+    monkeypatch.setattr(ReportGeneratorRegistry, "generate_batch", fake_generate_batch)
+
+    result = run_batch_readers(manifest, tmp_path / "workflow2.json", config=config)
+
+    assert result["failed_case_count"] == 0
+    assert peak_active == 2
+
+
 def test_batch_readers_preserves_mixed_generator_sources(monkeypatch, tmp_path: Path):
     script = tmp_path / "run_report_generation.py"
     script.write_text("# fake legacy script\n", encoding="utf-8")
     legacy_config = tmp_path / "reportgen_models.yaml"
     legacy_config.write_text("models:\n  fake_fresh:\n    python_bin: python\n", encoding="utf-8")
     artifact = tmp_path / "artifact.jsonl"
-    artifact.write_text(json.dumps({"generated_text": "FINDINGS: Artifact report.", "modality": "xray"}) + "\n", encoding="utf-8")
+    artifact.write_text(
+        json.dumps(
+            {
+                "case_id": "case1",
+                "generated_text": "FINDINGS: Artifact report.",
+                "modality": "xray",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
     report = tmp_path / "report.txt"
     image = tmp_path / "image.png"
     report.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal.", encoding="utf-8")
@@ -713,7 +828,7 @@ def test_batch_readers_preserves_mixed_generator_sources(monkeypatch, tmp_path: 
         )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
     cfg = AppConfig(
         llm=LLMConfig(provider="mock"),
         generator=GeneratorConfig(
@@ -777,7 +892,7 @@ def test_batch_readers_continues_when_case_workflow_fails(tmp_path: Path):
     assert result["case_count"] == 0
     assert result["failed_case_count"] == 1
     assert result["failed_cases"][0]["case_id"] == "bad_case"
-    assert "FileNotFoundError" in result["failed_cases"][0]["error"]
+    assert result["failed_cases"][0]["error"].startswith("FileNotFoundError: report text file not found:")
 
 
 def test_batch_readers_marks_empty_manifest_as_blocked(tmp_path: Path):
@@ -847,22 +962,21 @@ def test_batch_readers_does_not_placeholder_when_real_ocr_role_is_configured(tmp
     result = run_batch_readers(manifest, tmp_path / "workflow2.json", config=cfg)
     assert result["case_count"] == 0
     assert result["failed_case_count"] == 1
-    assert "FileNotFoundError" in result["failed_cases"][0]["error"]
+    assert result["failed_cases"][0]["error"] == (
+        "ValueError: case has no image, contact sheet, or volume asset"
+    )
 
 
 def test_sample_full_workflow_orchestrates_manifest_batch_department_and_validation(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
     case_dir.mkdir(parents=True)
-    image_path = case_dir / "Y1"
-    image_path.write_text("dummy", encoding="utf-8")
+    image_path = case_dir / "Y1.png"
+    _write_png(image_path)
     report_pdf = sample_root / "CR" / "CR001" / "report.pdf"
     report_pdf.write_text("dummy pdf", encoding="utf-8")
     output_dir = tmp_path / "run"
-    cfg = AppConfig(
-        llm=LLMConfig(provider="mock"),
-        generator=GeneratorConfig(cloud_fallback_enabled=True, default_models=[], local_models=[]),
-    )
+    cfg = _reference_free_generation_config()
     result = run_sample_full(
         sample_root,
         output_dir,
@@ -892,8 +1006,8 @@ def test_sample_full_dry_run_plans_all_compatible_local_models_without_outputs(t
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
     case_dir.mkdir(parents=True)
-    image_path = case_dir / "Y1"
-    image_path.write_text("dummy", encoding="utf-8")
+    image_path = case_dir / "Y1.png"
+    Image.new("L", (4, 4), color=0).save(image_path)
     report_pdf = sample_root / "CR" / "CR001" / "report.pdf"
     report_pdf.write_text("dummy pdf", encoding="utf-8")
     output_dir = tmp_path / "run"
@@ -922,11 +1036,11 @@ def test_sample_full_route_limit_rejects_invalid_values(tmp_path: Path, bad):
         plan_sample_full_routes(tmp_path / "sample", tmp_path / "run", limit=bad)
 
 
-def test_sample_full_dry_run_filters_local_models_by_source(tmp_path: Path):
+def test_sample_full_dry_run_filters_artifact_source_by_exact_case_id(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
     case_dir.mkdir(parents=True)
-    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    Image.new("L", (4, 4), color=0).save(case_dir / "Y1.png")
     (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
     output_dir = tmp_path / "run"
     result = plan_sample_full_routes(
@@ -938,10 +1052,14 @@ def test_sample_full_dry_run_filters_local_models_by_source(tmp_path: Path):
         model_sources=["artifact_reuse"],
     )
     keys = result["cases"][0]["compatible_model_keys"]
-    assert "chexagent" in keys
-    assert "llava_rad" in keys
-    assert "maira_2" not in keys
-    assert set(result["cases"][0]["compatible_model_sources"].values()) == {"artifact_reuse"}
+    assert keys == []
+    chexagent = next(
+        entry
+        for entry in result["cases"][0]["route_plan"]["entries"]
+        if entry["model_key"] == "chexagent"
+    )
+    assert chexagent["eligible"] is False
+    assert chexagent["excluded_reason"] == "artifact_case_not_found"
 
 
 def test_sample_full_dry_run_rejects_empty_sample_root(tmp_path: Path):

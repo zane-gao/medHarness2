@@ -59,6 +59,35 @@ def test_cxr_plugin_deduplicates_repeated_mentions_of_one_finding():
     assert nodules[0]["measurements"][0]["normalized_mm"] == 8.0
 
 
+def test_cxr_plugin_merges_impression_summary_and_keeps_measured_finding():
+    result = extract_findings(
+        "检查所见：右上肺见8mm结节影。未见气胸。诊断印象：右上肺结节。",
+        modality="cxr",
+        backend="auto",
+    )
+
+    nodules = [finding for finding in result["findings"] if finding["observation_code"] == "nodule"]
+
+    assert len(nodules) == 1
+    assert nodules[0]["anatomy_code"] == "right upper lobe"
+    assert nodules[0]["measurements"][0]["normalized_mm"] == 8.0
+    assert "8mm" in nodules[0]["source_text"]
+
+
+def test_cxr_plugin_keeps_distinct_measured_findings_when_impression_summarizes_them():
+    result = extract_findings(
+        "FINDINGS: A 4 mm nodule and a 7 mm nodule are present in the right upper lobe. "
+        "IMPRESSION: Right upper lobe nodules.",
+        modality="cxr",
+        backend="auto",
+    )
+
+    nodules = [finding for finding in result["findings"] if finding["observation_code"] == "nodule"]
+
+    assert len(nodules) == 2
+    assert sorted(finding["measurements"][0]["normalized_mm"] for finding in nodules) == [4.0, 7.0]
+
+
 def test_rule_dedup_does_not_treat_missing_measurement_as_zero():
     base = {
         "observation_code": "nodule",
@@ -78,6 +107,24 @@ def test_rule_dedup_does_not_treat_missing_measurement_as_zero():
             "finding_id": "f2",
             "measurements": [{"value": 0.0, "unit": "mm", "normalized_mm": 0.0}],
         },
+    ]
+
+    deduplicated = _deduplicate_findings(findings)
+
+    assert len(deduplicated) == 2
+
+
+def test_rule_dedup_preserves_distinct_raw_measurements_without_normalized_value():
+    base = {
+        "observation_code": "nodule",
+        "anatomy_code": "right upper lobe",
+        "laterality": "right",
+        "certainty": "present",
+        "source_text": "right upper lobe nodules",
+    }
+    findings = [
+        {**base, "finding_id": "f1", "measurements": [{"value": 4.0, "unit": "mm"}]},
+        {**base, "finding_id": "f2", "measurements": [{"value": 7.0, "unit": "mm"}]},
     ]
 
     deduplicated = _deduplicate_findings(findings)

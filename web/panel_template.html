@@ -434,7 +434,7 @@ footer { text-align: center; color: var(--ink-3); font-size: 12.5px; padding: 30
     <h3 style="margin-top:0">五阶段闭环：从输入到可治理结论</h3>
     <div class="flow">
       <div class="step"><div class="no">1</div><div class="body"><h4>契约与迁移</h4><p>冻结 case、finding、report、hazard 和 run schema，旧产物先迁移、再验证。</p></div></div>
-      <div class="step"><div class="no">2</div><div class="body"><h4>生成与评估基准</h4><p>先按三种主模态（CXR / CT / MRI）生成候选，部位只作为排序信号；区分 formal_fresh、exploratory_fresh、artifact 和 debug_fallback。</p></div></div>
+      <div class="step"><div class="no">2</div><div class="body"><h4>生成与评估基准</h4><p>按“模态 + 部位精确匹配 → 所有同模态 → 同部位且仅显式跨模态或通用模型 → 通用模型”生成候选，各层命中取并集；区分 formal_fresh、exploratory_fresh、artifact 和 debug_fallback。</p></div></div>
       <div class="step"><div class="no">3</div><div class="body"><h4>重评估与实验</h4><p>确定性主结果与 LLM 审计分开保存，重测稳定性、临床标注和六项实验门禁同步推进。</p></div></div>
       <div class="step"><div class="no">4</div><div class="body"><h4>图表与控制面板</h4><p>只从真实产物构建页面，显示 Git、来源健康、证据等级和未通过门禁。</p></div></div>
       <div class="step"><div class="no">5</div><div class="body"><h4>临床与治理</h4><p>双读者/仲裁和研究门禁完成后，才把探索性工程证据升级为正式研究结论。</p></div></div>
@@ -667,11 +667,11 @@ const FLOW = [
   { no:"入", io:true, title:"进门：一张片子 + 一份医生报告",
     desc:"输入就这两样。片子可能是胸片、CT 或 MRI；报告是医生写的原文（本批数据由 OCR 从报告单识别而来）。", chips:[] },
   { no:"1", title:"认片子 —— 这是 CT 还是胸片？",
-    desc:"先归一化三种主模态（CXR / CT / MRI）；部位作为辅助上下文，不再硬性淘汰候选。", chips:[["tool7","T7 模态识别"]] },
+    desc:"先归一化模态与部位，供精确、同模态、显式跨模态同部位和通用四级路由使用。", chips:[["tool7","T7 模态识别"]] },
   { no:"2", title:"AI 陪练团各写一份报告",
-    desc:"按模态（CXR / CT / MRI）路由到兼容的本地医学模型，部位只参与候选排序；每个模型对着片子盲写一份报告，当作对照组。", chips:[["tool8","T8 报告生成"]] },
+    desc:"先做模态 + 部位精确匹配，再并入所有同模态、同部位且仅显式跨模态或通用、以及通用模型；各层命中取并集并行盲写报告。", chips:[["tool8","T8 报告生成"]] },
   { no:"3", title:"验货 —— AI 写的报告先过质检",
-    desc:"检查模态是否冲突、段落是否完整、是否使用兜底；部位冲突保留为可审计 warning，不再作为硬阻断，并给每份报告标「证据等级」。", chips:[["toolqg","质量门禁"]] },
+    desc:"检查模态是否冲突、段落是否完整、是否使用兜底；保留路由层级和部位非精确原因，并给每份报告标「证据等级」。", chips:[["toolqg","质量门禁"]] },
   { no:"4", title:"逐份体检 —— 医生的和 AI 的都要查",
     desc:"每份报告独立做三项检查：① 五维打分（写得好不好）② 拆成发现清单（写了什么）③ 结构检查（该有的段落全不全）。", chips:[["tool1","T1 五维打分"],["tool2","T2 病灶抽取"],["tool3","T3 结构检查"]] },
   { no:"5", title:"对答案 —— 医生 vs AI 逐条配对",
@@ -811,7 +811,7 @@ const TOOLS = [
   how:`<p><b>三级瀑布：</b>① 读 DICOM 头（医学影像自带的"身份证"，里面直接写着设备类型）→ ② 认不出再看文件后缀和路径关键词 → ③ 还认不出才问视觉大模型"这是什么片子"。便宜的手段优先，贵的手段兜底——这个瀑布式设计在整个项目里反复出现。</p>` },
 
 { id:"tool8", no:"T8", name:"报告生成（AI 陪练团）", impl:IMPL.mix("本地医学模型优先；通用 VLM 兜底"), honesty:honestyBadge("t8"),
-  say:"按三种主模态叫来兼容的医学 AI 各写一份报告：CXR、CT、MRI 分别展开可用候选，部位只用于排序与审计提示。",
+  say:"按四级路由叫来兼容的医学 AI 各写一份报告：模态 + 部位精确匹配、所有同模态、同部位且仅显式跨模态或通用模型、通用模型；各层命中取并集。",
   meta:"请几位陪练医生对着同一张片子各写一份，用来跟真医生对答案。找不到对口专科时，只好请「全科实习生」（通用视觉模型 qwen3-vl-4b）顶班。",
   input:"图像 + 模态 + 可选部位", output:"多份候选报告（每份带 模型名 / 来源 / 证据等级 / 警告）",
   example:`<div class="lab">真实例子 · ${esc(EX.case_id)} 由 ${esc(gen0.model)} 生成（来源 ${esc(gen0.source)}，证据等级 ${esc(gen0.evidence_tier)}）</div>

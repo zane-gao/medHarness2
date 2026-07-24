@@ -9,6 +9,7 @@ from typing import Any
 
 from medharness2.config import AppConfig, LLMConfig, load_config, resolve_existing_path
 from medharness2.utils.io import write_json
+from medharness2.utils.processes import run_isolated_process
 
 
 def _nonnegative_count(value: Any, label: str) -> int:
@@ -219,17 +220,25 @@ def _run_local_vlm_dry_run(config: AppConfig, *, model: str | None = None) -> di
         "--dry-run",
     ]
     try:
-        completed = subprocess.run(
+        completed = run_isolated_process(
             cmd,
             check=False,
             capture_output=True,
             text=True,
             timeout=config.llm.local_cli_timeout_sec,
+            context={"requested_device": config.llm.local_cli_device},
         )
     except subprocess.TimeoutExpired:
         return {"status": "dry_run_timeout"}
     except Exception as exc:
-        return {"status": "dry_run_failed", "error": f"{type(exc).__name__}: {exc}"}
+        result = {
+            "status": "dry_run_failed",
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+        provenance = getattr(exc, "process_provenance", None)
+        if isinstance(provenance, dict):
+            result["process_provenance"] = dict(provenance)
+        return result
     parsed = _parse_json_object(completed.stdout)
     if not parsed:
         parsed = {
@@ -239,6 +248,9 @@ def _run_local_vlm_dry_run(config: AppConfig, *, model: str | None = None) -> di
     parsed["returncode"] = completed.returncode
     if completed.stderr:
         parsed["stderr_tail"] = completed.stderr[-1000:]
+    provenance = getattr(completed, "process_provenance", None)
+    if isinstance(provenance, dict):
+        parsed["process_provenance"] = dict(provenance)
     return parsed
 
 

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
+from types import ModuleType
 
 import pytest
 
@@ -879,6 +881,10 @@ def test_run_ocr_research_labels_unintegrated_paddle_provider(tmp_path: Path, mo
         "_build_source_pdf_index",
         lambda _root: {"a" * 64: source_pdf},
     )
+    paddleocr = ModuleType("paddleocr")
+    paddleocr.PaddleOCRVL = object
+    monkeypatch.setitem(sys.modules, "paddleocr", paddleocr)
+    monkeypatch.setitem(sys.modules, "paddle", ModuleType("paddle"))
     monkeypatch.setattr(research_prep, "_paddleocr_vl_weights_ready", lambda: False)
 
     run_ocr_research(pilot, research)

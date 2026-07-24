@@ -6,9 +6,11 @@ import subprocess
 from pathlib import Path
 
 import medharness2.config as config_module
+import medharness2.generators.registry as registry_module
 import pytest
 import yaml
-from medharness2.config import AppConfig, GeneratorConfig, LLMConfig, load_config
+from PIL import Image
+from medharness2.config import AppConfig, GeneratorConfig, LLMConfig, ModelRoleConfig, load_config
 from medharness2.generators.registry import ReportGeneratorRegistry
 from medharness2.llm_client import LLMClient
 from medharness2.tools.tool2_extract import extract_findings
@@ -45,10 +47,163 @@ def test_artifact_generator_reads_existing_jsonl(tmp_path: Path):
             ],
         )
     )
-    reports = generate_reports("image.png", "cxr", config=cfg)
+    reports = generate_reports("image.png", "cxr", case_id="case-a", generation_mode="benchmark", config=cfg)
     assert reports[0].model == "chexagent"
     assert "No pneumothorax" in reports[0].report
     assert reports[0].source == "artifact_reuse"
+
+
+def test_artifact_generator_is_not_available_in_production(tmp_path: Path):
+    artifact = tmp_path / "generation.jsonl"
+    artifact.write_text(
+        json.dumps({"case_id": "case-a", "generated_report": "historical report"}) + "\n",
+        encoding="utf-8",
+    )
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["artifact"],
+            local_models=[
+                {
+                    "key": "artifact",
+                    "source": "artifact_reuse",
+                    "supported_modalities": ["cxr"],
+                    "source_generation_jsonl": str(artifact),
+                }
+            ],
+        )
+    )
+
+    report = generate_reports("image.png", "cxr", case_id="case-a", config=cfg)[0]
+
+    assert report.report == ""
+    assert "artifact_mode_not_enabled" in report.warnings
+
+
+def test_artifact_generator_requires_unique_exact_case_id(tmp_path: Path):
+    artifact = tmp_path / "generation.jsonl"
+    artifact.write_text(
+        "\n".join(
+            [
+                json.dumps({"case_id": "case-a", "generated_report": "first"}),
+                json.dumps({"case_id": "case-a", "generated_report": "duplicate"}),
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["artifact"],
+            local_models=[
+                {
+                    "key": "artifact",
+                    "source": "artifact_reuse",
+                    "supported_modalities": ["cxr"],
+                    "source_generation_jsonl": str(artifact),
+                }
+            ],
+        )
+    )
+
+    missing_identity = generate_reports(
+        "image.png",
+        "cxr",
+        generation_mode="benchmark",
+        config=cfg,
+    )[0]
+    duplicate_identity = generate_reports(
+        "image.png",
+        "cxr",
+        case_id="case-a",
+        generation_mode="benchmark",
+        config=cfg,
+    )[0]
+
+    assert missing_identity.report == ""
+    assert "artifact_case_id_required" in missing_identity.warnings
+    assert duplicate_identity.report == ""
+    assert "artifact_case_id_ambiguous" in duplicate_identity.warnings
+
+
+@pytest.mark.parametrize(
+    ("rows", "expected_reason"),
+    [
+        ([{"case_id": "other-case", "generated_report": "other"}], "artifact_case_not_found"),
+        (
+            [
+                {"case_id": "case-a", "generated_report": "first"},
+                {"case_id": "case-a", "generated_report": "duplicate"},
+            ],
+            "artifact_case_id_ambiguous",
+        ),
+        ([{"sample_id": "case-a", "generated_report": "legacy alias"}], "artifact_invalid_case_id"),
+    ],
+)
+def test_artifact_route_plan_audits_exact_case_id_before_execution(
+    tmp_path: Path,
+    rows: list[dict[str, object]],
+    expected_reason: str,
+):
+    artifact = tmp_path / "generation.jsonl"
+    artifact.write_text(
+        "".join(json.dumps(row) + "\n" for row in rows),
+        encoding="utf-8",
+    )
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["artifact"],
+            local_models=[
+                {
+                    "key": "artifact",
+                    "source": "artifact_reuse",
+                    "supported_modalities": ["cxr"],
+                    "supported_body_parts": ["chest"],
+                    "source_generation_jsonl": str(artifact),
+                }
+            ],
+        )
+    )
+
+    plan = ReportGeneratorRegistry(cfg).plan_routes(
+        "cxr",
+        body_part="chest",
+        case_id="case-a",
+        generation_mode="benchmark",
+    )
+
+    assert plan.candidates == ()
+    assert plan.entries[0].excluded_reason == expected_reason
+
+
+def test_artifact_route_plan_marks_missing_file_before_execution(tmp_path: Path):
+    cfg = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            default_models=["artifact"],
+            local_models=[
+                {
+                    "key": "artifact",
+                    "source": "artifact_reuse",
+                    "supported_modalities": ["cxr"],
+                    "supported_body_parts": ["chest"],
+                    "source_generation_jsonl": str(tmp_path / "missing.jsonl"),
+                }
+            ],
+        )
+    )
+
+    plan = ReportGeneratorRegistry(cfg).plan_routes(
+        "cxr",
+        body_part="chest",
+        case_id="case-a",
+        generation_mode="replay",
+    )
+
+    assert plan.candidates == ()
+    assert plan.entries[0].excluded_reason == "artifact_missing"
 
 
 def test_artifact_generator_selects_requested_case_from_multi_case_jsonl(tmp_path: Path):
@@ -92,6 +247,7 @@ def test_artifact_generator_selects_requested_case_from_multi_case_jsonl(tmp_pat
         "cxr",
         model_keys=["artifact"],
         case_id="case-b",
+        generation_mode="benchmark",
         config=cfg,
     )
 
@@ -120,7 +276,13 @@ def test_artifact_generator_rejects_non_string_identity_and_report_fields(tmp_pa
     )
     registry = ReportGeneratorRegistry(cfg)
     entry = registry.entries["artifact"]
-    report = registry.generate(entry, "image.png", "cxr", case_id="case-a")
+    report = registry.generate(
+        entry,
+        "image.png",
+        "cxr",
+        case_id="case-a",
+        generation_mode="benchmark",
+    )
     assert report.report == ""
     assert "artifact_invalid_case_id" in report.warnings
 
@@ -178,7 +340,7 @@ def test_fallback_records_failed_local_generation_attempt(tmp_path: Path):
     assert reports[0].source == "mock_fallback"
     assert reports[0].metadata["fallback_provider"] == "mock"
     assert reports[0].metadata["local_attempts"][0]["model"] == "missing_artifact"
-    assert "artifact_missing" in reports[0].metadata["local_attempts"][0]["warnings"]
+    assert "artifact_mode_not_enabled" in reports[0].metadata["local_attempts"][0]["warnings"]
 
 
 def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: Path):
@@ -230,9 +392,11 @@ def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: P
             + "\n",
             encoding="utf-8",
         )
-        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+        completed = subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+        completed.process_provenance = {"pid": 101, "pgid": 101}
+        return completed
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
     cfg = AppConfig(
         generator=GeneratorConfig(
             cloud_fallback_enabled=False,
@@ -275,6 +439,190 @@ def test_legacy_cli_generator_invokes_medharness_script(monkeypatch, tmp_path: P
         "impression": "",
     }
     assert reports[0].metadata["raw_model_output"] == "FINDINGS: Clear lungs."
+    assert reports[0].metadata["process_provenance"] == {"pid": 101, "pgid": 101}
+
+
+@pytest.mark.parametrize(
+    ("failure_kind", "expected_warning"),
+    [
+        ("nonzero", "legacy_generation_failed"),
+        ("timeout", "legacy_generation_timeout"),
+    ],
+)
+def test_legacy_cli_failure_preserves_warning_and_process_provenance(
+    monkeypatch,
+    tmp_path: Path,
+    failure_kind: str,
+    expected_warning: str,
+):
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# fake runner\n", encoding="utf-8")
+    legacy_config = tmp_path / "legacy_models.yaml"
+    legacy_config.write_text("models:\n  failing-model: {}\n", encoding="utf-8")
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        if failure_kind == "nonzero":
+            exc = subprocess.CalledProcessError(5, cmd, output="stdout detail", stderr="stderr detail")
+        else:
+            exc = subprocess.TimeoutExpired(cmd, timeout)
+        exc.process_provenance = {"pid": 106, "pgid": 106}
+        raise exc
+
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
+    registry = ReportGeneratorRegistry(
+        AppConfig(
+            generator=GeneratorConfig(
+                cloud_fallback_enabled=False,
+                include_legacy_ready_models=False,
+                default_models=["failing-model"],
+                local_models=[
+                    {
+                        "key": "failing-model",
+                        "source": "medharness_cli",
+                        "supported_modalities": ["cxr"],
+                        "script_path": str(script),
+                        "config_path": str(legacy_config),
+                        "ready": True,
+                    }
+                ],
+            )
+        )
+    )
+
+    report = registry.generate(
+        registry.entries["failing-model"],
+        "image.png",
+        "cxr",
+        case_id="failure-case",
+    )
+
+    assert expected_warning in report.warnings
+    if failure_kind == "nonzero":
+        assert "stderr detail" in report.warnings
+    assert report.metadata["process_provenance"] == {"pid": 106, "pgid": 106}
+
+
+@pytest.mark.parametrize(
+    ("write_empty_output", "expected_warning"),
+    [
+        (False, "legacy_output_missing"),
+        (True, "legacy_output_empty"),
+    ],
+)
+def test_legacy_cli_missing_output_preserves_process_provenance(
+    monkeypatch,
+    tmp_path: Path,
+    write_empty_output: bool,
+    expected_warning: str,
+):
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# fake runner\n", encoding="utf-8")
+    legacy_config = tmp_path / "legacy_models.yaml"
+    legacy_config.write_text("models:\n  missing-output-model: {}\n", encoding="utf-8")
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        if write_empty_output:
+            output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+            output_path.write_text("", encoding="utf-8")
+        completed = subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        completed.process_provenance = {"pid": 107, "pgid": 107}
+        return completed
+
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
+    registry = ReportGeneratorRegistry(
+        AppConfig(
+            generator=GeneratorConfig(
+                include_legacy_ready_models=False,
+                cloud_fallback_enabled=False,
+                default_models=["missing-output-model"],
+                local_models=[
+                    {
+                        "key": "missing-output-model",
+                        "source": "medharness_cli",
+                        "supported_modalities": ["cxr"],
+                        "script_path": str(script),
+                        "config_path": str(legacy_config),
+                        "ready": True,
+                    }
+                ],
+            )
+        )
+    )
+
+    report = registry.generate(
+        registry.entries["missing-output-model"],
+        "image.png",
+        "cxr",
+        case_id="missing-output-case",
+    )
+
+    assert expected_warning in report.warnings
+    assert report.metadata["process_provenance"] == {"pid": 107, "pgid": 107}
+
+
+def test_legacy_batch_missing_case_output_preserves_process_provenance(
+    monkeypatch,
+    tmp_path: Path,
+):
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# fake runner\n", encoding="utf-8")
+    legacy_config = tmp_path / "legacy_models.yaml"
+    legacy_config.write_text("models:\n  partial-batch-model: {}\n", encoding="utf-8")
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        output_path = Path(cmd[cmd.index("--output-jsonl") + 1])
+        output_path.write_text(
+            json.dumps(
+                {
+                    "case_id": "case-present",
+                    "model_key": "partial-batch-model",
+                    "generated_text": "FINDINGS: Present output.",
+                    "modality": "cxr",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        completed = subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        completed.process_provenance = {"pid": 108, "pgid": 108}
+        return completed
+
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
+    registry = ReportGeneratorRegistry(
+        AppConfig(
+            generator=GeneratorConfig(
+                include_legacy_ready_models=False,
+                cloud_fallback_enabled=False,
+                default_models=["partial-batch-model"],
+                local_models=[
+                    {
+                        "key": "partial-batch-model",
+                        "source": "medharness_cli",
+                        "supported_modalities": ["cxr"],
+                        "script_path": str(script),
+                        "config_path": str(legacy_config),
+                        "ready": True,
+                    }
+                ],
+            )
+        )
+    )
+    cases = [
+        {"case_id": "case-present", "image_path": "present.png", "modality": "cxr"},
+        {"case_id": "case-missing", "image_path": "missing.png", "modality": "cxr"},
+    ]
+
+    reports = registry.generate_batch(
+        registry.entries["partial-batch-model"],
+        cases,
+        include_failures=True,
+    )
+
+    assert "legacy_batch_output_missing" in reports["case-missing"].warnings
+    assert reports["case-missing"].metadata["process_provenance"] == {
+        "pid": 108,
+        "pgid": 108,
+    }
 
 
 def test_legacy_cli_overlay_rewrites_legacy_mount_paths_with_default_python(
@@ -322,7 +670,7 @@ def test_legacy_cli_overlay_rewrites_legacy_mount_paths_with_default_python(
         )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
     cfg = AppConfig(
         generator=GeneratorConfig(
             cloud_fallback_enabled=False,
@@ -383,7 +731,7 @@ def test_legacy_cli_default_python_preserves_model_specific_runner_python(
         )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
     cfg = AppConfig(
         generator=GeneratorConfig(
             cloud_fallback_enabled=False,
@@ -448,7 +796,7 @@ def test_legacy_cli_resolves_absolute_python_bin_from_legacy_mount(
         )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
     cfg = AppConfig(
         generator=GeneratorConfig(
             cloud_fallback_enabled=False,
@@ -506,7 +854,7 @@ def test_legacy_cli_prepends_model_specific_python_paths(
         )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
     cfg = AppConfig(
         generator=GeneratorConfig(
             cloud_fallback_enabled=False,
@@ -568,7 +916,7 @@ def test_legacy_cli_overlay_applies_explicit_generation_parameters(
         )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
     cfg = AppConfig(
         generator=GeneratorConfig(
             cloud_fallback_enabled=False,
@@ -617,7 +965,7 @@ def test_legacy_cli_generator_uses_brain_mri_prompt_for_braingemma(monkeypatch, 
         )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
     volume = tmp_path / "brain.nii.gz"
     volume.write_text("volume", encoding="utf-8")
     cfg = AppConfig(
@@ -693,7 +1041,7 @@ def test_batch_reader_uses_selected_mri_series_prompt_for_legacy_cli(monkeypatch
         )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(registry_module, "run_isolated_process", fake_run)
     cfg = AppConfig(
         llm=LLMConfig(provider="mock"),
         generator=GeneratorConfig(
@@ -736,12 +1084,21 @@ def test_legacy_prompt_uses_generic_brain_mri_for_unknown_series():
 def test_registry_discovers_ready_legacy_report_generation_models():
     registry = ReportGeneratorRegistry(AppConfig())
     keys = set(registry.entries)
-    assert {"maira_2", "chexagent_srrg_findings_full", "medgemma_srrg_findings", "brain_gemma3d"} <= keys
+    assert {
+        "maira_2",
+        "chexagent_srrg_findings_full",
+        "medgemma_srrg_findings",
+        "brain_gemma3d",
+        "qwen25vl_med_grpo_report_generation",
+        "radiology_infer_mini",
+    } <= keys
     cxr = {entry.key for entry in registry.compatible_entries("cxr", body_part="chest")}
     assert {"maira_2", "chexagent_srrg_findings_full", "chexagent_srrg_impression_full"} <= cxr
+    assert "medmo_4b" in cxr
     assert "brain_gemma3d" not in cxr
     brain_mri = {entry.key for entry in registry.compatible_entries("mri", body_part="brain")}
-    assert "brain_gemma3d" in brain_mri
+    assert "brain_gemma3d" not in brain_mri
+    assert "medmo_4b" not in brain_mri
 
 
 def test_registry_exposes_legacy_model_readiness_metadata():
@@ -749,13 +1106,26 @@ def test_registry_exposes_legacy_model_readiness_metadata():
     maira = registry.entries["maira_2"]
     assert maira.report_trained is True
     assert maira.category == "report_trained_target"
-    assert maira.fresh_inference is True
-    assert maira.readiness_metadata()["route_role"] == "fresh_report_trained_local"
+    assert maira.runtime_state in {"runnable", "smoke_verified"}
+    assert maira.ready is True
+    assert maira.readiness_metadata()["runtime_state"] == maira.runtime_state
     assert "CXR findings" in maira.report_training
 
     chexagent = registry.entries["chexagent"]
     assert chexagent.fresh_inference is False
     assert chexagent.readiness_metadata()["route_role"] == "artifact_report_trained_local"
+
+
+def test_registry_preserves_non_runnable_legacy_statuses():
+    registry = ReportGeneratorRegistry(AppConfig())
+
+    brain = registry.entries["brain_gemma3d"]
+    feature_only = registry.entries["ker_vljepa_3b"]
+
+    assert brain.runtime_state == "preflight_only"
+    assert brain.ready is False
+    assert feature_only.runtime_state == "preflight_only"
+    assert feature_only.ready is False
 
 
 def test_registry_excludes_legacy_quality_blocked_models_from_formal_routes():
@@ -766,6 +1136,21 @@ def test_registry_excludes_legacy_quality_blocked_models_from_formal_routes():
     assert "chexagent_srrg_findings" not in cxr_models
     assert "lingshu_srrg_findings" not in cxr_models
     assert "qwen25vl_7b_instruct" not in registry.entries
+    for key in ("chexagent_srrg_findings", "lingshu_srrg_findings"):
+        assert registry.entries[key].runtime_state == "preflight_only"
+        assert registry.entries[key].validation_state == "quality_blocked"
+        assert registry.entries[key].fresh_inference is True
+
+
+def test_registry_uses_status_contract_for_feature_generators_and_quality_blocks():
+    registry = ReportGeneratorRegistry(load_config())
+
+    assert registry.entries["histogpt"].input_capabilities == ["feature_embedding"]
+    assert registry.entries["histgen"].input_capabilities == ["feature_embedding"]
+    assert registry.entries["histgen"].validation_state == "engineering_smoke_only"
+    assert registry.entries["histgen"].fresh_inference is True
+    assert registry.entries["pathgenic"].validation_state == "quality_blocked"
+    assert registry.entries["pathgenic"].ready is False
 
 
 def test_registry_star_selects_all_compatible_local_generators():
@@ -782,7 +1167,21 @@ def test_single_case_candidate_coverage_is_reference_recall(tmp_path: Path):
     report = tmp_path / "reference.txt"
     report.write_text("FINDINGS: Mild right lung opacity. IMPRESSION: Opacity.", encoding="utf-8")
     image = tmp_path / "image.png"
-    image.write_bytes(b"fake")
+    Image.new("L", (4, 4), color=0).save(image)
+    config = AppConfig(
+        llm=LLMConfig(provider="mock"),
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            include_legacy_ready_models=False,
+            default_models=[],
+            external_vlm_enabled=True,
+        ),
+        model_roles={
+            "report_generation": ModelRoleConfig(
+                provider="mock", model="yunwu-candidate", max_tokens=256
+            ),
+        },
+    )
     result = run_single_case(
         report_path=report,
         report_text=report.read_text(encoding="utf-8"),
@@ -791,6 +1190,8 @@ def test_single_case_candidate_coverage_is_reference_recall(tmp_path: Path):
         modality="cxr",
         body_part="chest",
         model_keys=[],
+        config=config,
+        generation_mode="benchmark",
     )
     assert result["generated_evaluations"]
     assert result["generated_evaluations"][0]["composite_inputs"]["finding_coverage"] == 0.0
@@ -799,15 +1200,40 @@ def test_single_case_candidate_coverage_is_reference_recall(tmp_path: Path):
 def test_registry_filters_all_compatible_by_source():
     registry = ReportGeneratorRegistry(AppConfig())
     selected = {entry.key: entry.source for entry in registry.select("cxr", requested=["*"], body_part="chest", sources={"artifact_reuse"})}
-    assert "chexagent" in selected
-    assert "llava_rad" in selected
-    assert "maira_2" not in selected
-    assert set(selected.values()) == {"artifact_reuse"}
+    assert selected == {}
 
 
 def test_default_config_uses_maira2_compatible_python_bin():
     registry = ReportGeneratorRegistry(load_config())
-    assert registry.entries["maira_2"].python_bin == "/data/miniconda3/envs/deepseek_2/bin/python"
+    assert registry.entries["maira_2"].python_bin == "/data/ubuntu_conda/envs/medharness_merlin/bin/python"
+
+
+def test_default_config_does_not_override_legacy_runtime_and_quality_status():
+    registry = ReportGeneratorRegistry(load_config())
+
+    maira = registry.entries["maira_2"]
+    brain = registry.entries["brain_gemma3d"]
+
+    assert maira.python_bin == "/data/ubuntu_conda/envs/medharness_merlin/bin/python"
+    assert brain.runtime_state == "preflight_only"
+    assert brain.validation_state == "quality_blocked"
+    assert brain.ready is False
+
+
+def test_direct_medharness_cli_config_does_not_infer_fresh_from_source():
+    entries = ReportGeneratorRegistry._load_entries(
+        [
+            {
+                "key": "direct-medharness-cli",
+                "source": "medharness_cli",
+                "ready": True,
+                "supported_modalities": ["cxr"],
+                "supported_body_parts": ["chest"],
+            }
+        ]
+    )
+
+    assert entries[0].fresh_inference is False
 
 
 def test_cxr_rule_extractor_marks_negated_observation_absent():

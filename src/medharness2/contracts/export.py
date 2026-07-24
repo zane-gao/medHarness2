@@ -23,6 +23,17 @@ from medharness2.contracts.evaluation import (
     StructureAuditArtifact,
 )
 from medharness2.contracts.run import RunManifest
+from medharness2.contracts.report_generation import (
+    CandidateFailureArtifact,
+    CandidateReportArtifact,
+    CandidateReportStructure,
+    CandidateStructureComparison,
+    FusionReportArtifact,
+    ProductionGenerationArtifact,
+    ProductionRankingArtifact,
+    RoutePlanArtifact,
+    RoutePlanEntryArtifact,
+)
 
 
 SCHEMA_MODELS = {
@@ -30,7 +41,16 @@ SCHEMA_MODELS = {
     "artifact_reference": ArtifactReference,
     "alignment_audit": AlignmentAuditArtifact,
     "case_evaluation": CaseEvaluationArtifact,
+    "candidate_failure": CandidateFailureArtifact,
+    "candidate_report": CandidateReportArtifact,
+    "candidate_report_structure": CandidateReportStructure,
+    "candidate_structure_comparison": CandidateStructureComparison,
     "finding_graph": FindingGraph,
+    "fusion_report": FusionReportArtifact,
+    "production_report_generation": ProductionGenerationArtifact,
+    "production_ranking": ProductionRankingArtifact,
+    "report_generation_route_plan": RoutePlanArtifact,
+    "report_generation_route_plan_entry": RoutePlanEntryArtifact,
     "generated_report": GeneratedReportArtifact,
     "hazard_adjudication": HazardAdjudicationArtifact,
     "hazard_result": HazardResult,

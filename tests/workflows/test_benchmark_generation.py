@@ -5,9 +5,13 @@ import math
 from pathlib import Path
 import sys
 
+import numpy as np
 import pytest
+from PIL import Image
 
-from medharness2.config import AppConfig, GeneratorConfig
+from medharness2.config import AppConfig, GeneratorConfig, ModelRoleConfig
+from medharness2.generators.registry import ReportGeneratorRegistry
+from medharness2.schema import GeneratedReport
 from medharness2.workflows.benchmark_generation import (
     _numeric_summary,
     _strict_bool,
@@ -34,7 +38,7 @@ def test_generation_benchmark_rejects_implicit_reference_usage_flag(bad):
 
 def _manifest(path: Path) -> Path:
     image = path.parent / "image.png"
-    image.write_bytes(b"png")
+    Image.new("L", (4, 4), color=0).save(image)
     return _manifest_with_assets(
         path,
         modality="cxr",
@@ -233,9 +237,9 @@ def test_formal_plan_reports_unknown_requested_model_without_hiding_valid_candid
 
 def test_benchmark_plan_uses_image_for_cxr_even_when_volume_exists(tmp_path: Path):
     image = tmp_path / "image.png"
-    image.write_bytes(b"png")
-    volume = tmp_path / "volume.nii.gz"
-    volume.write_bytes(b"nifti")
+    Image.new("L", (4, 4), color=0).save(image)
+    volume = tmp_path / "volume.npy"
+    np.save(volume, np.zeros((2, 4, 4), dtype=np.float32))
     manifest = _manifest_with_assets(
         tmp_path / "manifest.jsonl",
         modality="cxr",
@@ -260,9 +264,9 @@ def test_benchmark_plan_uses_volume_for_3d_modalities(
     modality: str,
 ):
     image = tmp_path / "preview.png"
-    image.write_bytes(b"png")
-    volume = tmp_path / "volume.nii.gz"
-    volume.write_bytes(b"nifti")
+    Image.new("L", (4, 4), color=0).save(image)
+    volume = tmp_path / "volume.npy"
+    np.save(volume, np.zeros((2, 4, 4), dtype=np.float32))
     manifest = _manifest_with_assets(
         tmp_path / "manifest.jsonl",
         modality=modality,
@@ -331,6 +335,95 @@ def test_formal_benchmark_run_refuses_non_formal_source(tmp_path: Path):
         )
 
 
+def test_exploratory_benchmark_replays_artifact_only_for_the_matching_case(tmp_path: Path):
+    artifact = tmp_path / "artifact.jsonl"
+    artifact.write_text(
+        json.dumps(
+            {
+                "case_id": "case-1",
+                "generated_text": "FINDINGS: Artifact finding. IMPRESSION: Artifact impression.",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    config = AppConfig(
+        generator=GeneratorConfig(
+            include_legacy_ready_models=False,
+            cloud_fallback_enabled=False,
+            default_models=["artifact-model"],
+            local_models=[
+                {
+                    "key": "artifact-model",
+                    "source": "artifact_reuse",
+                    "supported_modalities": ["cxr"],
+                    "supported_body_parts": ["chest"],
+                    "source_generation_jsonl": str(artifact),
+                    "ready": True,
+                }
+            ],
+        )
+    )
+
+    result = run_generation_benchmark(
+        _manifest(tmp_path / "manifest.jsonl"),
+        tmp_path / "out",
+        config=config,
+        formal=False,
+    )
+
+    assert result["status"] == "succeeded"
+    row = json.loads((tmp_path / "out" / "benchmark_results.jsonl").read_text(encoding="utf-8"))
+    assert row["model"] == "artifact-model"
+    assert row["generated_report"]["source"] == "artifact_reuse"
+    assert row["generated_report"]["report"].startswith("FINDINGS: Artifact finding.")
+
+
+def test_exploratory_benchmark_uses_external_vlm_and_writes_full_case_artifact(tmp_path: Path):
+    class RecordingClient:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, object]] = []
+
+        def call(self, prompt: str, **kwargs):
+            self.calls.append({"prompt": prompt, **kwargs})
+            if kwargs.get("model") == "fusion-model":
+                return "FINDINGS: No focal airspace opacity. IMPRESSION: No acute cardiopulmonary abnormality."
+            return "FINDINGS: No focal airspace opacity. IMPRESSION: No acute cardiopulmonary abnormality."
+
+    client = RecordingClient()
+    config = AppConfig(
+        generator=GeneratorConfig(
+            include_legacy_ready_models=False,
+            cloud_fallback_enabled=False,
+            default_models=["*"],
+            external_vlm_enabled=True,
+            fusion_enabled=True,
+        ),
+        model_roles={
+            "report_generation": ModelRoleConfig(provider="mock", model="candidate-model", max_tokens=256),
+            "report_fusion": ModelRoleConfig(provider="mock", model="fusion-model", max_tokens=256),
+        },
+    )
+
+    result = run_generation_benchmark(
+        _manifest(tmp_path / "manifest.jsonl"),
+        tmp_path / "out",
+        config=config,
+        formal=False,
+        llm_client=client,
+    )
+
+    case_artifacts_path = Path(result["case_artifacts_path"])
+    case_artifact = json.loads(case_artifacts_path.read_text(encoding="utf-8").splitlines()[0])
+    assert case_artifact["generation_mode"] == "benchmark"
+    assert case_artifact["route_plan"]["candidate_model_keys"] == ["yunwu_general"]
+    assert case_artifact["candidate_reports"][0]["source"] == "external_vlm"
+    assert case_artifact["candidate_reports"][0]["structure"]["structure_status"] == "succeeded"
+    assert case_artifact["top_k_reports"][0]["candidate_id"] == "case-1:yunwu_general"
+    assert case_artifact["fusion_report"]["fusion_status"] == "succeeded"
+    assert [call["model"] for call in client.calls] == ["candidate-model", "fusion-model"]
+
+
 def test_formal_benchmark_runs_fresh_only_without_reference_leakage(tmp_path: Path):
     result = run_generation_benchmark(
         _manifest(tmp_path / "manifest.jsonl"),
@@ -353,6 +446,7 @@ def test_formal_benchmark_runs_fresh_only_without_reference_leakage(tmp_path: Pa
     assert benchmark_manifest["artifact_sha256"] == {
         "results": _file_sha256(tmp_path / "out" / "benchmark_results.jsonl"),
         "summary": _file_sha256(tmp_path / "out" / "benchmark_summary.json"),
+        "case_artifacts": _file_sha256(tmp_path / "out" / "benchmark_case_artifacts.jsonl"),
     }
 
 
@@ -442,6 +536,78 @@ def test_exploratory_batch_failure_is_recorded_for_every_case(tmp_path: Path):
         assert row["execution"]["mode"] == "batch"
 
 
+def test_exploratory_benchmark_precomputes_every_planned_legacy_model(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    config = AppConfig(
+        generator=GeneratorConfig(
+            include_legacy_ready_models=False,
+            cloud_fallback_enabled=False,
+            default_models=["default-model"],
+            local_models=[
+                {
+                    "key": model_key,
+                    "source": "medharness_cli",
+                    "supported_modalities": ["cxr"],
+                    "supported_body_parts": ["chest"],
+                    "input_capabilities": ["image_2d"],
+                    "ready": True,
+                    "report_trained": True,
+                    "fresh_inference": True,
+                    "evidence_tier": "exploratory_fresh",
+                }
+                for model_key in ("default-model", "compatible-model")
+            ],
+        )
+    )
+    batch_calls: list[str] = []
+
+    def fake_generate_batch(self, entry, cases, *, include_failures=False):
+        del self
+        assert include_failures is True
+        batch_calls.append(entry.key)
+        return {
+            str(case["case_id"]): GeneratedReport(
+                model=entry.key,
+                source=entry.source,
+                report="FINDINGS: Clear lungs. IMPRESSION: No acute cardiopulmonary abnormality.",
+                modality=str(case["modality"]),
+                evidence_tier=entry.evidence_tier,
+                metadata={
+                    "generator_key": entry.key,
+                    "reference_report_used": False,
+                    "fresh_inference": True,
+                },
+            )
+            for case in cases
+        }
+
+    def unexpected_single_generate(self, *args, **kwargs):
+        del self, args, kwargs
+        raise AssertionError("planned medharness_cli models must be precomputed in model batches")
+
+    monkeypatch.setattr(ReportGeneratorRegistry, "generate_batch", fake_generate_batch)
+    monkeypatch.setattr(ReportGeneratorRegistry, "generate", unexpected_single_generate)
+
+    result = run_generation_benchmark(
+        _manifest(tmp_path / "manifest.jsonl"),
+        tmp_path / "out",
+        config=config,
+        formal=False,
+    )
+
+    assert result["status"] == "succeeded"
+    assert sorted(batch_calls) == ["compatible-model", "default-model"]
+    rows = [
+        json.loads(line)
+        for line in (tmp_path / "out" / "benchmark_results.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    assert {row["model"] for row in rows} == {"default-model", "compatible-model"}
+
+
 def _formal_config(tmp_path: Path) -> AppConfig:
     script = tmp_path / "fake_report_generator.py"
     script.write_text(
@@ -500,7 +666,7 @@ def _two_case_manifest(path: Path) -> Path:
     rows = []
     for index in (1, 2):
         image = path.parent / f"image-{index}.png"
-        image.write_bytes(f"png-{index}".encode("ascii"))
+        Image.new("L", (4, 4), color=index).save(image)
         rows.append(
             {
                 "case_id": f"case-{index}",
