@@ -46,12 +46,31 @@ def plan_sample_full_routes(
     report_trained_candidate_count = 0
     fallback_count = 0
     for row in rows:
-        entries = registry.select(
+        image_path = (
+            row.derived_assets.get("feature_path")
+            or row.derived_assets.get("wsi_feature_path")
+            or row.derived_assets.get("h5_feature_path")
+            or row.derived_assets.get("histgen_feature_path")
+            or row.derived_assets.get("volume_path")
+            or row.volume_path
+            or row.derived_assets.get("primary_image")
+            or (row.image_paths[0] if row.image_paths else "")
+        )
+        prepared_assets = {
+            **row.derived_assets,
+            **({"volume_path": row.volume_path} if row.volume_path else {}),
+        }
+        route_plan = registry.plan_routes(
             row.modality,
             requested=model_keys,
             body_part=row.body_part,
             sources=set(model_sources or []),
+            image_path=str(image_path),
+            prepared_assets=prepared_assets,
+            case_id=row.case_id,
+            generation_mode="benchmark",
         )
+        entries = list(route_plan.candidate_entries)
         if entries:
             local_candidate_count += 1
         else:
@@ -68,6 +87,7 @@ def plan_sample_full_routes(
                 "compatible_model_keys": [entry.key for entry in entries],
                 "compatible_model_sources": {entry.key: entry.source for entry in entries},
                 "compatible_model_readiness": {entry.key: entry.readiness_metadata() for entry in entries},
+                "route_plan": route_plan.to_json(),
                 "fallback_needed": not entries,
                 "warnings": row.warnings,
             }

@@ -3,6 +3,19 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from medharness2.schema import CandidateReport
+from medharness2.tools.report_structure import compare_candidate_structures
+
+
+_PRODUCTION_RANKING_WEIGHTS = {
+    "route": 0.40,
+    "structure": 0.20,
+    "consensus": 0.25,
+    "internal_consistency": 0.15,
+}
+_CONSENSUS_SIGNALS = ("laterality", "anatomy", "measurement", "severity")
+_NEUTRAL_SIGNAL_SCORE = 0.5
+
 
 def select_top_k(
     evaluations: list[dict[str, Any]],
@@ -72,6 +85,274 @@ def select_top_k(
             raise ValueError("near_cutoff_review must be a boolean")
         row.setdefault("requires_review", row.get("near_cutoff_review", False))
     return selected
+
+
+def select_production_top_k(
+    candidates: list[CandidateReport],
+    *,
+    top_k: int = 3,
+    ranking_mode: str = "production_reference_free",
+) -> list[dict[str, Any]]:
+    top_k = _strict_positive_int(top_k, "top_k")
+    if ranking_mode not in {
+        "production_reference_free",
+        "benchmark_reference_free",
+        "replay_reference_free",
+    }:
+        raise ValueError("unsupported reference-free ranking mode")
+    eligible = [candidate for candidate in candidates if _production_candidate_eligible(candidate)]
+    entity_sets = {candidate.candidate_id: _candidate_entity_set(candidate) for candidate in eligible}
+    signal_maps = {
+        signal: {
+            candidate.candidate_id: _candidate_signal_map(candidate, signal)
+            for candidate in eligible
+        }
+        for signal in _CONSENSUS_SIGNALS
+    }
+    comparison = compare_candidate_structures(
+        {candidate.candidate_id: candidate.structure for candidate in eligible}
+    )
+    rows: list[dict[str, Any]] = []
+    for candidate in eligible:
+        route_score = _production_route_score(candidate.route_tier)
+        structure_score = _production_structure_score(candidate)
+        entity_status_consensus_score = _production_consensus_score(
+            candidate.candidate_id,
+            entity_sets,
+        )
+        signal_scores: dict[str, float] = {}
+        signal_availability: dict[str, float] = {}
+        for signal in _CONSENSUS_SIGNALS:
+            signal_score, signal_available = _production_signal_consensus_score(
+                candidate.candidate_id,
+                signal_maps[signal],
+            )
+            signal_scores[signal] = signal_score
+            signal_availability[signal] = signal_available
+        consensus_score = sum(
+            [entity_status_consensus_score, *signal_scores.values()]
+        ) / (len(signal_scores) + 1)
+        comparison_metrics, comparison_reasons = _candidate_comparison_metrics(
+            candidate.candidate_id,
+            comparison,
+        )
+        internal_consistency_score = _production_internal_consistency_score(
+            candidate,
+            int(comparison_metrics["internal_conflict_count"]),
+        )
+        score = (
+            _PRODUCTION_RANKING_WEIGHTS["route"] * route_score
+            + _PRODUCTION_RANKING_WEIGHTS["structure"] * structure_score
+            + _PRODUCTION_RANKING_WEIGHTS["consensus"] * consensus_score
+            + _PRODUCTION_RANKING_WEIGHTS["internal_consistency"]
+            * internal_consistency_score
+        )
+        metrics = {
+            "route_score": round(route_score, 4),
+            "structure_score": round(structure_score, 4),
+            "entity_status_consensus_score": round(entity_status_consensus_score, 4),
+            "consensus_score": round(consensus_score, 4),
+            "internal_consistency_score": round(internal_consistency_score, 4),
+        }
+        for signal in _CONSENSUS_SIGNALS:
+            metrics[f"{signal}_consensus_score"] = round(signal_scores[signal], 4)
+            metrics[f"{signal}_signal_available"] = signal_availability[signal]
+        metrics.update(comparison_metrics)
+        ranking_reason = [
+            f"route_tier={candidate.route_tier}",
+            f"component:route={route_score:.4f}",
+            f"component:structure={structure_score:.4f}",
+            f"component:consensus={consensus_score:.4f}",
+            f"component:internal_consistency={internal_consistency_score:.4f}",
+        ]
+        ranking_reason.extend(
+            f"signal_missing:{signal}:neutral"
+            for signal in _CONSENSUS_SIGNALS
+            if signal_availability[signal] == 0.0
+        )
+        ranking_reason.extend(comparison_reasons)
+        ranking_reason.extend(
+            [
+                "reference_report_not_used",
+                "operational_ranking_not_clinical_quality",
+            ]
+        )
+        rows.append(
+            {
+                "candidate_id": candidate.candidate_id,
+                "model": candidate.generated.model,
+                "source": candidate.generated.source,
+                "rank": 0,
+                "score": round(score, 4),
+                "ranking_mode": ranking_mode,
+                "metrics": metrics,
+                "ranking_reason": ranking_reason,
+            }
+        )
+    rows.sort(key=lambda item: (-float(item["score"]), str(item["candidate_id"])))
+    for index, row in enumerate(rows, start=1):
+        row["rank"] = index
+        row["selected_top_k"] = index <= top_k
+    return rows[:top_k]
+
+
+def _production_candidate_eligible(candidate: CandidateReport) -> bool:
+    if not candidate.generated.report.strip():
+        return False
+    if candidate.structure.get("structure_status") != "succeeded":
+        return False
+    quality_gate = candidate.generated.metadata.get("quality_gate") or {}
+    return not isinstance(quality_gate, dict) or quality_gate.get("passed") is not False
+
+
+def _candidate_entity_set(candidate: CandidateReport) -> set[tuple[str, str]]:
+    return {
+        (str(item.get("entity") or "").strip(), str(item.get("observation_status") or "unknown"))
+        for item in candidate.structure.get("entities") or []
+        if str(item.get("entity") or "").strip()
+    }
+
+
+def _candidate_signal_map(
+    candidate: CandidateReport,
+    signal: str,
+) -> dict[str, set[str]]:
+    result: dict[str, set[str]] = {}
+    for item in candidate.structure.get("entities") or []:
+        entity = str(item.get("entity") or "").strip()
+        if not entity:
+            continue
+        values = _candidate_signal_values(item, signal)
+        if values:
+            result.setdefault(entity, set()).update(values)
+    return result
+
+
+def _candidate_signal_values(item: dict[str, Any], signal: str) -> set[str]:
+    if signal == "measurement":
+        values: set[str] = set()
+        for measurement in item.get("measurements") or []:
+            normalized = measurement.get("normalized_mm")
+            if normalized is None:
+                value = measurement.get("value")
+                unit = str(measurement.get("unit") or "").casefold()
+                if value is None:
+                    continue
+                normalized = float(value) * 10.0 if unit == "cm" else value
+            try:
+                values.add(f"{float(normalized):g}mm")
+            except (TypeError, ValueError):
+                continue
+        return values
+    if signal == "anatomy":
+        value = item.get("anatomy_code") or item.get("location_text")
+    else:
+        value = item.get(signal)
+    normalized = str(value or "").strip().casefold()
+    return set() if normalized in {"", "unknown", "unspecified"} else {normalized}
+
+
+def _production_route_score(route_tier: str) -> float:
+    return {
+        "exact_modality_body_part": 1.0,
+        "same_modality": 0.75,
+        "same_body_part_cross_modality": 0.5,
+        "universal": 0.25,
+    }.get(route_tier, 0.0)
+
+
+def _production_structure_score(candidate: CandidateReport) -> float:
+    structure = candidate.structure or {}
+    if structure.get("structure_status") != "succeeded":
+        return 0.0
+    return 1.0 if structure.get("spans") else 0.5
+
+
+def _production_consensus_score(
+    candidate_id: str,
+    entity_sets: dict[str, set[tuple[str, str]]],
+) -> float:
+    current = entity_sets.get(candidate_id, set())
+    others = [items for other_id, items in entity_sets.items() if other_id != candidate_id]
+    if not others:
+        return 0.5
+    similarities: list[float] = []
+    for other in others:
+        union = current | other
+        similarities.append(1.0 if not union else len(current & other) / len(union))
+    return sum(similarities) / len(similarities)
+
+
+def _production_signal_consensus_score(
+    candidate_id: str,
+    signal_maps: dict[str, dict[str, set[str]]],
+) -> tuple[float, float]:
+    current = signal_maps.get(candidate_id, {})
+    similarities: list[float] = []
+    for other_id, other in signal_maps.items():
+        if other_id == candidate_id:
+            continue
+        for entity in sorted(set(current) & set(other)):
+            union = current[entity] | other[entity]
+            similarities.append(
+                1.0 if not union else len(current[entity] & other[entity]) / len(union)
+            )
+    if not similarities:
+        return _NEUTRAL_SIGNAL_SCORE, 0.0
+    return sum(similarities) / len(similarities), 1.0
+
+
+def _production_internal_consistency_score(
+    candidate: CandidateReport,
+    internal_conflict_count: int,
+) -> float:
+    entities = {
+        str(item.get("entity") or "").strip()
+        for item in candidate.structure.get("entities") or []
+        if str(item.get("entity") or "").strip()
+    }
+    if not entities:
+        return _NEUTRAL_SIGNAL_SCORE
+    return max(0.0, 1.0 - internal_conflict_count / len(entities))
+
+
+def _candidate_comparison_metrics(
+    candidate_id: str,
+    comparison: dict[str, Any],
+) -> tuple[dict[str, float], list[str]]:
+    conflict_types = (
+        "observation_status",
+        "laterality",
+        "anatomy",
+        "measurement",
+        "severity",
+    )
+    metrics = {f"{conflict_type}_conflict_count": 0.0 for conflict_type in conflict_types}
+    reasons: list[str] = []
+    for conflict in comparison.get("conflicts") or []:
+        conflict_type = str(conflict.get("comparison_type") or "")
+        if candidate_id not in set(conflict.get("candidate_ids") or []):
+            continue
+        metric_key = f"{conflict_type}_conflict_count"
+        if metric_key in metrics:
+            metrics[metric_key] += 1.0
+        reasons.append(f"conflict:{conflict_type}:{conflict.get('entity')}")
+    omission_count = 0.0
+    for omission in comparison.get("omissions") or []:
+        if candidate_id in set(omission.get("missing_candidate_ids") or []):
+            omission_count += 1.0
+            reasons.append(f"omission:{omission.get('entity')}")
+    internal_conflict_count = 0.0
+    for conflict in comparison.get("internal_conflicts") or []:
+        if candidate_id in set(conflict.get("candidate_ids") or []):
+            internal_conflict_count += 1.0
+            reasons.append(
+                "internal_conflict:"
+                f"{conflict.get('comparison_type')}:{conflict.get('entity')}"
+            )
+    metrics["omission_count"] = omission_count
+    metrics["internal_conflict_count"] = internal_conflict_count
+    return metrics, reasons
 
 
 def _score_interval(

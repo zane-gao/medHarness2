@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 
 from medharness2.cli import main
-from medharness2.dashboard import _render_health_strip, _render_kpis, _render_reader_rows, build_dashboard
+from medharness2.dashboard import (
+    _render_health_strip,
+    _render_kpis,
+    _render_model_rows,
+    _render_reader_rows,
+    build_dashboard,
+)
 from medharness2.figures import build_figures
 from medharness2.workflows.experiments import run_experiments
 from medharness2.workflows.experiments import (
@@ -571,6 +577,39 @@ def test_dashboard_does_not_render_missing_percentile_as_p0():
     assert "0.7500" in html
     assert "—" in html
     assert "P0" not in html
+
+
+def test_dashboard_model_rows_render_canonical_runtime_validation_and_block_reason():
+    html = _render_model_rows(
+        [
+            {
+                "model_key": "blocked-model",
+                "adapter": "hf_vlm",
+                "status": "preflight_blocked",
+                "runtime_state": "preflight_only",
+                "validation_state": "quality_blocked",
+                "fresh_inference": True,
+                "quality_gate_blocked": True,
+                "supported_modalities": ["xray"],
+                "supported_body_parts": ["chest"],
+                "input_capabilities": ["image_2d"],
+                "blocked_reason": "clinical quality gate failed",
+                "latest_evidence": {
+                    "type": "fresh_inference_smoke",
+                    "path": "/tmp/smoke.jsonl",
+                    "exists": True,
+                },
+            }
+        ]
+    )
+
+    assert "blocked-model" in html
+    assert "preflight_blocked" in html
+    assert "preflight_only" in html
+    assert "quality_blocked" in html
+    assert "image_2d" in html
+    assert "fresh_inference_smoke" in html
+    assert "clinical quality gate failed" in html
 
 
 def _write_minimal_run(root: Path) -> Path:

@@ -161,6 +161,8 @@ def build_parser() -> argparse.ArgumentParser:
     models_list.add_argument("--modality")
     models_list.add_argument("--body-part")
     models_list.add_argument("--config")
+    models_list.add_argument("--all-statuses", action="store_true")
+    models_list.add_argument("--format", choices=["table", "json"], default="table")
     tools = subparsers.add_parser("tools")
     tools_sub = tools.add_subparsers(dest="tools_command", required=True)
     tools_catalog = tools_sub.add_parser("catalog")
@@ -186,11 +188,13 @@ def build_parser() -> argparse.ArgumentParser:
     workflow = subparsers.add_parser("workflow")
     workflow_sub = workflow.add_subparsers(dest="workflow", required=True)
     single = workflow_sub.add_parser("single-case")
-    single.add_argument("--report", required=True)
+    single.add_argument("--report")
     single.add_argument("--image", required=True)
     single.add_argument("--output", required=True)
     single.add_argument("--case-id")
     single.add_argument("--modality")
+    single.add_argument("--body-part")
+    single.add_argument("--generation-mode", choices=["benchmark", "replay", "production"], default="benchmark")
     single.add_argument("--top-n", type=int)
     single.add_argument("--model", action="append", dest="models")
     single.add_argument("--model-source", action="append", dest="model_sources")
@@ -221,6 +225,8 @@ def build_parser() -> argparse.ArgumentParser:
     batch.add_argument("--manifest", required=True)
     batch.add_argument("--output", required=True)
     batch.add_argument("--limit", type=int)
+    batch.add_argument("--generation-mode", choices=["benchmark", "replay", "production"], default="benchmark")
+    batch.add_argument("--top-n", type=int)
     batch.add_argument("--model", action="append", dest="models")
     batch.add_argument("--model-source", action="append", dest="model_sources")
     batch.add_argument("--all-compatible-local-models", action="store_true")
@@ -472,15 +478,63 @@ def main(argv: list[str] | None = None) -> int:
         try:
             config = load_config(args.config) if args.config else load_config()
             registry = ReportGeneratorRegistry(config)
+            catalog = build_capability_catalog(config)
         except Exception as exc:
             print(f"medHarness2 models list failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             return 1
-        entries = registry.compatible_entries(args.modality, body_part=args.body_part) if args.modality else list(registry.entries.values())
-        print("key\tsource\tmodalities\tbody_parts\tready\ttitle")
-        for entry in entries:
+        if args.all_statuses:
+            rows = list(catalog.get("model_statuses") or [])
+            if args.modality:
+                modality = args.modality.casefold()
+                rows = [
+                    row
+                    for row in rows
+                    if modality
+                    in {str(value).casefold() for value in row.get("supported_modalities") or []}
+                ]
+            if args.body_part:
+                body_part = args.body_part.casefold()
+                rows = [
+                    row
+                    for row in rows
+                    if body_part
+                    in {str(value).casefold() for value in row.get("supported_body_parts") or []}
+                ]
+        else:
+            selected = (
+                registry.compatible_entries(args.modality, body_part=args.body_part)
+                if args.modality
+                else list(registry.entries.values())
+            )
+            selected_keys = {entry.key for entry in selected}
+            rows = [
+                row for row in catalog.get("models") or [] if row.get("key") in selected_keys
+            ]
+        if args.format == "json":
+            print(json.dumps(rows, ensure_ascii=False, sort_keys=True))
+            return 0
+        print(
+            "key\tsource\tstatus\truntime_state\tvalidation_state\tfresh_inference\t"
+            "quality_gate_blocked\tmodalities\tbody_parts\tinput_capabilities\tblocked_reason"
+        )
+        for row in rows:
+            key = str(row.get("model_key") or row.get("key") or "")
             print(
-                f"{entry.key}\t{entry.source}\t{','.join(entry.supported_modalities)}\t"
-                f"{','.join(entry.supported_body_parts)}\t{entry.ready}\t{entry.title}"
+                "\t".join(
+                    [
+                        key,
+                        str(row.get("source") or row.get("adapter") or ""),
+                        str(row.get("status") or row.get("resource_status") or ""),
+                        str(row.get("runtime_state") or ""),
+                        str(row.get("validation_state") or ""),
+                        str(bool(row.get("fresh_inference"))),
+                        str(bool(row.get("quality_gate_blocked"))),
+                        ",".join(row.get("supported_modalities") or []),
+                        ",".join(row.get("supported_body_parts") or []),
+                        ",".join(row.get("input_capabilities") or []),
+                        str(row.get("blocked_reason") or ""),
+                    ]
+                )
             )
         return 0
     if args.command == "tools" and args.tools_command == "catalog":
@@ -640,15 +694,17 @@ def main(argv: list[str] | None = None) -> int:
         try:
             config = load_config(args.config) if args.config else load_config()
             result = run_single_case(
-                report_path=Path(args.report),
+                report_path=Path(args.report) if args.report else None,
                 image_path=Path(args.image),
                 output_path=Path(args.output),
                 case_id=args.case_id,
                 modality=args.modality,
+                body_part=args.body_part,
                 top_n=args.top_n,
                 model_keys=_model_keys(args),
                 model_sources=args.model_sources,
                 config=config,
+                generation_mode=args.generation_mode,
             )
         except Exception as exc:
             _record_registry(
@@ -677,6 +733,9 @@ def main(argv: list[str] | None = None) -> int:
                 result.get("pairwise_comparisons"), "single_case.pairwise_comparisons"
             )
             errors = _result_string_list(result.get("errors"), "single_case.errors")
+            candidate_reports = _result_mapping_list(result.get("candidate_reports"), "single_case.candidate_reports")
+            top_k_reports = _result_mapping_list(result.get("top_k_reports"), "single_case.top_k_reports")
+            fusion_report = _result_mapping(result.get("fusion_report"), "single_case.fusion_report")
         except Exception as exc:
             _record_registry(
                 Path(args.output).parent,
@@ -699,6 +758,8 @@ def main(argv: list[str] | None = None) -> int:
                 "report": args.report,
                 "image": args.image,
                 "modality": args.modality or "",
+                "body_part": args.body_part or "",
+                "generation_mode": args.generation_mode,
                 "case_id": args.case_id or "",
                 "top_n": args.top_n,
                 "models": _model_keys(args) or [],
@@ -710,10 +771,16 @@ def main(argv: list[str] | None = None) -> int:
                 "generated_report_count": len(generated_reports),
                 "ranking_count": len(rankings),
                 "pairwise_count": len(pairwise_comparisons),
+                "candidate_report_count": len(candidate_reports),
+                "top_k_report_count": len(top_k_reports),
+                "fusion_succeeded": fusion_report.get("fusion_status") == "succeeded",
             },
         )
         print(f"wrote medHarness2 single-case output to {args.output}")
-        print(f"generated_reports={len(generated_reports)} pairwise={len(pairwise_comparisons)}")
+        print(
+            f"generated_reports={len(generated_reports)} candidates={len(candidate_reports)} "
+            f"top_k={len(top_k_reports)} pairwise={len(pairwise_comparisons)}"
+        )
         return 1 if errors else 0
     if args.command == "workflow" and args.workflow == "sample-data":
         try:
@@ -871,7 +938,8 @@ def main(argv: list[str] | None = None) -> int:
             config = load_config(args.config) if args.config else load_config()
             result = run_batch_readers(
                 args.manifest, args.output, model_keys=_model_keys(args),
-                model_sources=args.model_sources, limit=args.limit, config=config,
+                model_sources=args.model_sources, limit=args.limit,
+                generation_mode=args.generation_mode, top_n=args.top_n, config=config,
             )
         except Exception as exc:
             _record_registry(
@@ -893,6 +961,8 @@ def main(argv: list[str] | None = None) -> int:
             inputs={
                 "manifest": args.manifest,
                 "limit": args.limit,
+                "generation_mode": args.generation_mode,
+                "top_n": args.top_n,
                 "models": _model_keys(args) or [],
                 "model_sources": args.model_sources or [],
                 "config": args.config or "",
@@ -905,6 +975,11 @@ def main(argv: list[str] | None = None) -> int:
                 "case_count": _count_or_zero(result.get("case_count"), "case_count"),
                 "failed_case_count": failed_case_count,
                 "reader_count": len(result.get("per_reader") or {}),
+                **(
+                    _result_mapping(result.get("production_summary"), "batch_readers.production_summary")
+                    if args.generation_mode == "production"
+                    else {}
+                ),
             },
         )
         print(f"wrote medHarness2 batch-readers output to {args.output}")

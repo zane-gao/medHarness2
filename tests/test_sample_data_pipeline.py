@@ -6,11 +6,14 @@ import subprocess
 from pathlib import Path
 
 import fitz
+import numpy as np
 import pandas as pd
 import pydicom
+from PIL import Image
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid
 
+import medharness2.llm_client as llm_client_module
 from medharness2.config import AppConfig, LLMConfig, ModelRoleConfig
 from medharness2.data.sample_data import build_sample_manifest
 from medharness2.data.sample_data import prepare_sample_dataset
@@ -309,7 +312,7 @@ def test_extract_report_text_can_use_local_vlm_cli_for_scanned_pdf(monkeypatch, 
         )
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(llm_client_module, "run_isolated_process", fake_run)
     cfg = AppConfig(
         llm=LLMConfig(
             provider="local_vlm_cli",
@@ -359,6 +362,38 @@ def test_prepare_case_assets_converts_cr_dicom_to_png(tmp_path: Path):
     assert prepared.derived_assets["primary_image"].endswith(".png")
     assert Path(prepared.derived_assets["primary_image"]).exists()
     assert prepared.image_paths[0].endswith(".png")
+
+
+def test_prepare_case_assets_creates_contact_sheet_from_existing_numpy_volume(tmp_path: Path):
+    volume = tmp_path / "brain.npy"
+    array = np.zeros((12, 16, 20), dtype=np.float32)
+    for index in range(array.shape[0]):
+        array[index, 3:13, 4:16] = index + 1
+    np.save(volume, array)
+
+    prepared = prepare_case_assets(
+        {
+            "case_id": "MR-VOLUME-001",
+            "modality": "mri",
+            "body_part": "brain",
+            "image_paths": [],
+            "volume_path": str(volume),
+            "report_pdf": "",
+            "warnings": [],
+        },
+        tmp_path / "derived",
+    )
+
+    contact_sheet = Path(prepared.derived_assets["contact_sheet"])
+    assert prepared.volume_path == str(volume)
+    assert prepared.derived_assets["volume_path"] == str(volume)
+    assert prepared.derived_assets["primary_image"] == str(contact_sheet)
+    assert prepared.derived_assets["contact_sheet_source"] == "volume"
+    assert contact_sheet.exists()
+    with Image.open(contact_sheet) as image:
+        assert image.format == "PNG"
+        assert image.width > 0
+        assert image.height > 0
 
 
 def test_prepare_case_assets_prefers_flair_series_for_brain_mri(monkeypatch, tmp_path: Path):

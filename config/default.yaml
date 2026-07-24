@@ -7,7 +7,7 @@ llm:
   max_retries: 3
   retry_initial_sec: 0.25
   temperature: 0.0
-  local_cli_python_bin: python
+  local_cli_python_bin: /data/ubuntu_conda/envs/medharness_merlin/bin/python
   local_cli_script: /data/isbi/gzp/medHarness/scripts/run_report_generation.py
   local_cli_config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
   local_cli_device: cuda:0
@@ -22,12 +22,32 @@ llm:
   local_hf_pdf_max_pages: 3
 
 privacy:
-  enforce_external: true
-  block_external_images: true
+  enforce_external: false
+  block_external_images: false
   allowed_external_classifications:
     - deidentified_structured
     - synthetic_test
     - public_nonclinical
+
+model_roles:
+  report_generation:
+    provider: chat_completions
+    model: qwen3-vl-plus
+    api_key_env: YUNWU_API_KEY
+    base_url: https://yunwu.ai/v1
+    max_retries: 2
+    timeout_sec: 180
+    temperature: 0.0
+    max_tokens: 4096
+  report_fusion:
+    provider: chat_completions
+    model: gpt-5.6-terra
+    api_key_env: YUNWU_API_KEY
+    base_url: https://yunwu.ai/v1
+    max_retries: 2
+    timeout_sec: 180
+    temperature: 0.0
+    max_tokens: 4096
 
 extractor:
   backend: auto
@@ -39,7 +59,27 @@ generator:
   include_legacy_ready_models: true
   legacy_config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
   default_models:
-    - chexagent
+    - maira_2
+    - chexagent_srrg_findings_full
+    - chexagent_srrg_impression_full
+    - medgemma_srrg_findings
+    - medgemma_srrg_impression
+    - lingshu_srrg_impression
+    - medmo_4b
+    - merlin_fresh
+    - medmo_4b_next
+    - qwen25vl_med_grpo_report_generation
+    - qwen25vl_med_grpo_report_generation_v2
+    - qwen25vl_flare2025_lora
+    - radiology_infer_mini
+    - yunwu_general
+  external_vlm_enabled: true
+  external_vlm_key: yunwu_general
+  external_vlm_title: Yunwu General Imaging Candidate
+  external_vlm_model_role: report_generation
+  external_vlm_input_capabilities: [image_2d]
+  fusion_enabled: true
+  fusion_model_role: report_fusion
   local_models:
     - key: chexagent
       title: CheXagent artifact
@@ -48,49 +88,6 @@ generator:
       supported_body_parts: [chest, lung]
       source_generation_jsonl: /data/isbi/gzp/baseline/medLLM3/outputs/runs/chexagent_openi_full_weight_100/generation.jsonl
       notes: Existing CXR artifact from medHarness/medLLM3; fast default smoke path.
-    - key: maira_2
-      title: MAIRA-2 fresh
-      source: medharness_cli
-      supported_modalities: [xray, cxr]
-      supported_body_parts: [chest, lung]
-      medharness_model_key: maira_2
-      python_bin: /data/miniconda3/envs/deepseek_2/bin/python
-      script_path: /data/isbi/gzp/medHarness/scripts/run_report_generation.py
-      config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
-      device: cuda:0
-      dtype: bf16
-      max_new_tokens: 160
-      timeout_sec: 1800
-      ready: true
-      notes: Fresh adapter through the existing medHarness report generation CLI.
-    - key: merlin_fresh
-      title: Merlin Fresh
-      source: medharness_cli
-      supported_modalities: [ct]
-      supported_body_parts: [abdomen, pelvis, multi-organ]
-      medharness_model_key: merlin_fresh
-      script_path: /data/isbi/gzp/medHarness/scripts/run_report_generation.py
-      config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
-      device: cuda:0
-      dtype: bf16
-      max_new_tokens: 160
-      timeout_sec: 1800
-      ready: true
-      notes: Fresh abdominal CT adapter through legacy medHarness when a NIfTI volume is available.
-    - key: brain_gemma3d
-      title: BrainGemma3D
-      source: medharness_cli
-      supported_modalities: [mri]
-      supported_body_parts: [brain, head]
-      medharness_model_key: brain_gemma3d
-      script_path: /data/isbi/gzp/medHarness/scripts/run_report_generation.py
-      config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
-      device: cuda:0
-      dtype: bf16
-      max_new_tokens: 160
-      timeout_sec: 1800
-      ready: true
-      notes: Fresh brain MRI adapter through legacy medHarness when a NIfTI volume is available.
 
 ranking:
   top_n: 3

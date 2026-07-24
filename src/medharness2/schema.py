@@ -4,7 +4,12 @@ from dataclasses import asdict, dataclass, field
 import re
 from typing import Any
 
-from medharness2.contracts import infer_evidence_tier
+from medharness2.contracts import (
+    CandidateFailureArtifact,
+    CandidateReportStructure,
+    FusionReportArtifact,
+    infer_evidence_tier,
+)
 
 
 EVIDENCE_TIERS = {"formal_fresh", "exploratory_fresh", "artifact", "debug_fallback", "mock"}
@@ -47,6 +52,72 @@ class GeneratedReport:
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass
+class CandidateFailure:
+    candidate_id: str
+    model: str
+    source: str
+    route_tier: str | None
+    stage: str = "generation"
+    warnings: list[str] = field(default_factory=list)
+    runtime_state: str = "unavailable"
+    validation_state: str = "unvalidated"
+    metadata: dict[str, Any] = field(default_factory=dict)
+    schema_version: str = "2.0"
+    artifact_type: str = "candidate_failure"
+
+    def to_json(self) -> dict[str, Any]:
+        return CandidateFailureArtifact.model_validate(asdict(self)).model_dump(mode="json")
+
+
+@dataclass
+class CandidateReport:
+    candidate_id: str
+    generated: GeneratedReport
+    route_tier: str
+    route_reason: str
+    runtime_state: str
+    validation_state: str
+    structure: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.structure:
+            self.structure = CandidateReportStructure.model_validate(self.structure).model_dump(mode="json")
+
+    def to_json(self) -> dict[str, Any]:
+        payload = self.generated.to_json()
+        payload.update(
+            {
+                "candidate_id": self.candidate_id,
+                "route_tier": self.route_tier,
+                "route_reason": self.route_reason,
+                "runtime_state": self.runtime_state,
+                "validation_state": self.validation_state,
+                "structure": self.structure,
+                "candidate_metadata": self.metadata,
+            }
+        )
+        return payload
+
+
+@dataclass
+class FusionReport:
+    fusion_status: str
+    fusion_model: str = ""
+    report: str = ""
+    input_candidate_ids: list[str] = field(default_factory=list)
+    used_image_asset: str | None = None
+    structure_version: str = ""
+    warnings: list[str] = field(default_factory=list)
+    provenance: dict[str, Any] = field(default_factory=dict)
+    schema_version: str = "2.0"
+    artifact_type: str = "fusion_report"
+
+    def to_json(self) -> dict[str, Any]:
+        return FusionReportArtifact.model_validate(asdict(self)).model_dump(mode="json")
 
 
 def require_formal_fresh_reports(reports: list[GeneratedReport]) -> None:

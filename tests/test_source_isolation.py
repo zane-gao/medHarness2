@@ -165,7 +165,13 @@ def test_explicit_reference_assisted_generation_is_debug_only():
         )
     )
 
-    report = generate_reports("image.png", "cxr", reference_report="SECRET REFERENCE", config=cfg)[0]
+    report = generate_reports(
+        "image.png",
+        "cxr",
+        reference_report="SECRET REFERENCE",
+        generation_mode="benchmark",
+        config=cfg,
+    )[0]
 
     assert "Reference report was provided" in report.report
     assert report.metadata["reference_report_used"] is True

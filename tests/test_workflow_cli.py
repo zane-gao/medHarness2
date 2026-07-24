@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 import medharness2.cli as cli_module
+from PIL import Image
 
 from medharness2.checkpoints import StageCheckpointStore
 from medharness2.cli import main
@@ -15,6 +17,117 @@ from medharness2.modules.pairwise_report import evaluate_pairwise
 from medharness2.modules.single_report import evaluate_single_report
 from medharness2.schema import GeneratedReport
 from medharness2.workflows.single_case import run_single_case
+
+
+def _write_png(path: Path) -> None:
+    Image.new("L", (4, 4), color=0).save(path)
+
+
+def _write_volume(path: Path) -> None:
+    np.save(path, np.zeros((2, 4, 4), dtype=np.float32))
+
+
+def _external_generation_config(*, fusion: bool = False) -> AppConfig:
+    return AppConfig(
+        llm=LLMConfig(provider="mock"),
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            include_legacy_ready_models=False,
+            default_models=[],
+            external_vlm_enabled=True,
+            fusion_enabled=fusion,
+        ),
+        model_roles={
+            "report_generation": ModelRoleConfig(
+                provider="mock", model="yunwu-candidate", max_tokens=256
+            ),
+            "report_fusion": ModelRoleConfig(
+                provider="mock", model="yunwu-fusion", max_tokens=256
+            ),
+        },
+    )
+
+
+def _write_external_config(root: Path, *, fusion: bool = False) -> Path:
+    config_path = root / "external_config.yaml"
+    lines = [
+        "llm:",
+        "  provider: mock",
+        "extractor:",
+        "  backend: placeholder",
+        "generator:",
+        "  cloud_fallback_enabled: false",
+        "  include_legacy_ready_models: false",
+        "  default_models: []",
+        "  local_models: []",
+        "  external_vlm_enabled: true",
+        f"  fusion_enabled: {'true' if fusion else 'false'}",
+        "model_roles:",
+        "  report_generation:",
+        "    provider: mock",
+        "    model: yunwu-candidate",
+    ]
+    if fusion:
+        lines.extend(
+            [
+                "  report_fusion:",
+                "    provider: mock",
+                "    model: yunwu-fusion",
+            ]
+        )
+    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return config_path
+
+
+def _precomputed_config(key: str, modality: str, body_part: str, capability: str) -> AppConfig:
+    return AppConfig(
+        llm=LLMConfig(provider="mock"),
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            include_legacy_ready_models=False,
+            default_models=[key],
+            local_models=[
+                {
+                    "key": key,
+                    "source": "medharness_cli",
+                    "supported_modalities": [modality],
+                    "supported_body_parts": [body_part],
+                    "input_capabilities": [capability],
+                    "runtime_state": "smoke_verified",
+                    "validation_state": "exploratory",
+                    "ready": True,
+                    "fresh_inference": True,
+                }
+            ],
+        ),
+    )
+
+
+def _precomputed_report(
+    key: str,
+    case_id: str,
+    report: str,
+    modality: str,
+    *,
+    source: str = "medharness_cli",
+    metadata: dict[str, object] | None = None,
+    evidence_tier: str = "formal_fresh",
+) -> GeneratedReport:
+    provenance = {
+        "generator_key": key,
+        "case_id": case_id,
+        "reference_report_used": False,
+        "fresh_inference": True,
+    }
+    provenance.update(metadata or {})
+    return GeneratedReport(
+        model=key,
+        source=source,
+        report=report,
+        modality=modality,
+        evidence_tier=evidence_tier,
+        metadata=provenance,
+    )
 
 
 def test_single_report_module_returns_composite_inputs():
@@ -161,7 +274,7 @@ def test_single_case_rejects_malformed_generated_composite_inputs(tmp_path: Path
     report = tmp_path / "report.txt"
     image = tmp_path / "image.png"
     report.write_text("FINDINGS: clear. IMPRESSION: normal.", encoding="utf-8")
-    image.write_bytes(b"png")
+    _write_png(image)
 
     original = evaluate_single_report
     calls = 0
@@ -180,7 +293,7 @@ def test_single_case_rejects_malformed_generated_composite_inputs(tmp_path: Path
             report_path=report,
             image_path=image,
             output_path=tmp_path / "case.json",
-            config=AppConfig(llm=LLMConfig(provider="mock")),
+            config=_external_generation_config(),
         )
 
 
@@ -948,11 +1061,37 @@ def test_pairwise_routes_hazard_disagreements_to_third_adjudicator(tmp_path: Pat
 
 def test_single_case_workflow_writes_json(tmp_path: Path):
     report = tmp_path / "human.txt"
-    image = tmp_path / "dummy.dcm"
+    image = tmp_path / "dummy.png"
     output = tmp_path / "result.json"
     report.write_text("FINDINGS: Mild right lung opacity measuring 1.2 cm.\nIMPRESSION: Mild opacity.", encoding="utf-8")
-    image.write_text("dummy", encoding="utf-8")
-    result = run_single_case(report, image, output, modality="cxr", top_n=1, llm_client=build_mock_client(), config=load_config())
+    _write_png(image)
+    config = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            include_legacy_ready_models=False,
+            default_models=["workflow-stub"],
+            local_models=[
+                {
+                    "key": "workflow-stub",
+                    "source": "local",
+                    "supported_modalities": ["cxr"],
+                    "supported_body_parts": ["chest"],
+                    "input_capabilities": ["image_2d"],
+                    "ready": True,
+                }
+            ],
+        )
+    )
+    result = run_single_case(
+        report,
+        image,
+        output,
+        modality="cxr",
+        body_part="chest",
+        top_n=1,
+        llm_client=build_mock_client(),
+        config=config,
+    )
     assert output.exists()
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert payload["human_evaluation"]
@@ -962,9 +1101,9 @@ def test_single_case_workflow_writes_json(tmp_path: Path):
 
 
 def test_single_case_preserves_legacy_fourth_positional_report_text(tmp_path: Path):
-    image = tmp_path / "dummy.dcm"
+    image = tmp_path / "dummy.png"
     output = tmp_path / "result.json"
-    image.write_text("dummy", encoding="utf-8")
+    _write_png(image)
 
     run_single_case(
         None,
@@ -983,10 +1122,10 @@ def test_single_case_preserves_legacy_fourth_positional_report_text(tmp_path: Pa
 
 def test_single_case_keyword_case_id_is_preserved_without_changing_legacy_positionals(tmp_path: Path):
     report = tmp_path / "human.txt"
-    image = tmp_path / "dummy.dcm"
+    image = tmp_path / "dummy.png"
     output = tmp_path / "result.json"
     report.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal.", encoding="utf-8")
-    image.write_text("dummy", encoding="utf-8")
+    _write_png(image)
 
     result = run_single_case(
         report,
@@ -1008,11 +1147,16 @@ def test_single_case_keyword_case_id_is_preserved_without_changing_legacy_positi
 
 def test_cli_single_case(tmp_path: Path):
     report = tmp_path / "human.txt"
-    image = tmp_path / "dummy.dcm"
+    image = tmp_path / "dummy.png"
     output = tmp_path / "result.json"
     report.write_text("FINDINGS: No pneumothorax. IMPRESSION: No acute disease.", encoding="utf-8")
-    image.write_text("dummy", encoding="utf-8")
-    code = main(["workflow", "single-case", "--report", str(report), "--image", str(image), "--output", str(output), "--modality", "cxr", "--top-n", "1"])
+    _write_png(image)
+    config = _write_external_config(tmp_path)
+    code = main([
+        "workflow", "single-case", "--report", str(report), "--image", str(image),
+        "--output", str(output), "--modality", "cxr", "--body-part", "chest",
+        "--top-n", "1", "--config", str(config),
+    ])
     assert code == 0
     payload = json.loads(output.read_text(encoding="utf-8"))
     assert "pairwise_comparisons" in payload
@@ -1021,6 +1165,49 @@ def test_cli_single_case(tmp_path: Path):
     assert entry["stage"] == "workflow.single-case"
     assert entry["outputs"]["result"] == str(output)
     assert entry["metrics"]["generated_report_count"] == len(payload["generated_reports"])
+
+
+def test_cli_single_case_production_does_not_require_reference_report(tmp_path: Path, monkeypatch):
+    image = tmp_path / "image.png"
+    output = tmp_path / "production.json"
+    Image.new("L", (4, 4), color=0).save(image)
+    config = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            include_legacy_ready_models=False,
+            default_models=["*"],
+            external_vlm_enabled=True,
+            fusion_enabled=True,
+        ),
+        model_roles={
+            "report_generation": ModelRoleConfig(provider="mock", model="yunwu-candidate", max_tokens=256),
+            "report_fusion": ModelRoleConfig(provider="mock", model="yunwu-fusion", max_tokens=256),
+        },
+    )
+    monkeypatch.setattr(cli_module, "load_config", lambda *args, **kwargs: config)
+
+    code = main(
+        [
+            "workflow",
+            "single-case",
+            "--image",
+            str(image),
+            "--output",
+            str(output),
+            "--modality",
+            "cxr",
+            "--body-part",
+            "chest",
+            "--generation-mode",
+            "production",
+        ]
+    )
+
+    assert code == 0
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["generation_mode"] == "production_reference_free"
+    assert payload["top_k_reports"]
+    assert payload["fusion_report"]["fusion_status"] == "succeeded"
 
 
 def test_cli_single_case_rejects_when_no_generator_is_available(tmp_path: Path):
@@ -1049,10 +1236,11 @@ def test_cli_single_case_rejects_when_no_generator_is_available(tmp_path: Path):
 
 def test_cli_single_case_preserves_explicit_case_id(tmp_path: Path):
     report = tmp_path / "human.txt"
-    image = tmp_path / "dummy.dcm"
+    image = tmp_path / "dummy.png"
     output = tmp_path / "result.json"
     report.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal.", encoding="utf-8")
-    image.write_text("dummy", encoding="utf-8")
+    _write_png(image)
+    config = _write_external_config(tmp_path)
 
     code = main(
         [
@@ -1066,10 +1254,14 @@ def test_cli_single_case_preserves_explicit_case_id(tmp_path: Path):
             str(output),
             "--modality",
             "cxr",
+            "--body-part",
+            "chest",
             "--case-id",
             "cli-explicit-case",
             "--top-n",
             "1",
+            "--config",
+            str(config),
         ]
     )
 
@@ -1177,15 +1369,15 @@ class _SequenceClient:
 
 def test_single_case_quality_gate_blocks_off_domain_generated_report(tmp_path: Path):
     report = tmp_path / "human.txt"
-    image = tmp_path / "brain.nii.gz"
+    image = tmp_path / "brain.npy"
     output = tmp_path / "result.json"
     report.write_text("FINDINGS: Brain MRI without acute infarct. IMPRESSION: No acute intracranial abnormality.", encoding="utf-8")
-    image.write_text("dummy", encoding="utf-8")
-    generated = GeneratedReport(
-        model="brain_gemma3d",
-        source="medharness_cli",
-        report="Findings: A left hip radiograph shows sclerosis of the femoral head.",
-        modality="mri",
+    _write_volume(image)
+    generated = _precomputed_report(
+        "brain_gemma3d",
+        output.stem,
+        "Findings: A left hip radiograph shows sclerosis of the femoral head.",
+        "mri",
     )
     result = run_single_case(
         report_path=report,
@@ -1194,7 +1386,7 @@ def test_single_case_quality_gate_blocks_off_domain_generated_report(tmp_path: P
         modality="mri",
         body_part="brain",
         precomputed_generated_reports=[generated],
-        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        config=_precomputed_config("brain_gemma3d", "mri", "brain", "volume"),
         llm_client=build_mock_client(),
     )
     blocked = result["generated_reports"][0]
@@ -1208,15 +1400,15 @@ def test_single_case_quality_gate_blocks_off_domain_generated_report(tmp_path: P
 
 def test_single_case_keeps_body_part_only_mismatch_in_ranking(tmp_path: Path):
     report = tmp_path / "human.txt"
-    image = tmp_path / "head.nii.gz"
+    image = tmp_path / "head.npy"
     output = tmp_path / "result.json"
     report.write_text("FINDINGS: Head CT without hemorrhage. IMPRESSION: No acute abnormality.", encoding="utf-8")
-    image.write_text("dummy", encoding="utf-8")
-    generated = GeneratedReport(
-        model="head_ct_reader",
-        source="medharness_cli",
-        report="FINDINGS: CT shows a small lung nodule. IMPRESSION: Follow-up recommended.",
-        modality="ct",
+    _write_volume(image)
+    generated = _precomputed_report(
+        "head_ct_reader",
+        output.stem,
+        "FINDINGS: CT shows a small lung nodule. IMPRESSION: Follow-up recommended.",
+        "ct",
     )
     result = run_single_case(
         report_path=report,
@@ -1225,7 +1417,7 @@ def test_single_case_keeps_body_part_only_mismatch_in_ranking(tmp_path: Path):
         modality="ct",
         body_part="head",
         precomputed_generated_reports=[generated],
-        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        config=_precomputed_config("head_ct_reader", "ct", "head", "volume"),
         llm_client=build_mock_client(),
     )
     kept = result["generated_reports"][0]
@@ -1239,12 +1431,12 @@ def test_single_case_quality_gate_keeps_matching_cxr_report(tmp_path: Path):
     image = tmp_path / "chest.png"
     output = tmp_path / "result.json"
     report.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal chest.", encoding="utf-8")
-    image.write_text("dummy", encoding="utf-8")
-    generated = GeneratedReport(
-        model="chexagent_srrg_findings_full",
-        source="medharness_cli",
-        report="FINDINGS: Lungs are clear. No pleural effusion or pneumothorax.",
-        modality="cxr",
+    _write_png(image)
+    generated = _precomputed_report(
+        "chexagent_srrg_findings_full",
+        output.stem,
+        "FINDINGS: Lungs are clear. No pleural effusion or pneumothorax.",
+        "cxr",
     )
     result = run_single_case(
         report_path=report,
@@ -1254,7 +1446,9 @@ def test_single_case_quality_gate_keeps_matching_cxr_report(tmp_path: Path):
         body_part="chest",
         top_n=1,
         precomputed_generated_reports=[generated],
-        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        config=_precomputed_config(
+            "chexagent_srrg_findings_full", "cxr", "chest", "image_2d"
+        ),
         llm_client=build_mock_client(),
     )
     kept = result["generated_reports"][0]
@@ -1301,15 +1495,16 @@ def test_single_case_quality_gate_allows_real_external_fallback_for_exploration(
 
 def test_single_case_allows_external_exploratory_fallback_in_ranking(tmp_path: Path):
     report = tmp_path / "human.txt"
-    image = tmp_path / "brain.nii.gz"
+    image = tmp_path / "brain.png"
     output = tmp_path / "result.json"
     report.write_text("FINDINGS: No acute infarction. IMPRESSION: Normal.", encoding="utf-8")
-    image.write_text("dummy", encoding="utf-8")
-    generated = GeneratedReport(
-        model="qwen3-vl-plus",
-        source="llm_fallback",
-        report="FINDINGS: No acute infarction. IMPRESSION: Normal.",
-        modality="mri",
+    _write_png(image)
+    generated = _precomputed_report(
+        "yunwu_general",
+        output.stem,
+        "FINDINGS: No acute infarction. IMPRESSION: Normal.",
+        "mri",
+        source="external_vlm",
         evidence_tier="exploratory_fresh",
         metadata={"fallback_used": True, "fallback_provider": "chat_completions"},
     )
@@ -1321,12 +1516,12 @@ def test_single_case_allows_external_exploratory_fallback_in_ranking(tmp_path: P
         modality="mri",
         body_part="brain",
         precomputed_generated_reports=[generated],
-        config=AppConfig(generator=GeneratorConfig(default_models=[], local_models=[])),
+        config=_external_generation_config(),
         llm_client=build_mock_client(),
     )
 
     assert result["generated_evaluations"][0]["metadata"]["fallback_used"] is True
-    assert result["rankings"][0]["model"] == "qwen3-vl-plus"
+    assert result["rankings"][0]["model"] == "yunwu_general"
     assert len(result["pairwise_comparisons"]) == 1
 
 
@@ -1349,11 +1544,11 @@ def test_quality_gate_blocks_malformed_fallback_provenance(tmp_path: Path):
 def test_single_case_fallback_uses_primary_image_instead_of_volume(tmp_path: Path):
     report = tmp_path / "human.txt"
     primary = tmp_path / "contact_sheet.png"
-    volume = tmp_path / "volume.nii.gz"
+    volume = tmp_path / "volume.npy"
     output = tmp_path / "result.json"
     report.write_text("FINDINGS: Head CT without hemorrhage. IMPRESSION: No acute abnormality.", encoding="utf-8")
-    primary.write_bytes(b"\x89PNG\r\n\x1a\n")
-    volume.write_text("volume", encoding="utf-8")
+    _write_png(primary)
+    _write_volume(volume)
 
     class RecordingClient:
         def __init__(self):
@@ -1362,20 +1557,13 @@ def test_single_case_fallback_uses_primary_image_instead_of_volume(tmp_path: Pat
         def call(self, prompt, image_path=None, **kwargs):
             if kwargs.get("response_json") is not None:
                 return json.dumps(kwargs["response_json"])
-            if prompt.startswith("Generate a concise radiology report"):
+            if prompt.startswith("Generate a radiology report"):
                 self.generation_image_path = image_path
                 return "FINDINGS: No acute intracranial hemorrhage. IMPRESSION: No acute abnormality."
             return "{}"
 
     client = RecordingClient()
-    cfg = AppConfig(
-        generator=GeneratorConfig(
-            cloud_fallback_enabled=True,
-            default_models=[],
-            local_models=[],
-            include_legacy_ready_models=False,
-        )
-    )
+    cfg = _external_generation_config()
     run_single_case(
         report_path=report,
         image_path=primary,
@@ -1421,25 +1609,9 @@ def test_cli_sample_full(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
     case_dir.mkdir(parents=True)
-    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    _write_png(case_dir / "Y1.png")
     (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "\n".join(
-            [
-                "llm:",
-                "  provider: mock",
-                "extractor:",
-                "  backend: placeholder",
-                "generator:",
-                "  cloud_fallback_enabled: true",
-                "  default_models: []",
-                "  local_models: []",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    config_path = _write_external_config(tmp_path, fusion=True)
     output_dir = tmp_path / "run"
     code = main(
         [
@@ -1471,7 +1643,7 @@ def test_cli_sample_full_dry_run_all_compatible(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
     case_dir.mkdir(parents=True)
-    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    Image.new("L", (4, 4), color=0).save(case_dir / "Y1.png")
     (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
     output_dir = tmp_path / "run"
     code = main(
@@ -1498,11 +1670,11 @@ def test_cli_sample_full_dry_run_all_compatible(tmp_path: Path):
     assert entry["metrics"]["case_count"] == 1
 
 
-def test_cli_sample_full_dry_run_filters_model_source(tmp_path: Path):
+def test_cli_sample_full_dry_run_filters_artifact_source_by_exact_case_id(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
     case_dir.mkdir(parents=True)
-    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    Image.new("L", (4, 4), color=0).save(case_dir / "Y1.png")
     (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
     output_dir = tmp_path / "run"
     code = main(
@@ -1523,8 +1695,11 @@ def test_cli_sample_full_dry_run_filters_model_source(tmp_path: Path):
     )
     assert code == 0
     route_plan = json.loads((output_dir / "route_plan.json").read_text(encoding="utf-8"))
-    assert "chexagent" in route_plan["cases"][0]["compatible_model_keys"]
-    assert "maira_2" not in route_plan["cases"][0]["compatible_model_keys"]
+    case = route_plan["cases"][0]
+    assert case["compatible_model_keys"] == ["yunwu_general"]
+    chexagent = next(entry for entry in case["route_plan"]["entries"] if entry["model_key"] == "chexagent")
+    assert chexagent["eligible"] is False
+    assert chexagent["excluded_reason"] == "artifact_case_not_found"
 
 
 def test_cli_models_list_shows_local_ready_generators(capsys):
@@ -1538,11 +1713,11 @@ def test_cli_models_list_shows_local_ready_generators(capsys):
 
 def test_cli_batch_readers_and_department_write_run_registry(tmp_path: Path):
     report = tmp_path / "report.txt"
-    image = tmp_path / "image.dcm"
+    image = tmp_path / "image.png"
     manifest = tmp_path / "manifest.jsonl"
-    config_path = _mock_no_local_config(tmp_path)
+    config_path = _write_external_config(tmp_path)
     report.write_text("FINDINGS: No pneumothorax. IMPRESSION: No acute disease.", encoding="utf-8")
-    image.write_text("dummy", encoding="utf-8")
+    _write_png(image)
     manifest.write_text(
         json.dumps(
             {
@@ -1606,6 +1781,40 @@ def test_cli_batch_readers_rejects_empty_manifest(tmp_path: Path):
     assert payload["case_count"] == 0
     assert payload["failed_case_count"] == 0
     assert payload["errors"] == ["no_cases_discovered"]
+
+
+def test_cli_batch_readers_passes_production_generation_options(monkeypatch, tmp_path: Path):
+    captured: dict[str, object] = {}
+
+    def fake_run_batch_readers(manifest_path, output_path, **kwargs):
+        captured.update(kwargs)
+        return {
+            "generation_mode": "production",
+            "case_count": 1,
+            "failed_case_count": 0,
+            "per_reader": {"reader-a": {"case_count": 1}},
+            "errors": [],
+        }
+
+    monkeypatch.setattr("medharness2.cli.run_batch_readers", fake_run_batch_readers)
+    code = main(
+        [
+            "workflow",
+            "batch-readers",
+            "--manifest",
+            str(tmp_path / "manifest.jsonl"),
+            "--output",
+            str(tmp_path / "batch.json"),
+            "--generation-mode",
+            "production",
+            "--top-n",
+            "2",
+        ]
+    )
+
+    assert code == 0
+    assert captured["generation_mode"] == "production"
+    assert captured["top_n"] == 2
 
 
 def test_cli_exploratory_benchmark_returns_nonzero_when_no_results(tmp_path: Path):

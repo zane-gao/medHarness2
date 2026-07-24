@@ -100,6 +100,8 @@ def summarize_dashboard_payload(payload: dict[str, Any]) -> dict[str, int]:
     registry = _optional_mapping(payload, "run_registry")
     figures = _optional_mapping(payload, "figures")
     catalog = _optional_mapping(payload, "catalog")
+    model_statuses = _optional_mapping_list(catalog, "model_statuses", prefix="catalog")
+    model_rows = model_statuses or _optional_mapping_list(catalog, "models", prefix="catalog")
     experiments = _optional_mapping(payload, "experiments")
     run_summary_values = _optional_mapping(run_summary, "summary", prefix="run_summary")
     case_count = _first_present(
@@ -114,7 +116,7 @@ def summarize_dashboard_payload(payload: dict[str, Any]) -> dict[str, int]:
     return {
         "case_count": _count_or_zero(case_count, "case_count"),
         "tool_count": len(_optional_list(catalog, "tools", prefix="catalog")),
-        "model_count": len(_optional_list(catalog, "models", prefix="catalog")),
+        "model_count": len(model_rows),
         "experiment_count": _count_or_zero(experiments.get("experiment_count", 0), "experiment_count"),
         "figure_count": _count_or_zero(figure_count, "figure_count"),
         "registry_entry_count": len(_optional_list(registry, "entries", prefix="run_registry")),
@@ -252,6 +254,8 @@ def _build_template_fragments(payload: dict[str, Any]) -> dict[str, str]:
     tables = _optional_mapping(payload, "analysis_tables")
     registry = _optional_mapping(payload, "run_registry")
     figures = _optional_mapping(payload, "figures")
+    model_statuses = _optional_mapping_list(catalog, "model_statuses", prefix="catalog")
+    model_rows = model_statuses or _optional_mapping_list(catalog, "models", prefix="catalog")
 
     # JSON 嵌入 <script type="application/json">：转义 "</" 防止提前闭合标签
     payload_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
@@ -270,8 +274,8 @@ def _build_template_fragments(payload: dict[str, Any]) -> dict[str, str]:
         "__MH2_WORKFLOW_ROWS__": _render_workflow_rows(_optional_mapping_list(catalog, "workflow_stages", prefix="catalog")),
         "__MH2_TOOL_CARDS__": _render_tool_cards(_optional_mapping_list(catalog, "tools", prefix="catalog")),
         "__MH2_TOOL_TABLE_ROWS__": _render_tool_table_rows(_optional_mapping_list(catalog, "tools", prefix="catalog")),
-        "__MH2_MODEL_COUNT__": str(len(_optional_mapping_list(catalog, "models", prefix="catalog"))),
-        "__MH2_MODEL_ROWS__": _render_model_rows(_optional_mapping_list(catalog, "models", prefix="catalog")),
+        "__MH2_MODEL_COUNT__": str(len(model_rows)),
+        "__MH2_MODEL_ROWS__": _render_model_rows(model_rows),
         "__MH2_ROLE_CARDS__": _render_role_cards({**providers, "model_roles": model_roles}),
         "__MH2_EXPERIMENT_CARDS__": _render_experiment_cards(_optional_mapping_list(experiments, "experiments", prefix="experiments")),
         "__MH2_PROTOCOL_CARDS__": _render_protocol_cards(_optional_mapping_list(protocol, "experiments", prefix="experiment_protocol")),
@@ -629,25 +633,41 @@ def _render_tool_table_rows(tools: list[dict[str, Any]]) -> str:
 
 def _render_model_rows(models: list[dict[str, Any]]) -> str:
     if not models:
-        return _empty_row(6)
+        return _empty_row(8)
     rows: list[str] = []
     for model in models:
-        fresh = (
-            '<span class="badge b-ok">fresh</span>'
-            if model.get("fresh_inference")
-            else '<span class="badge b-warn">artifact</span>'
+        key = model.get("model_key") or model.get("key") or ""
+        adapter = model.get("adapter") or model.get("source") or ""
+        status = model.get("status") or model.get("resource_status") or ""
+        runtime_state = model.get("runtime_state") or ""
+        validation_state = model.get("validation_state") or ""
+        latest_evidence = model.get("latest_evidence")
+        if not isinstance(latest_evidence, dict):
+            latest_evidence = {}
+        evidence_type = latest_evidence.get("type") or ""
+        evidence_path = latest_evidence.get("path") or ""
+        evidence_exists = latest_evidence.get("exists") is True
+        evidence = (
+            f'<span class="badge {"b-ok" if evidence_exists else "b-warn"}">'
+            f'{_esc(evidence_type or "missing")}</span>'
+            f'<br><span class="mono" style="font-size:10px">{_esc(evidence_path)}</span>'
+            if evidence_type or evidence_path
+            else '<span class="badge b-plain">none</span>'
         )
-        tier = model.get("evidence_tier")
-        tier_chip = f'<span class="mchip">{_esc(tier)}</span>' if tier else ""
+        blocked_reason = model.get("blocked_reason") or ""
         rows.append(
             "<tr>"
-            f'<td class="primary mono">{_esc(model.get("key", ""))}<br>'
-            f'<span style="color:var(--ink-3);font-size:11px">{_esc(model.get("title", ""))}</span></td>'
-            f"<td>{_source_chip(model.get('source'))}{tier_chip}</td>"
-            f'<td><span class="mchip">{_esc(model.get("route_role", ""))}</span></td>'
-            f"<td>{_esc(', '.join(model.get('supported_modalities') or []))}</td>"
-            f"<td>{fresh}</td>"
-            f"<td>{_esc(model.get('notes', ''))}</td>"
+            f'<td class="primary mono">{_esc(key)}<br>'
+            f'<span style="color:var(--ink-3);font-size:11px">{_esc(model.get("title") or adapter)}</span></td>'
+            f"<td>{_source_chip(adapter)}</td>"
+            f'<td><span class="mchip">{_esc(status)}</span></td>'
+            f'<td><span class="mchip">{_esc(runtime_state)}</span><br>'
+            f'<span class="mchip">{_esc(validation_state)}</span></td>'
+            f"<td>{_esc(', '.join(model.get('supported_modalities') or []))}<br>"
+            f'<span style="color:var(--ink-3)">{_esc(", ".join(model.get("supported_body_parts") or []))}</span></td>'
+            f"<td>{_esc(', '.join(model.get('input_capabilities') or []))}</td>"
+            f"<td>{evidence}</td>"
+            f"<td>{_esc(blocked_reason)}</td>"
             "</tr>"
         )
     return "".join(rows)

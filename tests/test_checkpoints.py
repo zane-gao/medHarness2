@@ -4,13 +4,14 @@ import json
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 from medharness2.checkpoints import (
     CheckpointIntegrityError,
     StageCheckpointStore,
     stable_sha256,
 )
-from medharness2.config import AppConfig, ModelRoleConfig
+from medharness2.config import AppConfig, GeneratorConfig, ModelRoleConfig
 from medharness2.modules.pairwise_report import evaluate_pairwise
 from medharness2.modules.pairwise_report import _valid_error_index
 from medharness2.modules.single_report import evaluate_single_report
@@ -436,8 +437,26 @@ def test_run_single_case_propagates_stable_checkpoint_namespaces(
     monkeypatch.setattr("medharness2.workflows.single_case.evaluate_single_report", fake_single)
     monkeypatch.setattr("medharness2.workflows.single_case.evaluate_pairwise", fake_pairwise)
     image = tmp_path / "image.png"
-    image.write_bytes(b"png")
+    Image.new("L", (4, 4), color=0).save(image)
     store = StageCheckpointStore(tmp_path / "checkpoints")
+    config = AppConfig(
+        generator=GeneratorConfig(
+            default_models=["model-a"],
+            include_legacy_ready_models=False,
+            local_models=[
+                {
+                    "key": "model-a",
+                    "source": "local",
+                    "supported_modalities": ["cxr"],
+                    "supported_body_parts": ["chest"],
+                    "ready": True,
+                    "runtime_state": "runnable",
+                    "validation_state": "engineering_smoke_only",
+                    "input_capabilities": ["image_2d"],
+                }
+            ],
+        )
+    )
 
     run_single_case(
         report_text="FINDINGS: Clear lungs.",
@@ -448,14 +467,19 @@ def test_run_single_case_propagates_stable_checkpoint_namespaces(
         precomputed_generated_reports=[
             GeneratedReport(
                 model="model-a",
-                source="medharness_cli",
+                source="local",
                 report="FINDINGS: Clear lungs.",
                 modality="cxr",
                 evidence_tier="exploratory_fresh",
-                metadata={"reference_report_used": False, "fresh_inference": True},
+                metadata={
+                    "generator_key": "model-a",
+                    "case_id": "case-1",
+                    "reference_report_used": False,
+                    "fresh_inference": True,
+                },
             )
         ],
-        config=AppConfig(),
+        config=config,
         llm_client=object(),
         checkpoint_store=store,
     )

@@ -26,6 +26,7 @@ data = [
   "pydicom>=3.0",
   "Pillow>=10.0",
   "numpy>=1.26",
+  "h5py>=3.11",
 ]
 test = [
   "fastapi>=0.110",
@@ -44,7 +45,7 @@ medharness2 = "medharness2.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-medharness2 = ["templates/*.html"]
+medharness2 = ["templates/*.html", "templates/*.json"]
 
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib"

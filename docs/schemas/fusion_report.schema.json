@@ -1,0 +1,80 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "2.0",
+      "default": "2.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "artifact_type": {
+      "const": "fusion_report",
+      "default": "fusion_report",
+      "title": "Artifact Type",
+      "type": "string"
+    },
+    "fusion_status": {
+      "enum": [
+        "disabled",
+        "no_candidates",
+        "role_not_configured",
+        "failed",
+        "empty_output",
+        "succeeded"
+      ],
+      "title": "Fusion Status",
+      "type": "string"
+    },
+    "fusion_model": {
+      "default": "",
+      "title": "Fusion Model",
+      "type": "string"
+    },
+    "report": {
+      "default": "",
+      "title": "Report",
+      "type": "string"
+    },
+    "input_candidate_ids": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Input Candidate Ids",
+      "type": "array"
+    },
+    "used_image_asset": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Used Image Asset"
+    },
+    "structure_version": {
+      "default": "",
+      "title": "Structure Version",
+      "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+    },
+    "provenance": {
+      "additionalProperties": true,
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "required": [
+    "fusion_status"
+  ],
+  "title": "FusionReportArtifact",
+  "type": "object"
+}

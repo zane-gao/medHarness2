@@ -5,7 +5,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 from medharness2.config import AppConfig, load_config
-from medharness2.generators.registry import ReportGeneratorRegistry
+from medharness2.generators.registry import (
+    ReportGeneratorRegistry,
+    load_legacy_status_export,
+)
 
 
 TOOL_CATALOG: list[dict[str, Any]] = [
@@ -505,11 +508,21 @@ WORKFLOW_STAGE_CATALOG: list[dict[str, Any]] = [
 def build_capability_catalog(config: AppConfig | None = None) -> dict[str, Any]:
     cfg = config or load_config()
     registry = ReportGeneratorRegistry(cfg)
+    status_export = load_legacy_status_export(cfg.generator.legacy_config_path)
+    model_statuses = status_export.get("models") or []
+    if not isinstance(model_statuses, list):
+        model_statuses = []
     return {
         "schema_version": "1.0",
         "tools": TOOL_CATALOG,
         "workflow_stages": WORKFLOW_STAGE_CATALOG,
         "models": [_model_entry(entry) for entry in registry.entries.values()],
+        "model_statuses": model_statuses,
+        "model_status_summary": {
+            key: value
+            for key, value in status_export.items()
+            if key != "models"
+        },
         "providers": {
             "llm": {
                 "provider": cfg.llm.provider,
@@ -555,15 +568,7 @@ def _model_entry(entry: Any) -> dict[str, Any]:
     return {
         "key": entry.key,
         "title": entry.title,
-        "source": entry.source,
         "supported_modalities": list(entry.supported_modalities),
         "supported_body_parts": list(entry.supported_body_parts),
-        "ready": entry.ready,
-        "category": entry.category,
-        "report_trained": entry.report_trained,
-        "report_training": entry.report_training,
-        "fresh_inference": entry.fresh_inference,
-        "route_role": entry.route_role,
-        "evidence_tier": entry.evidence_tier,
-        "notes": entry.notes,
+        **entry.readiness_metadata(),
     }

@@ -5,9 +5,46 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 import medharness2.api as api_module
 from medharness2.api import _count_or_zero, _result_bool, _result_mapping, _result_string_list, app
+from medharness2.config import AppConfig, GeneratorConfig, ModelRoleConfig
+
+
+def _write_png(path: Path) -> None:
+    Image.new("L", (4, 4), color=0).save(path)
+
+
+def _write_external_config(root: Path, *, fusion: bool = False) -> Path:
+    config_path = root / "external_config.yaml"
+    lines = [
+        "llm:",
+        "  provider: mock",
+        "extractor:",
+        "  backend: placeholder",
+        "generator:",
+        "  cloud_fallback_enabled: false",
+        "  include_legacy_ready_models: false",
+        "  default_models: []",
+        "  local_models: []",
+        "  external_vlm_enabled: true",
+        f"  fusion_enabled: {'true' if fusion else 'false'}",
+        "model_roles:",
+        "  report_generation:",
+        "    provider: mock",
+        "    model: yunwu-candidate",
+    ]
+    if fusion:
+        lines.extend(
+            [
+                "  report_fusion:",
+                "    provider: mock",
+                "    model: yunwu-fusion",
+            ]
+        )
+    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return config_path
 
 
 def test_api_registry_counts_reject_invalid_values():
@@ -234,30 +271,16 @@ def test_api_rejects_malformed_render_and_merge_results(
 
 
 def test_api_single_case_accepts_report_text(tmp_path: Path):
-    config_path = tmp_path / "api_config.yaml"
-    config_path.write_text(
-        "\n".join(
-            [
-                "llm:",
-                "  provider: mock",
-                "extractor:",
-                "  backend: placeholder",
-                "generator:",
-                "  cloud_fallback_enabled: true",
-                "  default_models: []",
-                "  local_models: []",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    config_path = _write_external_config(tmp_path)
+    image_path = tmp_path / "image.png"
+    _write_png(image_path)
     output_path = tmp_path / "api_result.json"
     client = TestClient(app)
     response = client.post(
         "/workflow/single-case",
         json={
             "report_text": "FINDINGS: No pneumothorax. IMPRESSION: No acute disease.",
-            "image_path": "tests/fixtures/dummy.dcm",
+            "image_path": str(image_path),
             "output_path": str(output_path),
             "modality": "cxr",
             "top_n": 1,
@@ -268,40 +291,26 @@ def test_api_single_case_accepts_report_text(tmp_path: Path):
     body = response.json()
     assert body["output_path"] == str(output_path)
     assert body["summary"]["generated_reports"] == 1
-    assert body["summary"]["pairwise_comparisons"] == 0
-    assert body["summary"]["rankings"] == 0
+    assert body["summary"]["pairwise_comparisons"] == 1
+    assert body["summary"]["rankings"] == 1
     assert body["summary"]["modality"] == "cxr"
     assert output_path.exists()
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     assert payload["generated_reports"]
-    assert payload["generated_reports"][0]["metadata"]["quality_gate"]["passed"] is False
+    assert payload["generated_reports"][0]["metadata"]["quality_gate"]["passed"] is True
 
 
 def test_api_single_case_preserves_explicit_case_id(tmp_path: Path):
-    config_path = tmp_path / "api_config.yaml"
-    config_path.write_text(
-        "\n".join(
-            [
-                "llm:",
-                "  provider: mock",
-                "extractor:",
-                "  backend: placeholder",
-                "generator:",
-                "  cloud_fallback_enabled: true",
-                "  default_models: []",
-                "  local_models: []",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    config_path = _write_external_config(tmp_path)
+    image_path = tmp_path / "image.png"
+    _write_png(image_path)
     output_path = tmp_path / "api_result.json"
     response = TestClient(app).post(
         "/workflow/single-case",
         json={
             "case_id": "api-case-id",
             "report_text": "FINDINGS: No pneumothorax. IMPRESSION: Normal.",
-            "image_path": "tests/fixtures/dummy.dcm",
+            "image_path": str(image_path),
             "output_path": str(output_path),
             "modality": "cxr",
             "top_n": 1,
@@ -322,12 +331,14 @@ def test_api_single_case_surfaces_no_generated_reports_in_summary_and_registry(t
         "llm:\n  provider: mock\ngenerator:\n  cloud_fallback_enabled: false\n  default_models: []\n  local_models: []\n",
         encoding="utf-8",
     )
+    image_path = tmp_path / "image.png"
+    _write_png(image_path)
     output_path = tmp_path / "api_result.json"
     response = TestClient(app).post(
         "/workflow/single-case",
         json={
             "report_text": "FINDINGS: Normal. IMPRESSION: Normal.",
-            "image_path": "tests/fixtures/dummy.dcm",
+            "image_path": str(image_path),
             "output_path": str(output_path),
             "modality": "cxr",
             "config_path": str(config_path),
@@ -352,28 +363,50 @@ def test_api_single_case_requires_report_text_or_path(tmp_path: Path):
     assert response.status_code == 400
 
 
-def test_api_batch_readers_and_department(tmp_path: Path):
-    config_path = tmp_path / "api_config.yaml"
-    config_path.write_text(
-        "\n".join(
-            [
-                "llm:",
-                "  provider: mock",
-                "extractor:",
-                "  backend: placeholder",
-                "generator:",
-                "  cloud_fallback_enabled: true",
-                "  default_models: []",
-                "  local_models: []",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
+def test_api_single_case_production_does_not_require_reference_report(tmp_path: Path, monkeypatch):
+    image = tmp_path / "image.png"
+    output_path = tmp_path / "production.json"
+    _write_png(image)
+    config = AppConfig(
+        generator=GeneratorConfig(
+            cloud_fallback_enabled=False,
+            include_legacy_ready_models=False,
+            default_models=["*"],
+            external_vlm_enabled=True,
+            fusion_enabled=True,
+        ),
+        model_roles={
+            "report_generation": ModelRoleConfig(provider="mock", model="yunwu-candidate", max_tokens=256),
+            "report_fusion": ModelRoleConfig(provider="mock", model="yunwu-fusion", max_tokens=256),
+        },
     )
+    monkeypatch.setattr(api_module, "load_config", lambda *args, **kwargs: config)
+
+    response = TestClient(app).post(
+        "/workflow/single-case",
+        json={
+            "case_id": "api-production-case",
+            "image_path": str(image),
+            "output_path": str(output_path),
+            "modality": "cxr",
+            "body_part": "chest",
+            "generation_mode": "production",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    assert payload["generation_mode"] == "production_reference_free"
+    assert payload["top_k_reports"]
+    assert payload["fusion_report"]["fusion_status"] == "succeeded"
+
+
+def test_api_batch_readers_and_department(tmp_path: Path):
+    config_path = _write_external_config(tmp_path)
     report = tmp_path / "report.txt"
-    image = tmp_path / "image.dcm"
+    image = tmp_path / "image.png"
     report.write_text("FINDINGS: No pneumothorax. IMPRESSION: Normal.", encoding="utf-8")
-    image.write_text("dummy", encoding="utf-8")
+    _write_png(image)
     manifest = tmp_path / "manifest.jsonl"
     manifest.write_text(
         json.dumps(
@@ -443,6 +476,36 @@ def test_api_sample_data_returns_structured_failure_for_malformed_config(tmp_pat
     assert response.json()["detail"] == "sample_data_failed:ValueError"
     registry = json.loads((output_dir / "run_registry.json").read_text(encoding="utf-8"))
     assert registry["entries"][-1]["status"] == "failed"
+
+
+def test_api_batch_readers_passes_production_generation_options(monkeypatch, tmp_path: Path):
+    captured: dict[str, object] = {}
+
+    def fake_run_batch_readers(manifest_path, output_path, **kwargs):
+        captured.update(kwargs)
+        return {
+            "generation_mode": "production",
+            "case_count": 1,
+            "failed_case_count": 0,
+            "per_reader": {"reader-a": {"case_count": 1}},
+            "errors": [],
+            "cases": [],
+        }
+
+    monkeypatch.setattr("medharness2.api.run_batch_readers", fake_run_batch_readers)
+    response = TestClient(app).post(
+        "/workflow/batch-readers",
+        json={
+            "manifest_path": str(tmp_path / "manifest.jsonl"),
+            "output_path": str(tmp_path / "batch.json"),
+            "generation_mode": "production",
+            "top_n": 2,
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["generation_mode"] == "production"
+    assert captured["top_n"] == 2
 
 
 def test_api_validate_run(tmp_path: Path):
@@ -633,25 +696,9 @@ def test_api_sample_full(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
     case_dir.mkdir(parents=True)
-    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    _write_png(case_dir / "Y1.png")
     (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
-    config_path = tmp_path / "api_config.yaml"
-    config_path.write_text(
-        "\n".join(
-            [
-                "llm:",
-                "  provider: mock",
-                "extractor:",
-                "  backend: placeholder",
-                "generator:",
-                "  cloud_fallback_enabled: true",
-                "  default_models: []",
-                "  local_models: []",
-            ]
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    config_path = _write_external_config(tmp_path, fusion=True)
     output_dir = tmp_path / "run"
     client = TestClient(app)
     response = client.post(
@@ -675,7 +722,7 @@ def test_api_sample_full_dry_run_all_compatible(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
     case_dir.mkdir(parents=True)
-    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    _write_png(case_dir / "Y1.png")
     (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
     output_dir = tmp_path / "run"
     client = TestClient(app)
@@ -704,7 +751,7 @@ def test_api_sample_full_dry_run_filters_model_source(tmp_path: Path):
     sample_root = tmp_path / "sample"
     case_dir = sample_root / "CR" / "CR001" / "W1"
     case_dir.mkdir(parents=True)
-    (case_dir / "Y1").write_text("dummy", encoding="utf-8")
+    _write_png(case_dir / "Y1.png")
     (sample_root / "CR" / "CR001" / "report.pdf").write_text("dummy pdf", encoding="utf-8")
     output_dir = tmp_path / "run"
     client = TestClient(app)
@@ -720,9 +767,13 @@ def test_api_sample_full_dry_run_filters_model_source(tmp_path: Path):
         },
     )
     assert response.status_code == 200
-    keys = response.json()["result"]["cases"][0]["compatible_model_keys"]
-    assert "chexagent" in keys
-    assert "maira_2" not in keys
+    case = response.json()["result"]["cases"][0]
+    assert case["compatible_model_keys"] == ["yunwu_general"]
+    chexagent = next(
+        entry for entry in case["route_plan"]["entries"] if entry["model_key"] == "chexagent"
+    )
+    assert chexagent["eligible"] is False
+    assert chexagent["excluded_reason"] == "artifact_case_not_found"
 
 
 def test_api_catalog_tools_returns_provider_without_secret_values():
@@ -733,6 +784,20 @@ def test_api_catalog_tools_returns_provider_without_secret_values():
     assert body["providers"]["llm"]["secret_values_exposed"] is False
     assert any(tool["id"] == "tool8_generate" for tool in body["tools"])
     assert body["models"]
+
+
+def test_api_catalog_models_returns_complete_canonical_status_export():
+    client = TestClient(app)
+
+    response = client.get("/catalog/models")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model_status_summary"]["model_count"] == 390
+    assert body["model_status_summary"]["quality_gate_blocked_count"] == 36
+    assert len(body["model_statuses"]) == 390
+    maira = next(row for row in body["model_statuses"] if row["model_key"] == "maira_2")
+    assert maira["latest_evidence"]["exists"] is True
 
 
 def test_api_workflow_education_eval_report(tmp_path: Path):

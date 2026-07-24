@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from threading import Barrier
 
 import fitz
 import pytest
 
+import medharness2.llm_client as llm_client_module
 from medharness2.config import AppConfig, LLMConfig
 from medharness2.llm_client import (
     LLMClient,
@@ -23,6 +26,18 @@ def test_mock_client_returns_text():
     result = client.call("hello", image_path="img.dcm")
     assert "mock response" in result
     assert "img.dcm" in result
+
+
+def test_external_payload_builders_reject_missing_or_empty_image_assets(tmp_path):
+    missing = tmp_path / "missing.png"
+    empty = tmp_path / "empty.png"
+    empty.write_bytes(b"")
+
+    for path in (missing, empty):
+        with pytest.raises(LLMClientError, match="image asset"):
+            LLMClient._build_chat_content("look", str(path))
+        with pytest.raises(LLMClientError, match="image asset"):
+            LLMClient._build_input("look", str(path))
 
 
 @pytest.mark.parametrize("bad", [True, 1.5, 0, -1, "2"])
@@ -438,9 +453,11 @@ def test_local_vlm_cli_provider_invokes_legacy_runner(monkeypatch, tmp_path):
         assert row["modality"] == "generic_image"
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(json.dumps({"case_id": row["case_id"], "generated_text": "FINDINGS: Local OCR."}) + "\n")
-        return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+        completed = subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
+        completed.process_provenance = {"pid": 102, "pgid": 102}
+        return completed
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+    monkeypatch.setattr(llm_client_module, "run_isolated_process", fake_run)
     client = LLMClient(
         AppConfig(
             llm=LLMConfig(
@@ -460,6 +477,103 @@ def test_local_vlm_cli_provider_invokes_legacy_runner(monkeypatch, tmp_path):
     assert result == "FINDINGS: Local OCR."
     assert calls[0][0] == "/opt/local/python"
     assert calls[0][calls[0].index("--model-key") + 1] == "qwen25vl_7b_instruct"
+    assert client.last_process_provenance == {"pid": 102, "pgid": 102}
+
+
+def test_local_vlm_cli_preserves_nonzero_error_contract(monkeypatch, tmp_path):
+    client = _local_vlm_cli_client(tmp_path)
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        exc = subprocess.CalledProcessError(
+            4,
+            cmd,
+            output="stdout detail",
+            stderr="stderr detail",
+        )
+        exc.process_provenance = {"pid": 104, "pgid": 104}
+        raise exc
+
+    monkeypatch.setattr(llm_client_module, "run_isolated_process", fake_run)
+
+    with pytest.raises(LLMClientError, match="Local VLM CLI call failed: stderr detail") as caught:
+        client.call("Generate report.")
+
+    assert isinstance(caught.value.__cause__, subprocess.CalledProcessError)
+    assert client.last_process_provenance == {"pid": 104, "pgid": 104}
+
+
+def test_local_vlm_cli_preserves_timeout_error_contract(monkeypatch, tmp_path):
+    client = _local_vlm_cli_client(tmp_path)
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        exc = subprocess.TimeoutExpired(cmd, timeout, output=b"partial stdout")
+        exc.process_provenance = {"pid": 105, "pgid": 105}
+        raise exc
+
+    monkeypatch.setattr(llm_client_module, "run_isolated_process", fake_run)
+
+    with pytest.raises(LLMClientError, match="Local VLM CLI call timed out") as caught:
+        client.call("Generate report.")
+
+    assert isinstance(caught.value.__cause__, subprocess.TimeoutExpired)
+    assert client.last_process_provenance == {"pid": 105, "pgid": 105}
+
+
+def test_local_vlm_cli_process_provenance_is_isolated_per_concurrent_call(
+    monkeypatch,
+    tmp_path,
+):
+    client = _local_vlm_cli_client(tmp_path)
+    runner_barrier = Barrier(2)
+    caller_barrier = Barrier(2)
+    provenance_by_prompt = {
+        "first prompt": {"pid": 201, "pgid": 201},
+        "second prompt": {"pid": 202, "pgid": 202},
+    }
+
+    def fake_run(cmd, check, capture_output, text, timeout):
+        input_path = cmd[cmd.index("--input-jsonl") + 1]
+        output_path = cmd[cmd.index("--output-jsonl") + 1]
+        row = json.loads(open(input_path, encoding="utf-8").read())
+        prompt = row["prompt"]
+        with open(output_path, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps({"generated_text": prompt}) + "\n")
+        runner_barrier.wait(timeout=2)
+        completed = subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        completed.process_provenance = provenance_by_prompt[prompt]
+        return completed
+
+    def call(prompt: str):
+        result = client.call(prompt)
+        caller_barrier.wait(timeout=2)
+        return result, client.last_process_provenance
+
+    monkeypatch.setattr(llm_client_module, "run_isolated_process", fake_run)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(call, "first prompt")
+        second = executor.submit(call, "second prompt")
+
+    assert first.result() == ("first prompt", provenance_by_prompt["first prompt"])
+    assert second.result() == ("second prompt", provenance_by_prompt["second prompt"])
+
+
+def _local_vlm_cli_client(tmp_path) -> LLMClient:
+    script = tmp_path / "run_report_generation.py"
+    script.write_text("# fake runner\n", encoding="utf-8")
+    config = tmp_path / "reportgen_models.yaml"
+    config.write_text("models: {}\n", encoding="utf-8")
+    return LLMClient(
+        AppConfig(
+            llm=LLMConfig(
+                provider="local_vlm_cli",
+                model="qwen25vl_7b_instruct",
+                local_cli_script=str(script),
+                local_cli_config_path=str(config),
+                local_cli_timeout_sec=30,
+            )
+        )
+    )
 
 
 def test_local_hf_vlm_provider_renders_pdf_before_generation(monkeypatch, tmp_path):

@@ -32,16 +32,27 @@ def prepare_case_assets(case_manifest: CaseManifest | dict[str, Any], output_dir
             warnings=warnings,
         )
 
-    groups = _group_series(case.image_paths)
+    groups = _group_series(case.image_paths) if case.image_paths else {}
     selected, selection = _select_series(groups, modality, case.body_part)
-    if not selected:
+    if not selected and case.image_paths:
         selected = case.image_paths
-    volume_path = _write_series_volume(selected, out_dir / "volume.nii.gz", warnings)
-    contact_sheet = _write_contact_sheet(selected, out_dir / "contact_sheet.png", warnings)
-    derived = {"series_count": len(groups) or 1, **selection}
+    volume_path = _write_series_volume(selected, out_dir / "volume.nii.gz", warnings) if selected else None
+    provided_volume = str(case.volume_path or "")
+    if not volume_path and provided_volume:
+        if Path(provided_volume).is_file():
+            volume_path = provided_volume
+        else:
+            warnings.append("volume_path_missing")
+    contact_sheet = _write_contact_sheet(selected, out_dir / "contact_sheet.png", warnings) if selected else None
+    contact_sheet_source = "dicom_series" if contact_sheet else ""
+    if not contact_sheet and volume_path:
+        contact_sheet = _write_volume_contact_sheet(volume_path, out_dir / "contact_sheet.png", warnings)
+        contact_sheet_source = "volume" if contact_sheet else ""
+    derived = {"series_count": len(groups), **selection}
     if contact_sheet:
         derived["contact_sheet"] = contact_sheet
         derived["primary_image"] = contact_sheet
+        derived["contact_sheet_source"] = contact_sheet_source
     if volume_path:
         derived["volume_path"] = volume_path
     return PreparedCase(
@@ -195,33 +206,83 @@ def _write_series_volume(image_paths: list[str], output_path: Path, warnings: li
 
 
 def _write_contact_sheet(image_paths: list[str], output_path: Path, warnings: list[str], *, num_slices: int = 9) -> str | None:
-    arrays: list[np.ndarray] = []
     if not image_paths:
         return None
+    arrays: list[tuple[int, np.ndarray]] = []
     indices = np.linspace(0, len(image_paths) - 1, min(num_slices, len(image_paths))).astype(int)
     for index in indices:
         arr = _read_dicom_array(image_paths[int(index)], warnings)
         if arr is None:
             continue
-        arrays.append(np.squeeze(arr))
+        arrays.append((int(index), np.squeeze(arr)))
     if not arrays:
         warnings.append("contact_sheet_failed")
         return None
-    tiles = [_normalize_uint8(arr) for arr in arrays]
-    tile_h, tile_w = tiles[0].shape[-2], tiles[0].shape[-1]
+    return _write_array_contact_sheet(arrays, output_path)
+
+
+def _write_volume_contact_sheet(
+    volume_path: str,
+    output_path: Path,
+    warnings: list[str],
+    *,
+    num_slices: int = 9,
+) -> str | None:
+    volume = _read_volume_array(volume_path, warnings)
+    if volume is None:
+        return None
+    array = np.squeeze(np.asarray(volume))
+    while array.ndim > 3:
+        array = array[0]
+    if array.ndim == 2:
+        array = array[np.newaxis, ...]
+    if array.ndim != 3 or array.shape[0] == 0:
+        warnings.append("volume_contact_sheet_invalid_shape")
+        return None
+    indices = np.linspace(0, array.shape[0] - 1, min(num_slices, array.shape[0])).astype(int)
+    return _write_array_contact_sheet(
+        [(int(index), np.asarray(array[int(index)])) for index in indices],
+        output_path,
+    )
+
+
+def _write_array_contact_sheet(
+    indexed_arrays: list[tuple[int, np.ndarray]],
+    output_path: Path,
+) -> str:
+    tiles = [(index, _normalize_uint8(array)) for index, array in indexed_arrays]
+    tile_h, tile_w = tiles[0][1].shape[-2], tiles[0][1].shape[-1]
     cols = int(np.ceil(np.sqrt(len(tiles))))
     rows = int(np.ceil(len(tiles) / cols))
     canvas = Image.new("RGB", (cols * tile_w, rows * tile_h), "black")
     draw = ImageDraw.Draw(canvas)
-    for idx, tile in enumerate(tiles):
+    for idx, (slice_index, tile) in enumerate(tiles):
         image = Image.fromarray(tile).convert("RGB")
         x = (idx % cols) * tile_w
         y = (idx // cols) * tile_h
         canvas.paste(image, (x, y))
-        draw.text((x + 4, y + 4), str(int(indices[idx])), fill=(255, 255, 0))
+        draw.text((x + 4, y + 4), str(slice_index), fill=(255, 255, 0))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(output_path)
     return str(output_path)
+
+
+def _read_volume_array(volume_path: str, warnings: list[str]) -> np.ndarray | None:
+    path = Path(volume_path)
+    try:
+        if path.suffix.lower() == ".npy":
+            return np.asarray(np.load(path, allow_pickle=False))
+        if path.suffix.lower() == ".npz":
+            with np.load(path, allow_pickle=False) as archive:
+                if not archive.files:
+                    raise ValueError("empty npz archive")
+                return np.asarray(archive[archive.files[0]])
+        import SimpleITK as sitk
+
+        return sitk.GetArrayFromImage(sitk.ReadImage(str(path)))
+    except Exception as exc:
+        warnings.append(f"volume_preview_read_failed:{path.name}:{type(exc).__name__}")
+        return None
 
 
 def _read_dicom_array(image_path: str, warnings: list[str]) -> np.ndarray | None:

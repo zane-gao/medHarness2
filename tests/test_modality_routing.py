@@ -70,8 +70,22 @@ def test_generator_entry_rejects_invalid_generation_limits_without_coercion(fiel
 def test_registry_prefers_matching_body_part_without_requiring_it():
     registry = ReportGeneratorRegistry(AppConfig())
     registry.entries = {
-        "ct_match": GeneratorEntry("ct_match", "match", "medharness_cli", ["ct"], ["chest"]),
-        "ct_other": GeneratorEntry("ct_other", "other", "medharness_cli", ["ct"], ["abdomen"]),
+        "ct_match": GeneratorEntry(
+            "ct_match",
+            "match",
+            "medharness_cli",
+            ["ct"],
+            ["chest"],
+            runtime_state="runnable",
+        ),
+        "ct_other": GeneratorEntry(
+            "ct_other",
+            "other",
+            "medharness_cli",
+            ["ct"],
+            ["abdomen"],
+            runtime_state="runnable",
+        ),
     }
     selected = registry.compatible_entries("ct", body_part="chest")
     assert [entry.key for entry in selected] == ["ct_match", "ct_other"]
@@ -84,17 +98,17 @@ def test_registry_expands_wildcard_default_models_for_each_modality():
                 default_models=["*"],
                 include_legacy_ready_models=False,
                 local_models=[
-                    {
-                        "key": "cxr_model",
-                        "title": "CXR",
-                        "source": "artifact_reuse",
+                        {
+                            "key": "cxr_model",
+                            "title": "CXR",
+                            "source": "local",
                         "supported_modalities": ["cxr"],
                         "ready": True,
                     },
-                    {
-                        "key": "ct_model",
-                        "title": "CT",
-                        "source": "artifact_reuse",
+                        {
+                            "key": "ct_model",
+                            "title": "CT",
+                            "source": "local",
                         "supported_modalities": ["ct"],
                         "ready": True,
                     },
@@ -114,10 +128,10 @@ def test_registry_normalizes_modality_aliases_before_selection():
                 default_models=["alias_model"],
                 include_legacy_ready_models=False,
                 local_models=[
-                    {
-                        "key": "alias_model",
-                        "title": "MRI",
-                        "source": "artifact_reuse",
+                        {
+                            "key": "alias_model",
+                            "title": "MRI",
+                            "source": "local",
                         "supported_modalities": ["mri"],
                         "ready": True,
                     }
@@ -140,39 +154,46 @@ def test_registry_normalizes_modality_aliases_before_selection():
         ("CTA abdomen", "ct"),
         ("MR examination", "mri"),
         ("brain magnetic resonance", "mri"),
+        ("pathology WSI", "pathology"),
+        ("ultrasound study", "ultrasound"),
+        ("PET scan", "pet"),
+        ("PET/CT", "pet_ct"),
+        ("mammogram", "mammography"),
+        ("fundus photography", "ophthalmology"),
+        ("capsule endoscopy", "endoscopy"),
         ("", "unknown"),
     ],
 )
-def test_normalize_modality_uses_three_family_route_vocabulary(value, expected):
+def test_normalize_modality_uses_supported_imaging_route_vocabulary(value, expected):
     assert normalize_modality(value) == expected
 
 
-def test_registry_matches_free_text_modality_aliases_without_body_part_filtering():
+def test_registry_matches_free_text_modality_aliases_for_modality_general_models():
     registry = ReportGeneratorRegistry(
         AppConfig(
             generator=GeneratorConfig(
                 default_models=["*"],
                 include_legacy_ready_models=False,
                 local_models=[
-                    {
-                        "key": "ct_model",
-                        "source": "artifact_reuse",
-                        "supported_modalities": ["CT"],
-                        "supported_body_parts": ["abdomen"],
+                        {
+                            "key": "ct_model",
+                            "source": "local",
+                            "supported_modalities": ["CT"],
+                            "supported_body_parts": ["unknown"],
                         "ready": True,
                     },
-                    {
-                        "key": "mri_model",
-                        "source": "artifact_reuse",
-                        "supported_modalities": ["MRI"],
-                        "supported_body_parts": ["brain"],
+                        {
+                            "key": "mri_model",
+                            "source": "local",
+                            "supported_modalities": ["MRI"],
+                            "supported_body_parts": ["unknown"],
                         "ready": True,
                     },
-                    {
-                        "key": "cxr_model",
-                        "source": "artifact_reuse",
-                        "supported_modalities": ["chest x-ray"],
-                        "supported_body_parts": ["chest"],
+                        {
+                            "key": "cxr_model",
+                            "source": "local",
+                            "supported_modalities": ["chest x-ray"],
+                            "supported_body_parts": ["unknown"],
                         "ready": True,
                     },
                 ],
@@ -243,8 +264,19 @@ def test_recognize_modality_normalizes_vlm_result_and_empty_reply(monkeypatch, t
     assert recognize_modality(str(path), config=AppConfig(), llm_client=Client("")) == "unknown"
 
 
-@pytest.mark.parametrize("reply", ["pathology", "ultrasound study", "PET scan"])
-def test_recognize_modality_collapses_unknown_vlm_values_to_unknown(tmp_path, reply):
+@pytest.mark.parametrize(
+    "reply, expected",
+    [
+        ("pathology", "pathology"),
+        ("ultrasound study", "ultrasound"),
+        ("PET scan", "pet"),
+        ("PET/CT", "pet_ct"),
+        ("mammogram", "mammography"),
+        ("fundus photography", "ophthalmology"),
+        ("capsule endoscopy", "endoscopy"),
+    ],
+)
+def test_recognize_modality_preserves_supported_vlm_modalities(tmp_path, reply, expected):
     path = tmp_path / "unknown.bin"
     path.write_bytes(b"not a dicom")
 
@@ -252,10 +284,21 @@ def test_recognize_modality_collapses_unknown_vlm_values_to_unknown(tmp_path, re
         def call(self, *args, **kwargs):
             return reply
 
+    assert recognize_modality(str(path), config=AppConfig(), llm_client=Client()) == expected
+
+
+def test_recognize_modality_collapses_unrecognized_vlm_value_to_unknown(tmp_path):
+    path = tmp_path / "unknown.bin"
+    path.write_bytes(b"not a dicom")
+
+    class Client:
+        def call(self, *args, **kwargs):
+            return "not an imaging modality"
+
     assert recognize_modality(str(path), config=AppConfig(), llm_client=Client()) == "unknown"
 
 
-def test_cloud_fallback_preserves_unknown_modality_and_fallback_provenance():
+def test_cloud_fallback_preserves_supported_pathology_modality_and_fallback_provenance():
     cfg = AppConfig(
         generator=GeneratorConfig(
             cloud_fallback_enabled=True,
@@ -270,7 +313,7 @@ def test_cloud_fallback_preserves_unknown_modality_and_fallback_provenance():
         llm_client=build_mock_client(),
     )[0]
 
-    assert report.modality == "unknown"
+    assert report.modality == "pathology"
     assert report.source == "mock_fallback"
     assert report.metadata["fallback_used"] is True
 

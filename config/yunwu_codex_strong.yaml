@@ -7,6 +7,7 @@
 llm:
   provider: mock
   model: gpt-5.6-terra
+  local_cli_python_bin: /data/ubuntu_conda/envs/medharness_merlin/bin/python
   max_retries: 3
   timeout_sec: 60
   retry_initial_sec: 0.5
@@ -37,6 +38,19 @@ model_roles:
     <<: *yunwu_gpt
     max_tokens: 4096
   education:
+    <<: *yunwu_gpt
+    max_tokens: 4096
+  report_generation:
+    provider: chat_completions
+    model: qwen3-vl-plus
+    api_key_env: YUNWU_API_KEY
+    base_url: https://yunwu.ai/v1
+    schema_max_attempts: 2
+    transport_max_retries: 1
+    timeout_sec: 120
+    temperature: 0.0
+    max_tokens: 4096
+  report_fusion:
     <<: *yunwu_gpt
     max_tokens: 4096
 
@@ -86,7 +100,28 @@ generator:
   reference_assisted_generation: false
   include_legacy_ready_models: true
   legacy_config_path: /data/isbi/gzp/medHarness/configs/reportgen_models.yaml
-  default_models: []
+  default_models:
+    - maira_2
+    - chexagent_srrg_findings_full
+    - chexagent_srrg_impression_full
+    - medgemma_srrg_findings
+    - medgemma_srrg_impression
+    - lingshu_srrg_impression
+    - medmo_4b
+    - merlin_fresh
+    - medmo_4b_next
+    - qwen25vl_med_grpo_report_generation
+    - qwen25vl_med_grpo_report_generation_v2
+    - qwen25vl_flare2025_lora
+    - radiology_infer_mini
+    - yunwu_general
+  external_vlm_enabled: true
+  external_vlm_key: yunwu_general
+  external_vlm_title: Yunwu General Imaging Candidate
+  external_vlm_model_role: report_generation
+  external_vlm_input_capabilities: [image_2d]
+  fusion_enabled: true
+  fusion_model_role: report_fusion
 
 ranking:
   top_n: 3

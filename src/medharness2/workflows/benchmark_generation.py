@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import time
 from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
@@ -11,11 +10,14 @@ from typing import Any
 
 from medharness2.config import AppConfig, load_config, resolve_existing_path
 from medharness2.data.sample_data import load_manifest
+from medharness2.generators.pipeline import run_candidate_generation
 from medharness2.generators.registry import GeneratorEntry, ReportGeneratorRegistry
+from medharness2.llm_client import LLMClient
 from medharness2.privacy import ExternalPayloadPolicy
 from medharness2.schema import GeneratedReport, require_formal_fresh_reports
 from medharness2.tools.quality_gate import apply_generation_quality_gate
 from medharness2.utils.io import write_json
+from medharness2.workflows.batch_readers import precompute_medharness_cli_reports
 
 
 def plan_generation_benchmark(
@@ -35,16 +37,20 @@ def plan_generation_benchmark(
     stratum_coverage: dict[str, dict[str, int]] = {}
     formal_ready_case_count = 0
     for case in rows:
+        input_asset = _case_input_asset(case, cfg)
         entries = registry.select(
             case.modality,
             requested=model_keys or ["*"],
             body_part=case.body_part,
+            image_path=str(input_asset["path"] or ""),
+            prepared_assets=_case_prepared_assets(case),
+            case_id=case.case_id,
+            generation_mode="benchmark",
         )
         case_blocking_violations: list[dict[str, Any]] = []
         case_model_violations: list[dict[str, Any]] = []
         eligible_models: list[dict[str, Any]] = []
         rejected_models: list[dict[str, Any]] = []
-        input_asset = _case_input_asset(case, cfg)
         if not input_asset["path"]:
             case_blocking_violations.append(
                 {
@@ -228,6 +234,7 @@ def run_generation_benchmark(
     config: AppConfig | None = None,
     model_keys: list[str] | None = None,
     formal: bool = True,
+    llm_client: LLMClient | None = None,
 ) -> dict[str, Any]:
     cfg = config or load_config()
     manifest = Path(manifest_path)
@@ -242,118 +249,111 @@ def run_generation_benchmark(
     rows = load_manifest(manifest)
     registry = ReportGeneratorRegistry(cfg)
     privacy = ExternalPayloadPolicy(cfg.privacy)
+    client = llm_client or LLMClient(cfg)
     indexed_results: list[tuple[int, int, dict[str, Any]]] = []
+    case_artifacts: list[dict[str, Any]] = []
     plan_cases = {str(case["case_id"]): case for case in plan["cases"]}
-    model_jobs: dict[str, dict[str, Any]] = {}
+    planned_model_keys = _planned_execution_model_keys(plan, formal=formal)
+    precomputed_reports = precompute_medharness_cli_reports(
+        rows,
+        config=cfg,
+        model_keys=planned_model_keys,
+        model_sources=None,
+        generation_mode="benchmark",
+    )
     for case_index, case in enumerate(rows):
         case_plan = plan_cases[case.case_id]
-        selected_model_keys = (
-            [
-                str(model["model"])
-                for model in case_plan["selected_formal_candidates"]
-            ]
-            if formal
-            else model_keys or ["*"]
-        )
-        entries = registry.select(
-            case.modality,
-            requested=selected_model_keys,
-            body_part=case.body_part,
-        )
         input_asset = case_plan["input_asset"]
+        selected_model_keys = _planned_case_model_keys(case_plan, formal=formal)
         if not input_asset["exists"] or not Path(str(input_asset["path"])).is_file():
             raise ValueError(
                 f"Benchmark input asset unavailable for case {case.case_id}: "
                 f"{input_asset}"
             )
-        for model_index, entry in enumerate(entries):
-            bucket = model_jobs.setdefault(
-                entry.key,
-                {"entry": entry, "jobs": []},
-            )
-            bucket["jobs"].append(
-                {
-                    "case_index": case_index,
-                    "model_index": model_index,
-                    "case": case,
-                    "input_asset": input_asset,
-                }
-            )
-
-    for bucket in model_jobs.values():
-        entry = bucket["entry"]
-        jobs = bucket["jobs"]
-        if entry.source == "medharness_cli":
-            started = time.monotonic()
-            generated_by_case = registry.generate_batch(
-                entry,
-                [
-                    {
-                        "case_id": job["case"].case_id,
-                        "image_path": job["input_asset"]["path"],
-                        "modality": job["case"].modality,
-                        "body_part": job["case"].body_part,
-                        "reference_report": "",
-                    }
-                    for job in jobs
-                ],
-                include_failures=True,
-            )
-            batch_latency_sec = round(time.monotonic() - started, 4)
-            for job in jobs:
-                case = job["case"]
-                generated = generated_by_case.get(case.case_id)
-                if generated is None:
-                    generated = _missing_batch_report(entry, case.modality)
-                latency_sec = _adapter_latency(generated, batch_latency_sec)
-                result = _benchmark_result(
-                    case=case,
-                    entry=entry,
-                    generated=generated,
-                    input_asset=job["input_asset"],
-                    latency_sec=latency_sec,
-                    execution={
-                        "mode": "batch",
-                        "batch_size": len(jobs),
-                        "batch_latency_sec": batch_latency_sec,
-                    },
-                    formal=formal,
-                    privacy=privacy,
+        prepared_assets = _case_prepared_assets(case)
+        pipeline = run_candidate_generation(
+            image_path=str(input_asset["path"]),
+            modality=case.modality,
+            body_part=case.body_part,
+            case_id=case.case_id,
+            generation_mode="benchmark",
+            reference_report=None,
+            prepared_assets=prepared_assets,
+            model_keys=selected_model_keys,
+            top_n=cfg.ranking.top_n,
+            precomputed_generated_reports=precomputed_reports.get(case.case_id),
+            config=cfg,
+            llm_client=client,
+        )
+        route_plan = pipeline.route_plan
+        candidate_rows = [candidate.to_json() for candidate in pipeline.candidate_reports]
+        failure_rows = list(pipeline.candidate_failures)
+        case_artifacts.append(
+            {
+                "schema_version": "2.0",
+                "artifact_type": "generation_benchmark_case",
+                "generation_mode": "benchmark",
+                "ranking_mode": "benchmark_reference_free",
+                "case_id": case.case_id,
+                "modality": case.modality,
+                "body_part": case.body_part,
+                "input_asset": {
+                    **input_asset,
+                    "sha256": _asset_hash(str(input_asset["path"])),
+                },
+                "route_plan": route_plan,
+                "candidate_reports": candidate_rows,
+                "candidate_failures": failure_rows,
+                "candidate_structure_comparison": pipeline.candidate_structure_comparison,
+                "top_k_reports": pipeline.top_k_reports,
+                "fusion_report": pipeline.fusion_report.to_json(),
+                "reference_report_used": False,
+            }
+        )
+        candidates_by_key = {
+            _candidate_model_key(candidate.candidate_id): candidate.generated
+            for candidate in pipeline.candidate_reports
+        }
+        failures_by_key = {
+            _candidate_model_key(str(failure.get("candidate_id") or "")): failure
+            for failure in failure_rows
+            if failure.get("stage") == "generation"
+        }
+        decisions = {
+            str(decision["model_key"]): decision
+            for decision in route_plan["entries"]
+            if decision.get("eligible") is True
+        }
+        for model_index, model_key in enumerate(route_plan["candidate_model_keys"]):
+            decision = decisions[model_key]
+            entry = registry.entries[model_key]
+            generated = candidates_by_key.get(model_key)
+            if generated is None:
+                failure = failures_by_key.get(model_key)
+                if failure is None:
+                    continue
+                generated = GeneratedReport(
+                    model=model_key,
+                    source=str(failure.get("source") or entry.source),
+                    report="",
+                    modality=case.modality,
+                    evidence_tier=entry.evidence_tier,
+                    warnings=[str(item) for item in failure.get("warnings") or []],
+                    metadata=dict(failure.get("metadata") or {}),
                 )
-                indexed_results.append(
-                    (job["case_index"], job["model_index"], result)
-                )
-            continue
-
-        for job in jobs:
-            case = job["case"]
-            started = time.monotonic()
-            generated = registry.generate(
-                entry,
-                str(job["input_asset"]["path"]),
-                case.modality,
-                reference_report=None,
-                body_part=case.body_part,
-                case_id=case.case_id,
-            )
-            latency_sec = round(time.monotonic() - started, 4)
+            execution = _execution_metadata(generated)
+            latency_sec = _candidate_latency(generated, execution)
             result = _benchmark_result(
                 case=case,
                 entry=entry,
                 generated=generated,
-                input_asset=job["input_asset"],
+                input_asset=_generated_input_asset(input_asset, generated),
                 latency_sec=latency_sec,
-                execution={
-                    "mode": "single",
-                    "batch_size": 1,
-                    "batch_latency_sec": latency_sec,
-                },
+                execution=execution,
                 formal=formal,
                 privacy=privacy,
             )
-            indexed_results.append(
-                (job["case_index"], job["model_index"], result)
-            )
+            indexed_results.append((case_index, model_index, result))
 
     results = [
         result
@@ -366,6 +366,11 @@ def run_generation_benchmark(
     results_path = output / "benchmark_results.jsonl"
     results_path.write_text(
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in results),
+        encoding="utf-8",
+    )
+    case_artifacts_path = output / "benchmark_case_artifacts.jsonl"
+    case_artifacts_path.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in case_artifacts),
         encoding="utf-8",
     )
     tier_counts = Counter(str(row["generated_report"]["evidence_tier"]) for row in results)
@@ -414,6 +419,8 @@ def run_generation_benchmark(
         ),
         "warning_counts": dict(sorted(warning_counts.items())),
         "results_path": str(results_path),
+        "case_artifact_count": len(case_artifacts),
+        "case_artifacts_path": str(case_artifacts_path),
     }
     summary_path = output / "benchmark_summary.json"
     write_json(summary_path, summary)
@@ -428,10 +435,12 @@ def run_generation_benchmark(
         "artifacts": {
             "results": str(results_path),
             "summary": str(summary_path),
+            "case_artifacts": str(case_artifacts_path),
         },
         "artifact_sha256": {
             "results": _file_sha256(results_path),
             "summary": _file_sha256(summary_path),
+            "case_artifacts": _file_sha256(case_artifacts_path),
         },
     }
     write_json(output / "benchmark_manifest.json", benchmark_manifest)
@@ -480,20 +489,6 @@ def _benchmark_result(
     }
 
 
-def _missing_batch_report(entry: GeneratorEntry, modality: str) -> GeneratedReport:
-    report = GeneratedReport(
-        model=entry.key,
-        source=entry.source,
-        report="",
-        modality=modality,
-        evidence_tier=entry.evidence_tier,
-        warnings=["legacy_batch_output_missing"],
-        metadata={"reference_report_used": False},
-    )
-    ReportGeneratorRegistry._apply_entry_metadata(entry, report)
-    return report
-
-
 def _adapter_latency(generated: GeneratedReport, fallback: float) -> float:
     runtime = generated.metadata.get("adapter_runtime") or {}
     if isinstance(runtime, dict):
@@ -501,6 +496,70 @@ def _adapter_latency(generated: GeneratedReport, fallback: float) -> float:
         if isinstance(value, (int, float)) and not isinstance(value, bool):
             return float(value)
     return fallback
+
+
+def _candidate_model_key(candidate_id: str) -> str:
+    candidate_text = str(candidate_id or "").strip()
+    return candidate_text.rsplit(":", 1)[-1] if ":" in candidate_text else candidate_text
+
+
+def _planned_execution_model_keys(plan: dict[str, Any], *, formal: bool) -> list[str]:
+    keys: list[str] = []
+    for case in plan.get("cases") or []:
+        keys.extend(_planned_case_model_keys(case, formal=formal))
+    return list(dict.fromkeys(keys))
+
+
+def _planned_case_model_keys(case_plan: dict[str, Any], *, formal: bool) -> list[str]:
+    field = "selected_formal_candidates" if formal else "models"
+    models = case_plan.get(field) or []
+    if not isinstance(models, list) or any(not isinstance(model, dict) for model in models):
+        raise ValueError(f"benchmark plan case {field} must be a list of objects")
+    return [str(model["model"]) for model in models]
+
+
+def _execution_metadata(generated: GeneratedReport) -> dict[str, Any]:
+    metadata = generated.metadata or {}
+    batch_execution = metadata.get("batch_execution")
+    if isinstance(batch_execution, dict) and batch_execution.get("mode") == "batch":
+        return {
+            "mode": "batch",
+            "batch_size": int(batch_execution.get("batch_size") or 1),
+            "batch_latency_sec": float(batch_execution.get("batch_latency_sec") or 0.0),
+        }
+    latency = metadata.get("elapsed_sec")
+    if not isinstance(latency, (int, float)) or isinstance(latency, bool):
+        latency = 0.0
+    return {
+        "mode": "single",
+        "batch_size": 1,
+        "batch_latency_sec": float(latency),
+    }
+
+
+def _candidate_latency(generated: GeneratedReport, execution: dict[str, Any]) -> float:
+    fallback = float(execution.get("batch_latency_sec") or 0.0)
+    return _adapter_latency(generated, fallback)
+
+
+def _generated_input_asset(
+    planned_asset: dict[str, Any],
+    generated: GeneratedReport,
+) -> dict[str, Any]:
+    metadata = generated.metadata or {}
+    selected_path = str(metadata.get("input_asset") or planned_asset.get("path") or "")
+    selected_kind = str(metadata.get("input_asset_kind") or planned_asset.get("kind") or "")
+    selected_capability = str(metadata.get("input_asset_capability") or "")
+    selection_policy = str(planned_asset.get("selection_policy") or "")
+    if selected_capability:
+        selection_policy = f"capability:{selected_capability}"
+    return {
+        **planned_asset,
+        "path": selected_path,
+        "kind": selected_kind,
+        "selection_policy": selection_policy,
+        "exists": bool(selected_path and Path(selected_path).is_file()),
+    }
 
 
 def _model_plan_row(entry: GeneratorEntry) -> dict[str, Any]:
@@ -578,6 +637,15 @@ def _case_input_asset(case: Any, config: AppConfig) -> dict[str, Any]:
         "exists": bool(resolved and resolved.is_file()),
         "selection_policy": selection_policy,
     }
+
+
+def _case_prepared_assets(case: Any) -> dict[str, Any]:
+    assets = dict(case.derived_assets or {})
+    if case.volume_path:
+        assets.setdefault("volume_path", case.volume_path)
+    if case.image_paths:
+        assets.setdefault("primary_image", case.image_paths[0])
+    return assets
 
 
 def _resolve_input_asset_path(path_text: str, config: AppConfig) -> Path | None:

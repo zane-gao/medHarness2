@@ -406,14 +406,14 @@
       <div class="sec-head">
         <span class="eyebrow">Model Routing</span>
         <h2>模型路由</h2>
-        <p class="sec-note">报告生成模型注册表：来源渠道、路由角色、支持模态与新旧推理属性。</p>
+        <p class="sec-note">报告生成模型完整状态：资源、运行、验证、输入能力、最近证据与阻断原因均来自 canonical status export。</p>
       </div>
       <div class="filter-row">
         <input class="filter-input" id="model-filter" type="search" placeholder="过滤模型 / 模态 / 来源…" autocomplete="off">
         <span class="filter-count" id="model-count">__MH2_MODEL_COUNT__ 个模型</span>
       </div>
       <div class="tbl-wrap"><table id="model-table">
-        <thead><tr><th>模型</th><th>来源</th><th>路由角色</th><th>模态</th><th>新推理</th><th>备注</th></tr></thead>
+        <thead><tr><th>模型</th><th>适配器 / 来源</th><th>资源状态</th><th>运行 / 验证</th><th>模态 / 部位</th><th>输入能力</th><th>最近证据</th><th>阻断原因</th></tr></thead>
         <tbody>__MH2_MODEL_ROWS__</tbody>
       </table></div>
     </section>

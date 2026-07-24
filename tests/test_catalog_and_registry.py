@@ -92,6 +92,47 @@ def test_capability_catalog_lists_tools_models_and_providers(tmp_path: Path):
     assert models["demo_model"]["report_trained"] is True
 
 
+def test_capability_catalog_exposes_full_canonical_legacy_model_statuses():
+    catalog = build_capability_catalog(AppConfig())
+    statuses = {row["model_key"]: row for row in catalog["model_statuses"]}
+
+    assert catalog["model_status_summary"]["model_count"] == 390
+    assert catalog["model_status_summary"]["quality_gate_blocked_count"] == 36
+    assert len(statuses) == 390
+    assert statuses["cosmobillian_radiologist_llama_cxr_report_generation"][
+        "validation_state"
+    ] == "quality_blocked"
+    assert statuses["cosmobillian_radiologist_llama_cxr_report_generation"][
+        "quality_gate_blocked"
+    ] is True
+    assert statuses["maira_2"]["latest_evidence"]["exists"] is True
+    assert statuses["petar_localized_composed_report"]["output_mode"] == (
+        "evidence_grounded_composed_report"
+    )
+    assert statuses["petar_localized_composed_report"]["quality_gate_blocked"] is True
+
+    executable = {row["key"]: row for row in catalog["models"]}
+    assert executable["maira_2"]["runtime_state"] == "smoke_verified"
+    assert executable["maira_2"]["validation_state"] == "engineering_smoke_only"
+    assert executable["maira_2"]["input_capabilities"] == ["image_2d"]
+    assert executable["maira_2"]["latest_evidence"]["exists"] is True
+
+
+def test_models_list_can_emit_all_canonical_statuses_as_json(capsys):
+    rc = main(["models", "list", "--all-statuses", "--format", "json"])
+
+    assert rc == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert len(rows) == 390
+    cosmobillian = next(
+        row
+        for row in rows
+        if row["model_key"] == "cosmobillian_radiologist_llama_cxr_report_generation"
+    )
+    assert cosmobillian["quality_gate_blocked"] is True
+    assert cosmobillian["blocked_reason"]
+
+
 def test_capability_catalog_exposes_secret_free_model_role_routes():
     cfg = AppConfig(
         model_roles={

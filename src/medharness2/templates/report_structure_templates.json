@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "registry_version": "report-structure-templates-v1",
+  "templates": [
+    {
+      "template_id": "cxr_chest",
+      "template_version": "1.0",
+      "modalities": ["cxr"],
+      "body_parts": ["chest"],
+      "anatomy_sections": ["lungs", "pleura", "cardiomediastinum", "mediastinum", "bones", "devices"]
+    },
+    {
+      "template_id": "ct_chest",
+      "template_version": "1.0",
+      "modalities": ["ct"],
+      "body_parts": ["chest"],
+      "anatomy_sections": ["lungs", "pleura", "mediastinum", "heart", "chest_wall", "bones"]
+    },
+    {
+      "template_id": "ct_head",
+      "template_version": "1.0",
+      "modalities": ["ct"],
+      "body_parts": ["head", "brain"],
+      "anatomy_sections": ["brain_parenchyma", "ventricles", "extra_axial_spaces", "sinuses", "calvarium"]
+    },
+    {
+      "template_id": "ct_abdomen",
+      "template_version": "1.0",
+      "modalities": ["ct"],
+      "body_parts": ["abdomen", "abdomen_pelvis", "pelvis"],
+      "anatomy_sections": ["liver", "biliary_system", "pancreas", "spleen", "adrenals", "kidneys", "bowel", "peritoneum", "pelvis", "bones"]
+    },
+    {
+      "template_id": "ct_spine",
+      "template_version": "1.0",
+      "modalities": ["ct"],
+      "body_parts": ["spine"],
+      "anatomy_sections": ["alignment", "vertebrae", "discs", "canal", "paraspinal_soft_tissues"]
+    },
+    {
+      "template_id": "mri_brain",
+      "template_version": "1.0",
+      "modalities": ["mri"],
+      "body_parts": ["brain", "head"],
+      "anatomy_sections": ["brain_parenchyma", "diffusion", "ventricles", "extra_axial_spaces", "vascular_flow_voids", "sinuses"]
+    },
+    {
+      "template_id": "mri_spine",
+      "template_version": "1.0",
+      "modalities": ["mri"],
+      "body_parts": ["spine"],
+      "anatomy_sections": ["alignment", "vertebral_marrow", "discs", "canal", "cord_or_cauda", "paraspinal_soft_tissues"]
+    },
+    {
+      "template_id": "ultrasound_abdomen",
+      "template_version": "1.0",
+      "modalities": ["ultrasound"],
+      "body_parts": ["abdomen", "abdomen_pelvis", "pelvis"],
+      "anatomy_sections": ["liver", "gallbladder", "biliary_system", "pancreas", "spleen", "kidneys", "bladder", "pelvis"]
+    },
+    {
+      "template_id": "mammography_breast",
+      "template_version": "1.0",
+      "modalities": ["mammography"],
+      "body_parts": ["breast"],
+      "anatomy_sections": ["breast_density", "masses", "calcifications", "asymmetries", "architectural_distortion", "axilla"]
+    },
+    {
+      "template_id": "pathology_generic",
+      "template_version": "1.0",
+      "modalities": ["pathology"],
+      "body_parts": ["unknown"],
+      "anatomy_sections": ["specimen", "morphology", "diagnosis", "ancillary_studies"]
+    }
+  ],
+  "generic_template": {
+    "template_id": "generic",
+    "template_version": "1.0",
+    "anatomy_sections": ["findings", "impression"]
+  }
+}
